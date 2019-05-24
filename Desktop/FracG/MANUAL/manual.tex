@@ -1,0 +1,192 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage{geometry}
+ \geometry{
+ a4paper,
+ total={170mm,257mm},
+ left=20mm,
+ top=20mm,
+ }
+\setlength{\parindent}{0pt}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{fancyvrb}
+\usepackage{hyperref}
+\usepackage{titlepic}
+\usepackage{graphicx}
+\usepackage{eso-pic}
+
+\DefineVerbatimEnvironment{verbatim}{Verbatim}{xleftmargin=.5in}
+\hypersetup{
+    colorlinks = true,
+    allcolors = {blue},
+}
+
+\titlepic{\includegraphics[width=0.5\textwidth]{logo.png}}
+\title{\textbf{FracG V 0.1} - \\
+Graph based Fault and Fracture Analysis}
+\date{2019\\ April}
+\author{by some guys...  \\
+{\small CSIRO Deep Earth Imaging }\\
+{\small Future Science Platform}}
+\begin{document}
+\maketitle
+\newpage
+\tableofcontents
+\vspace*{\fill}
+FracG is free software: you can redistribute it and/or modify
+
+it under the terms of the GNU General Public License as published by
+
+the Free Software Foundation, either version 3 of the License, or
+
+(at your option) any later version.
+
+
+FracG is distributed in the hope that it will be useful,
+
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+
+See the GNU General Public License for more details.
+
+
+You should have received a copy of the GNU General Public License along with FracG.  
+
+If not, see \url{https://www.gnu.org/licenses/}.
+\newpage
+\section{Installation}
+\textit{FracG} is designed for Debian GNU/Linux and depend on three main libraries: GDAL~\cite{gdal18}, ARMADILLO~\cite{san16} and BOOST~\cite{sie02, geh16}.
+Prior to compiling the program these need to be installed:
+\begin{verbatim}
+	sudo add-apt-repository ppa:ubuntugis/ppa && sudo apt-get update
+	sudo apt-get install build-essential xutils-dev libboost-all-dev liblapack-dev 
+	libblas-dev libboost-dev gdal-bin libarmadillo-dev 
+\end{verbatim}
+If the libraries are all installed correctly the permission for the file ``\textit{install.sh}'' need to be changed.
+\begin{verbatim}
+	cd ...FracG
+	sudo chmod -x install.sh 
+\end{verbatim}
+Now the installation script can be executed:
+\begin{verbatim}
+	sudo ./install.sh
+\end{verbatim}
+\textit{FracG} can now be executed from the command line with the following syntax:
+\begin{verbatim}
+	FracG [vector_data] [Digital Elevation Data]
+\end{verbatim}
+It is recommend to create a folder containing the data that should be analysed and executing \textit{FracG} from within this directory.
+
+You can also compile \textit{FracG} from a terminal without the install script. Please note that this will make \textit{FracG} only executable from within the directory you compiled it in.
+
+\begin{verbatim}
+	cd ...FracG/src
+	g++ -o FracG main.cpp graph.cpp GeoRef.cpp geometrie.cpp stats.cpp 
+	-larmadillo -lgdal
+\end{verbatim}
+
+In some cases it might be necessary to install Aramdillo manually. In that case please follow the instruction on the web page:
+~\href{http://arma.sourceforge.net/download.html}{ARMADILLO}
+
+If you should encounter any difficulties with compiling \textit{FracG} please~\href{mailto:uli.kelka@csiro.au}{email} us a description of the problem.
+\newpage
+\section{Testing FracG}
+After successful  installation \textit{FracG} can be tested with the sample data provided.
+\begin{verbatim}
+	cd ..FracG/TEST
+	FracG 10faults.shp DEM.tif
+\end{verbatim}
+The input for this test is a vector file containing 10 synthetic fault traces and a digital elevation model. The out put should look similar to this:
+\begin{small}
+\begin{verbatim}
+******************************************** 
+* Boost version: 1_65_1                    *
+* Armadillo version: 9.200.7 (Carpe Noctem)*
+******************************************** 
+Fault  data from .shp-file.
+Raster data from .tif-file.
+
+Enter minimum distance in m: 
+\end{verbatim}
+\end{small}
+The user is asked to define the minimum distance in m. This value represents the shortest possible branch length of the Graph. Every branch with a length below this value will be removed from the Graph. This is useful for ``poorly'' digitised networks where Y-insertions are falsely classified as X-intersection.
+
+The network analysis extracts the data of the entire network and for the elements of the graph creating an on-screen output like this:
+\begin{small}
+\begin{verbatim}
+read 10 faults from shp
+Driver: GTiff/GeoTIFF
+Size is 1854x1708x1
+Origin = (14255867.750754,-1784374.132214)
+Pixel Size = (30.922081,-30.922081)
+Converted input raster to array. 
+
+Average scan line density [nb/km]: 0.00804058 (stddev: 0.0359586) 
+
+Box Counting
+ D migth be 1
+Boxcounting: 0.01965 seconds [CPU Clock] 
+
+Converted 10 faults into 10 edges
+Area: 1.49572e+06
+
+GRAPH'S ANALYSIS OF NETWORK 
+Nodes: 22 EDGES: 14
+Edgenodes: 2
+Number of connected Nodes: 2 (Xnodes + Ynodes)
+Branches: 13 Lines: 9 Number of Branches: 14
+Number of components (c): 8
+DEM ANALYSIS 
+ analysed vertices 
+ analysed edges 
+DEM Analysis: 0.003365 seconds [CPU Clock] 
+
+Dijkstra shortest paths: 0 (0) 
+
+minTree Total eges: 14
+Distribute fractures: 
+fault: 3/10
+fault: 9/10
+Created 15573 fractures along 10 faults
+in 34.953 seconds [CPU Clock] 
+
+Finished in 35.3374 seconds [CPU Clock]
+
+Additional raster files?
+\end{verbatim}
+\end{small}
+The user is asked whether additional raster data should be analysed. The amount of raster data that can be provided is only limited by the system memory available. The prompt will appear after the first additional data was loaded and will reappear until the user decided that no additional data is needed. Data for every fault trace as well as for every branch and vertex of the Graph will be extracted.
+
+\section{Output}
+The network is analyses as a set of line traces and as a Graph. The  analysis is based on~\cite{san18}. 
+Beside the useful characterization of the network in line with~\cite{san18} \textit{FracG} takes advantage of the BOOST Graph's library~\cite{sie02}. The consistency of the Graph is tested with ``\textit{boyer\_myrvold\_planarity\_test}'' prior to the analysis and Minumum spanning tree and shortest path are determined.
+The output files contain the data that can then be analysed in GIS and any data processing software.
+The created files are:
+\begin{table}[h!]
+  \begin{center}
+    \caption{Output files.}
+    \label{tab:table1}
+    \begin{tabular}{l|l} % <-- Alignments: 1st column left, 2nd middle and 3rd right, with vertical lines in between
+      \textbf{Filename} & \textbf{Content} \\
+      \hline
+      Initial\_Fault\_Statistics.txt & Gemetric properties, CDF of length, k-means of geometries \\
+      BoxCounting.txt & Number of non-empty boxes, box-size and estimated Minkowski dimension \\
+      Graph\_results.txt &  Information on topology derived from graph analysis\\
+      GRAPH.shp & Shapefile containing the branches of the graph with associated attributes  \\
+      \textit{vec\_filename}\_results.txt & Location, degree and elevation of graph vertices \\
+      DEM-\textit{ras-filename}\_vertexData.txt & type component and elevation values around graph vertices \\
+      DEM-\textit{ras-filename}\_EdgeData.txt & edge number, edge type, component,elevation data and slope\\
+      MinTree.shp & Shapefile containing the Kruskal Minimum Spanning tree \\
+      ShortPath.shp & Shapefile contain the Dijkstra shortest distance between two points \\
+      FaultData\_\textit{ras-filename}.txt & Data around fault traces from additional raster file \\
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\vspace*{\fill}
+\bibliography{manual_bib} 
+\bibliographystyle{ieeetr}
+\end{document}
