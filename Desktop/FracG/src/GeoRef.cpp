@@ -416,8 +416,7 @@ int count = 0;
 	//SG.query(geometry::index::nearest(f.front(),1), std::back_inserter(front));   
 		//if (geometry::disjoint(front.at(0), geom.DefinePointBuffer(f.back(), dist));
                
-    seg_index gg = SG.query(geometry::index::nearest(f.back(),1) );
-    
+
     cout << F.at(gg.second).front().x() << endl;
             
     if (front.size() > 0)
