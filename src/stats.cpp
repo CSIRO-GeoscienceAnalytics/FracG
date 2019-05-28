@@ -840,6 +840,12 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 					int minX = (geometry::get<geometry::min_corner, 0>(AOI) - GeoTransform[0]) / GeoTransform[1]; 
 					int maxY = abs((geometry::get<geometry::max_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
 					int minY = abs((geometry::get<geometry::min_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
+					
+					//cap the values to what is available in the raster file
+					minX = std::max(minX, 0);
+					maxX = std::min(maxX, (int)GeoTransform[6]);
+					minY = std::max(minY, 0);
+					maxY = std::min(maxY, (int)GeoTransform[7]);
 
 						for (int x = minX; x < maxX; x++)
 						{
@@ -875,6 +881,11 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 					minX = (geometry::get<geometry::min_corner, 0>(AOI) - GeoTransform[0]) / GeoTransform[1]; 
 					maxY = abs((geometry::get<geometry::max_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
 					minY = abs((geometry::get<geometry::min_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
+					
+					minX = std::max(minX, 0);
+					maxX = std::min(maxX, (int)GeoTransform[6]);
+					minY = std::max(minY, 0);
+					maxY = std::min(maxY, (int)GeoTransform[7]);
 
 					for (int x = minX; x < maxX; x++)
 					{

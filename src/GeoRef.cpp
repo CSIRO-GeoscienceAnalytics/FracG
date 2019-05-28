@@ -38,8 +38,10 @@ T** GEO::RasterConvert(int rows, int cols, T **M)
  int value = 0, X, Y, Data ;
 
  poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
-	if( poDataset == NULL )
-		std::cout<<"no file"<< std::endl;
+	if( poDataset == NULL ){
+		std::cout<<"no file \"" << filename << "\"" << std::endl;
+		exit(-1);
+	}
 
  GDALRasterBand *band = poDataset -> GetRasterBand(1);       
 
@@ -76,9 +78,10 @@ T** GEO::RasterConvert(int rows, int cols, T **M)
  int value = 0;
 
  poDataset = (GDALDataset *) GDALOpen( filename.c_str(), GA_ReadOnly );
-		if( poDataset == NULL )
-			std::cout<<"no file"<< std::endl;
-			
+		if( poDataset == NULL ){
+			std::cout<<"no file \"" << filename << "\"" << std::endl;
+			exit(-1);
+		}
 
 	printf( "Driver: %s/%s\n",
 		poDataset->GetDriver()->GetDescription(),
@@ -174,7 +177,7 @@ RASTER = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(),
 	const char * layer;
 	line_type Line;
 	point_type P;
-	string f = filename.substr(filename.find("/")+1); 
+	string f = filename.substr(filename.find_last_of('/')+1); 
 	layer =  f.substr(0, f.find(".")).c_str();
 
 	GDALAllRegister();
@@ -417,7 +420,7 @@ int count = 0;
 		//if (geometry::disjoint(front.at(0), geom.DefinePointBuffer(f.back(), dist));
                
 
-    cout << F.at(gg.second).front().x() << endl;
+//     cout << F.at(gg.second).front().x() << endl;
             
     if (front.size() > 0)
 		count++;
