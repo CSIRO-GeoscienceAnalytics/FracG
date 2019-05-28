@@ -11,6 +11,23 @@ GEO::GEO ()
  OGRSpatialReference GeoRef;
  const char *GeoProj;
 
+ //Convert c++ template type to GDAL Datatype
+ template <typename T> struct GetGDALDataTypeTraits
+ {
+	 static const GDALDataType datatype;
+ };
+ template<> struct GetGDALDataTypeTraits<unsigned char> {static const GDALDataType datatype = GDT_Byte;};
+ template<> struct GetGDALDataTypeTraits<char> {static const GDALDataType datatype = GDT_Byte;};
+ template<> struct GetGDALDataTypeTraits<unsigned short> {static const GDALDataType datatype = GDT_UInt16;};
+ template<> struct GetGDALDataTypeTraits<short> {static const GDALDataType datatype = GDT_Int16;};
+ template<> struct GetGDALDataTypeTraits<unsigned int> {static const GDALDataType datatype = GDT_UInt32;};
+ template<> struct GetGDALDataTypeTraits<int> {static const GDALDataType datatype = GDT_Int32;};
+ template<> struct GetGDALDataTypeTraits<float> {static const GDALDataType datatype = GDT_Float32;};
+ template<> struct GetGDALDataTypeTraits<double> {static const GDALDataType datatype = GDT_Float64;};
+ template <typename T> static GDALDataType GetGDALDataType()
+ {
+	 return GetGDALDataTypeTraits<T>::datatype;
+ }
 
 //create array with size of raster
 template<typename T> 
@@ -27,6 +44,62 @@ T** GEO::RasterConvert(int rows, int cols, T **M)
 {
  for (auto vd : boost::make_iterator_range(vertices(G))) 
    G[vd].elevation = getElevation(G[vd].location, filename);
+}
+
+//read the entire file at once, rather than one at a time. gives faster IO. This assumes that we can fit the entire file in memory at once.
+void GEO::AssignValuesAll(Graph& G, std::string const& filename)
+{
+	int *data = nullptr;
+	readRaster<int>(filename, data);
+	for (auto vd : boost::make_iterator_range(vertices(G))) 
+	{       
+		point_type p = G[vd].location;
+		G[vd].elevation = getElevationFromArray(p, data);
+		G[vd].Pressure = G[vd].elevation * 9.81 * 1;
+	}
+	
+	CPLFree(data);
+}
+
+//convenience function to read a value using a point as an index
+int GEO::getElevationFromArray(point_type p, const int *data){
+	int xind = (p.x() - GeoTransform[0]) / GeoTransform[1];
+	int yind = abs((p.y() - GeoTransform[3]) / GeoTransform[5]);
+	return data[yind*((int)GeoTransform[6])+xind];
+}
+
+//read in the contents of a raster file to a user-specified one-dimensional array, for a given datatype
+//Free the data with CPLFree(data)
+template <typename T>
+int GEO::readRaster(std::string const filename, T *&data){
+	const char * name = filename.c_str();
+	GDALDataset  *poDataset;
+	GDALAllRegister();
+
+	poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
+	if( poDataset == NULL )
+		std::cout<<"no file"<< std::endl;
+
+	GDALRasterBand *band = poDataset -> GetRasterBand(1);
+	cout << "xSize = " << GeoTransform[6] << ", XSize = " << band->GetXSize() << ", ySize = " << GeoTransform[7] << ", YSize = " << band->GetYSize() << endl;
+	int xSize = GeoTransform[6];
+	int ySize = GeoTransform[7];
+	data = (T *) CPLMalloc(sizeof(*data) * xSize * ySize); //the buffer that gets filled up
+	
+	if (data == NULL)
+	{
+		cerr << "ERROR: unable to allocate " << sizeof(*data) << " x " << xSize << " x " << ySize << " = " << sizeof(*data) * xSize * ySize << " bytes to read in raster file" << endl;
+		return -1;
+	}
+	
+	int err = band->RasterIO(GF_Read,0,0,xSize,ySize,data,xSize,ySize,GetGDALDataType<T>(),0,0,nullptr); //GDT_Int32
+
+	if (err != 0)
+		cout << "ERROR: cannot read elevation data!" << endl;
+	
+	GDALClose( poDataset );
+	
+	return err;
 }
 
  //read pixel vaule of DEM at coodinate
@@ -190,6 +263,8 @@ RASTER = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(),
         printf( " Open failed.\n" );
         exit( 1 );
     }   
+ 
+	cout << "f = " << f << ", layer = " << layer <<endl;
  
     OGRLayer  *poLayer = poDS->GetLayerByName( layer );
     poLayer->ResetReading();

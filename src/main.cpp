@@ -99,7 +99,7 @@ std::clock_t startcputime = std::clock();
 	G.ReadVEC(graph, map,faults);
 	//G.CreateGraph(graph, map, Dist);
 //	G.CheckNetwork(graph, map, Dist);
- geo.AssignValues(graph, rasFile);
+ geo.AssignValuesAll(graph, rasFile);
 	G.GraphAnalysis(graph, METRICS); 
 
  stats.DEManalysis(graph, 60, rasFile, RASTER);
