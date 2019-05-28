@@ -60,7 +60,10 @@ struct larger
  void Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double max_len);
  
  int getElevation(point_type p, std::string const& filename);
+ int getElevationFromArray(point_type p, const int *data);
  void AssignValues(Graph& G, std::string const& filename);
+ void AssignValuesAll(Graph& G, std::string const& filename);
+ template<typename T> int readRaster(std::string const filename, T *&data);
  void GetRasterProperties(std::string const& filename, double**& RASTER);
  void read_wkt(std::string const& filename, std::vector<line_type>& lineString);
  void read_shp(std::string const& filename, std::vector<line_type>& lineString);
