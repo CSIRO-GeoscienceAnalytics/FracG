@@ -21,10 +21,11 @@ class GEOMETRIE
  {
 	line_type cross;
 	point_type centre, p1, p2;
+	int seg_count;
 	vector<line_type> all;
 
 	Perpencicular() : cross(), centre(), p1(), p2(), all()
-	{}
+	{seg_count = 0;}
 
 	inline void operator()(Segment const& s)
 	{
@@ -34,10 +35,6 @@ class GEOMETRIE
 		p1 = cross.front();
 		p2 = cross.back();
 		geometry::centroid(cross, centre);
-			
-		geometry::append(cross, p1);
-		geometry::append(cross, centre);
-		geometry::append(cross, p2);
 			
 		rx = p2.x() - p1.x();
 		ry = p2.y() - p1.y();
@@ -57,6 +54,7 @@ class GEOMETRIE
 		all.push_back(cross);
 	}
  };
+ 
 
 //find the centre of a segment------------------------------------------ 
  template <typename Segment>
@@ -82,7 +80,7 @@ class GEOMETRIE
  BUFFER DefinePointBuffer(point_type POINT, const double Bdistance );
  BUFFER DefineLineBuffer(line_type fault, const double Bdistance);
  double minSpacing(line_type Trace);
- line_type GetSegment(line_type Trace, point_type Begin, point_type Junction);
+ line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
  void SortDist(vector <std::tuple<long double, point_type, edge_iter>>& cross);
 
  };

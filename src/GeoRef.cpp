@@ -473,39 +473,126 @@ void GEO::Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double
  }         
 }
 
+double CalculateAngle(line_type &a, bool a_front, line_type &b, bool b_front)
+{
+	point_type a1, a2, b1, b2;
+	if (a_front)
+	{
+		a1 = a[0];
+		a2 = a[1];
+	} else {
+		const int s = a.size();
+		a1 = a[s-2];
+		a2 = a[s-1];
+	}
+	if (b_front)
+	{
+		b1 = b[0];
+		b2 = b[1];
+	} else {
+		const int s = b.size();
+		b1 = b[s-2];
+		b2 = b[s-1];
+	}
+	if (a_front == b_front){
+		point_type temp = b1;
+		b1 = b2;
+		b2 = temp;
+	}
+	const double dxa = a1.x() - a2.x();
+	const double dya = a1.y() - a2.y();
+	const double dxb = b1.x() - b2.x();
+	const double dyb = b1.y() - b2.y();
+	const double la = std::sqrt(std::pow(dxa, 2) + std::pow(dya, 2));
+	const double lb = std::sqrt(std::pow(dxb, 2) + std::pow(dyb, 2));
+	const double dotprod = dxa*dxb + dya*dyb;
+	const double theta = acos(dotprod / (la*lb));
+	return theta;
+}
+
+bool MergeConnections(vector<line_type>&in, vector<bool> &seen, line_type &base, double threshold)
+{
+	const double angle_threshold = 25 * math::constants::pi<double>() / 180;
+	bool changed;
+	
+	do {
+		int front_match_count = 0; //only merge if there is one and only one other fault line that is close enough
+		int back_match_count = 0;
+		int front_match = -1, back_match = -1;
+		bool front_match_loc = false, back_match_loc = false; //true iff we're matching to the front of the other linestring
+		for (auto comp_it = in.begin(); comp_it != in.end(); comp_it++)
+		{
+			const int comp_index = comp_it - in.begin();
+			if (seen.at(comp_index)) continue;
+			if (geometry::distance(base.front(), comp_it->front()) <= threshold)
+			{
+				front_match_count++;
+				front_match = comp_index;
+				front_match_loc = true;
+			}
+			if (geometry::distance(base.front(), comp_it->back()) <= threshold)
+			{
+				front_match_count++;
+				front_match = comp_index;
+				front_match_loc = false;
+			}
+			if (geometry::distance(base.back(), comp_it->front()) <= threshold)
+			{
+				back_match_count++;
+				back_match = comp_index;
+				back_match_loc = true;
+			}
+			if (geometry::distance(base.back(), comp_it->back()) <= threshold)
+			{
+				back_match_count++;
+				back_match = comp_index;
+				back_match_loc = false;
+			}
+		}
+		changed = false;
+		if (front_match_count == 1)
+		{
+			double theta = CalculateAngle(base, true, in.at(front_match), front_match_loc);
+			if (abs(theta) <= angle_threshold)
+			{
+				line_type prepend = in.at(front_match);
+				if (front_match_loc) geometry::reverse(prepend);
+				geometry::append(prepend, base);
+				base = prepend;
+				seen.at(front_match) = true;
+				changed = true;
+			}
+		}
+		if (back_match_count == 1)
+		{
+			double theta = CalculateAngle(base, false, in.at(back_match), back_match_loc);
+			if (abs(theta) <= angle_threshold){
+				line_type append = in.at(back_match);
+				if (!back_match_loc) geometry::reverse(append);
+				geometry::append(base, append);
+				seen.at(back_match) = true;
+				changed = true;
+			}
+		}
+	} while (changed);
+	return true;
+}
 
 
 void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 {
  GEOMETRIE geom;
- seg_tree SG = Seg_Tree(F);
- vector<seg_index> front, back;
-
-int count = 0;
- BOOST_FOREACH(line_type f, F)
- {
-	front.clear();
-	back.clear();
-	
-	box g ;
-	BUFFER y = geom.DefinePointBuffer(f.front(), dist);
-	geometry::convert(g, y);
-
-	//SG.query(geometry::index::nearest(f.front(),1), std::back_inserter(front));   
-		//if (geometry::disjoint(front.at(0), geom.DefinePointBuffer(f.back(), dist));
-               
-
-//     cout << F.at(gg.second).front().x() << endl;
-            
-    if (front.size() > 0)
-		count++;
-		
-    if (back.size() > 0)
-		count++;
-      
-            
-
+ vector<line_type> new_F;
+ vector<bool> seen(F.size(), false); 
+ 
+ for (auto it = F.begin(); it != F.end(); it++){
+	 int index = it-F.begin();
+	 if (seen.at(index)) continue;
+	 seen.at(index) = true;
+	 line_type base = *it;
+	 MergeConnections(F, seen, base, dist);
+	 new_F.push_back(base);
  }
- cout << "detected " << count << " bad vertices" << endl;
+ F = new_F;
 }
  

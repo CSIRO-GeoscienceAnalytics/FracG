@@ -71,7 +71,8 @@
  {
 //======================GEOMETRY======================================== 
  //typedef geometry::model::point<double, 2, geometry::cs::geographic <geometry::degree>> point_type;  
- typedef geometry::model::d2::point_xy<long double>  point_type; 
+ typedef geometry::model::d2::point_xy<long double>  point_type;
+ typedef boost::geometry::model::d2::point_xy<long long> point_int;
  typedef boost::geometry::model::segment<point_type> Segment;
  typedef geometry::model::linestring<point_type> line_type;
  typedef geometry::model::multi_linestring<line_type> multiline_type;
@@ -131,6 +132,7 @@
 
  typedef std::vector<edge_type> short_path;
  typedef map<point_type, vertex_type, geometry::less<point_type> > map_type;
+ typedef map<point_int, std::vector<vertex_type>, geometry::less<point_int> > map_vertex_type;
  
  typedef std::vector<std::pair<double, double>> FSTATS;
  typedef std::vector<std::tuple<double, double, double>> FSTATS2; 

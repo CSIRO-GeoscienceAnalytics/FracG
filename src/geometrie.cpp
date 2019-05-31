@@ -73,37 +73,66 @@ GEOMETRIE::GEOMETRIE ()
  return len;	 
  }
  
-//split fault trace into segments between intersection------------------ 
- line_type GEOMETRIE::GetSegment(line_type Trace, point_type Begin, point_type Junction)
+ 
+ line_type::iterator get_closest_segment(line_type &Trace, point_type point)
  {
- bool front = false; 
+	 double best_distance = std::numeric_limits<double>::infinity();
+	 line_type::iterator best_index = Trace.begin();
+	 point_type prev_point = Trace.front();
+	 for (line_type::iterator it = Trace.begin(); it != Trace.end(); it++)
+	 {
+		 Segment seg(prev_point, *it);
+		 double distance = geometry::distance(seg, point);
+		 //~ cout << "distance between (" << prev_point.x() << ", " << prev_point.y() << ") -> (" << it->x() << ", " << it->y() << ") and point (" << point.x() << ", " << point.y() << ") is " << distance << endl;
+		 if (distance < best_distance)
+		 {
+			 best_distance = distance;
+			 best_index = it;
+			 //~ cout << "best point is now (" << best_index->x() << ", " << best_index->y() << ") with distance " << best_distance << endl;
+		 }
+		 prev_point = *it;
+	 }
+	 //~ cout << "returning best index at location (" << best_index->x() << ", " <<best_index->y() << ")" << endl;
+	 return best_index;
+ }
+ 
+//split fault trace into segments between intersection------------------ 
+ line_type GEOMETRIE::GetSegment(line_type Trace, point_type Junction, point_type Begin)
+ {
+ bool front = true; 
  box outL;
  line_type line_seg;
- Segment seg(Begin, Junction);
- geometry::envelope(seg, outL);
+ const double threshold = 1;
+ point_type first, last;
  
- if (geometry::equals(Trace.back(), Begin))
-	front = true;
+ line_type::iterator jit = get_closest_segment(Trace, Junction);
+ line_type::iterator bit = get_closest_segment(Trace, Begin);
  
- if (front)
- {
-	geometry::append(line_seg, Begin);
-		BOOST_FOREACH(point_type P, Trace)
-			if (geometry::within(P, outL))
-				geometry::append(line_seg, P);
-	geometry::append(line_seg, Junction);
+ line_type::iterator first_segment, last_segment;
+ if (jit <= bit){
+	 first = Junction;
+	 last = Begin;
+	 first_segment = jit;
+	 last_segment = bit;
+ } else {
+	 first = Begin;
+	 last = Junction;
+	 first_segment = bit;
+	 last_segment = jit;
  }
- 
- else if (!front)
- {
-	geometry::append(line_seg, Begin);
-		BOOST_REVERSE_FOREACH(point_type P, Trace)
-			if (geometry::within(P, outL))
-				geometry::append(line_seg, P);
-	geometry::append(line_seg, Junction);
+
+ if (jit == bit){
+	 geometry::append(line_seg, first);
+	 geometry::append(line_seg, last);
+	 return line_seg;
  }
- 
- 
+ geometry::append(line_seg, first);
+ for (auto it = first_segment; it != last_segment; it++)
+ {
+	 if (geometry::distance(*std::next(it, -1), *it) > threshold) 
+		geometry::append(line_seg, *it);
+ }
+ geometry::append(line_seg, last);
  return line_seg; 
  }
  
@@ -122,7 +151,11 @@ GEOMETRIE::GEOMETRIE ()
 	for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 	{
 		if (*it == get<0>(*I))
+		{
 			 NewCross.push_back(*I);
+			 cross.erase(I);
+			 break;
+		 }
 	}
  cross = NewCross;
  }

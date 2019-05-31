@@ -59,7 +59,7 @@ cout<< "******************************************** \n"
  STATS stats;
  GEOMETRIE geom;
  seg_tree Segment_Tree;
- map_type map;
+ map_vertex_type map;
  FSTATS  faultStats;
  FSTATS2 faultStats2;
  point_type source, target;
@@ -88,16 +88,16 @@ std::clock_t startcputime = std::clock();
 		geo.read_shp(vecFile, faults);
 	if (ext == ".txt")
 		geo.read_wkt(vecFile, faults);  
+		
 	geo.CorrectNetwork(faults, Dist);
-
-
 
  geo.GetRasterProperties(rasFile, RASTER);
  
 	stats.CreateStats(txtF, faults);
-
 	G.ReadVEC(graph, map,faults);
-	//G.CreateGraph(graph, map, Dist);
+	G.SplitFaults(graph, map, Dist);
+	G.DrawGraph(graph);
+	
 //	G.CheckNetwork(graph, map, Dist);
  geo.AssignValuesAll(graph, rasFile);
 	G.GraphAnalysis(graph, METRICS); 
@@ -115,13 +115,13 @@ std::clock_t startcputime = std::clock();
    target.set<1>(-1809965.628127270000);
 
 	//G.ShortPath(graph, map, source, target, 500);
-	//G.MinTree (graph);
+	G.MinTree (graph);
 	
 	//G.CreateFractures(frac_graph, map, faults, rasFile ); 
  //geo.WriteTxt(frac_graph, "frac_graph.txt");
 //----------------------------------------------------------------------
  cout << "Finished in " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n" << endl;
- //stats.AdditionalData(faults, graph);
+ stats.AdditionalData(faults, graph);
  
  seg_tree T = geo.Seg_Tree(faults);
   

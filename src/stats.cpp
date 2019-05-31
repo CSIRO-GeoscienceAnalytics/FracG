@@ -792,6 +792,11 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 				int maxY = abs((geometry::get<geometry::max_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
 				int minY = abs((geometry::get<geometry::min_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
 				
+				minX = std::max(minX, 0);
+				maxX = std::min(maxX, (int)GeoTransform[6]);
+				minY = std::max(minY, 0);
+				maxY = std::min(maxY, (int)GeoTransform[7]);
+				
 				for (int x = minX; x < maxX; x++)
 				{
 				point.set<0>(GeoTransform[0] + x * GeoTransform[1]);
@@ -826,16 +831,18 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 			{
 				GEOMETRIE::Perpencicular <geometry::model::referring_segment<point_type>> functor;
 				functor = geometry::for_each_segment(G[ve].trace, functor);
-					 
-					int segm = 0;
-					BOOST_FOREACH(line_type cross, functor.all)
-					{
-					txtF2 << Eg << "\t" << G[ve].BranchType << "\t"<< G[ve].component << "\t" << "\t" ;
+
+				int segm = 0;
+				BOOST_FOREACH(line_type cross, functor.all)
+				{
+					bool have_front = false, have_back = false;
+					txtF2 << Eg << "\t" << G[ve].BranchType << "\t"<< G[ve].component << "\t";
 					point_type f = cross.front();
 					point_type b = cross.back();
 //front-----------------------------------------------------------------
 					Radius = geom.DefinePointBuffer(f, radius);
 					geometry::envelope(Radius, AOI);
+					
 					int maxX = (geometry::get<geometry::max_corner, 0>(AOI) - GeoTransform[0]) / GeoTransform[1];
 					int minX = (geometry::get<geometry::min_corner, 0>(AOI) - GeoTransform[0]) / GeoTransform[1]; 
 					int maxY = abs((geometry::get<geometry::max_corner, 1>(AOI) - GeoTransform[3]) / GeoTransform[5]);
@@ -847,34 +854,35 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 					minY = std::max(minY, 0);
 					maxY = std::min(maxY, (int)GeoTransform[7]);
 
-						for (int x = minX; x < maxX; x++)
-						{
-							point.set<0>(GeoTransform[0] + x * GeoTransform[1]);
-							
-							for (int y = maxY; y < minY; y++)
-							{
-								point.set<1>(GeoTransform[3] + y * GeoTransform[5]);
-
-								if (geometry::within(point, Radius))
-								{
-									//Points <<  GeoTransform[0]+ x *  GeoTransform[1] << "\t" <<  GeoTransform[3]+ y *  GeoTransform[5] <<  "\t" << 0 << "\t"<< RASTER[x][y] <<  endl;;
-									data.push_back(RASTER[x][y]);
-								}
-								geometry::clear(point);
-							}
-						}
+					for (int x = minX; x < maxX; x++)
+					{
+						point.set<0>(GeoTransform[0] + x * GeoTransform[1]);
 						
-						if (data.size() !=0)
+						for (int y = maxY; y < minY; y++)
 						{
+							point.set<1>(GeoTransform[3] + y * GeoTransform[5]);
+
+							if (geometry::within(point, Radius))
+							{
+								Points <<  GeoTransform[0]+ x *  GeoTransform[1] << "\t" <<  GeoTransform[3]+ y *  GeoTransform[5] <<  "\t" << 0 << "\t"<< RASTER[x][y] <<  endl;;
+								data.push_back(RASTER[x][y]);
+							}
+							geometry::clear(point);
+						}
+					}
+					
+					if (data.size() !=0)
+					{
+						have_front = true;
 						vec DATA(data.size(),fill::zeros);
-							for(int i =0; i < (int) data.size(); i++)
-								DATA(i) = data.at(i);
-							m_front = arma::mean(DATA);
+						for(int i =0; i < (int) data.size(); i++)
+							DATA(i) = data.at(i);
+						m_front = arma::mean(DATA);
 						txtF2 << m_front << "\t" << arma::stddev(DATA) << "\t";
 						data.clear();
-						}
+					}
 						
-//back------------------------------------------------------------------
+	//back------------------------------------------------------------------
 					Radius = geom.DefinePointBuffer(b, radius);
 					geometry::envelope(Radius, AOI);
 					maxX = (geometry::get<geometry::max_corner, 0>(AOI) - GeoTransform[0]) / GeoTransform[1];
@@ -905,24 +913,26 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 					}
 					if (data.size() !=0)
 					{
+						have_back = true;
 						vec DATA = conv_to<vec>::from(data);
 						m_back = arma::mean(DATA);
 						txtF2 << m_back << "\t" << arma::stddev(DATA) <<"\t";
 						data.clear();
 					}
 					
-//slope-----------------------------------------------------------------
-					if (m_front != 0 && m_back != 0)
+	//slope-----------------------------------------------------------------
+					if (have_front && have_back)
 					{
 						if (m_front > m_back)
 							Sl = (m_front - m_back) / geometry::distance(f,b);
 					
 						else if (m_front < m_back)
 							Sl = (m_back - m_front) / geometry::distance(f,b);
-						txtF2 << Sl << endl;
+						txtF2 << Sl;
 						segm++;
 						slope.push_back(Sl);
 					}
+					txtF2 << endl;
 				}
 			}
 			if (slope.size() >0 )

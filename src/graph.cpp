@@ -11,21 +11,37 @@ GRAPH::GRAPH ()
 }
 
 //add new vertex to graph-----------------------------------------------
-vertex_type GRAPH::AddNewVertex(map_type& map, point_type const& key, Graph& graph)
+vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph)
  {
- typename map_type::const_iterator it = map.find(key);
-	if (it == map.end())
+	const double threshold = 1;
+	point_int check;
+	check.set<0>((int)key.x());
+	check.set<1>((int)key.y());
+	typename map_vertex_type::iterator it = map.find(check);
+	
+	if (it != map.end())
 	{
-		vertex_type new_vertex = add_vertex(FVertex<typename map_type::key_type>(key), graph);
-		map[key] = new_vertex;
+		std::vector<vertex_type> &possible = it->second;
+		for (auto pit = possible.begin(); pit != possible.end(); pit++)
+		{
+			if (geometry::distance(graph[*pit].location, key) <= threshold) return *pit;
+		}
+		vertex_type new_vertex = add_vertex(FVertex<point_type>(key), graph);
+		possible.push_back(new_vertex);
 		return new_vertex;
 	}
- return it->second; 
+	std::vector<vertex_type> possible(1);
+	vertex_type new_vertex = add_vertex(FVertex<point_type>(key), graph);
+	possible.push_back(new_vertex);
+	map[check] = possible;
+	return new_vertex;
+	//~ return it->second; 
  }
 
 //add new edge to teh graph---------------------------------------------
  void GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg)
  {
+	 //cout << "Assing edge between " << S << " and " << T << " with number of vertices " << num_vertices(G) << endl;
 	 if (!boost::edge(S, T, G).second &&
 		!geometry::equals(G[S].location, G[T].location))
 		add_edge(S, T, 
@@ -48,7 +64,7 @@ vertex_type GRAPH::AddNewVertex(map_type& map, point_type const& key, Graph& gra
  }
  
  //read vector data into graph------------------------------------------
- void GRAPH::ReadVEC(Graph& graph, map_type& map, std::vector<line_type> &faults)
+ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
  {
  vector <point_type> Intersec;
  vector <std::tuple< std::pair<point_type, point_type>, line_type, int >> G;
@@ -62,10 +78,12 @@ vertex_type GRAPH::AddNewVertex(map_type& map, point_type const& key, Graph& gra
  GEO g;
  GEOMETRIE geom;
  
- Xmax = GeoTransform[0] + GeoTransform[1] * GeoTransform[6] - 10;    // west
- Xmin = GeoTransform[0] + 10; 									    // east
- Ymax = GeoTransform[3] - 10; 									   // north
- Ymin = GeoTransform[3] + GeoTransform[5] * GeoTransform[7] + 10; //south
+ const double aoi_buffer = 10;
+ 
+ Xmax = GeoTransform[0] + GeoTransform[1] * GeoTransform[6] - aoi_buffer;    // west
+ Xmin = GeoTransform[0] + aoi_buffer; 									    // east
+ Ymax = GeoTransform[3] - aoi_buffer; 									   // north
+ Ymin = GeoTransform[3] + GeoTransform[5] * GeoTransform[7] + aoi_buffer; //south
  
  bx.min_corner().set<0>( Xmin );
  bx.min_corner().set<1>( Ymin );
@@ -83,16 +101,16 @@ vertex_type GRAPH::AddNewVertex(map_type& map, point_type const& key, Graph& gra
 		{
 			geometry::intersection(Fault, pl, Intersec);
 			
-				if (Intersec.size() > 0)
-				{
-					if (geometry::within(Fault.front(), pl))
-						G.push_back(make_tuple(make_pair(Fault.front(),Intersec.at(0)), 
+			if (Intersec.size() > 0)
+			{
+				if (geometry::within(Fault.front(), pl))
+					G.push_back(make_tuple(make_pair(Fault.front(),Intersec.at(0)), 
 						geom.GetSegment(Fault, Intersec.at(0), Fault.front()), 1));
 				
 					if (geometry::within(Fault.back(), pl))
 						G.push_back(make_tuple(make_pair(Intersec.at(0),Fault.back()), 
 						geom.GetSegment(Fault, Intersec.at(0), Fault.back()), 2));
-				}
+			}
 				
 				if (Intersec.size() == 0)
 					G.push_back(make_tuple(make_pair(Fault.front(),Fault.back()), Fault, 0));
@@ -130,7 +148,7 @@ vertex_type GRAPH::AddNewVertex(map_type& map, point_type const& key, Graph& gra
   
   void GRAPH::CheckNetwork(Graph& G, map_type& map, double minDist)
  {
- GEOMETRIE geom;
+ /*GEOMETRIE geom;
  float angle, angle1, angle2;
  vertex_type U, u;
  line_type fault;
@@ -212,12 +230,12 @@ vertex_type GRAPH::AddNewVertex(map_type& map, point_type const& key, Graph& gra
 				remove_vertex(vd, G);
 			}
 		}
-	}
+	}*/
  }
  
  //create the graph by insertic vertices at intersections and 
  //split traces into edges----------------------------------------------
-void GRAPH::CreateGraph(Graph& graph, map_type& map, double minDist )
+void GRAPH::CreateGraph(Graph& graph, map_vertex_type& map, double minDist )
 {
  GEOMETRIE geom;
  long double Distance;
@@ -233,6 +251,8 @@ void GRAPH::CreateGraph(Graph& graph, map_type& map, double minDist )
 
  typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, edge_iter>> >> UpGraph;
  UpGraph GraphBuild;
+ 
+ const double threshold = 1.0;
  
  for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
  {
@@ -288,26 +308,26 @@ void GRAPH::CreateGraph(Graph& graph, map_type& map, double minDist )
 		geom.SortDist(cross);
 		for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 		{
-		NewV =AddNewVertex(map, get<1>(*I), graph);
-		auto nx = std::next(I, 1);
-			if (get<0>(*I) == get<0>(cross.at(0)))
+			NewV = AddNewVertex(map, get<1>(*I), graph);
+			auto nx = std::next(I, 1);
+			if (abs(get<0>(*I) - get<0>(cross.at(0))) <= threshold)
 				AddNewEdge(graph, U, NewV, geom.GetSegment( fault, graph[U].location, graph[NewV].location));
 
-			if (get<0>(*I) == get<0>(cross.back()))
+			if (abs(get<0>(*I) - get<0>(cross.back())) <= threshold)
 				AddNewEdge(graph, u, NewV, geom.GetSegment( fault, graph[u].location, graph[NewV].location));
 
 			else
 			{
-			NewV2 = AddNewVertex(map, get<1>(*nx), graph);
-			AddNewEdge(graph, NewV, NewV2, geom.GetSegment( fault, graph[NewV].location, graph[NewV2].location));
+				NewV2 = AddNewVertex(map, get<1>(*nx), graph);
+				AddNewEdge(graph, NewV, NewV2, geom.GetSegment( fault, graph[NewV].location, graph[NewV2].location));
 			}
 		}
 	}
 	else
 	{
-	NewV = AddNewVertex(map, get<1>(cross.at(0)), graph);
-	AddNewEdge(graph, U, NewV, geom.GetSegment( fault, graph[U].location, graph[NewV].location));
-	AddNewEdge(graph, u, NewV, geom.GetSegment( fault, graph[u].location, graph[NewV].location));
+		NewV = AddNewVertex(map, get<1>(cross.at(0)), graph);
+		AddNewEdge(graph, U, NewV, geom.GetSegment( fault, graph[NewV].location, graph[U].location));
+		AddNewEdge(graph, u, NewV, geom.GetSegment( fault, graph[NewV].location, graph[u].location));
 
 		if (!geometry::equals(graph[U].location, graph[NewV].location) &&
 			!geometry::equals(graph[u].location, graph[NewV].location) &&
@@ -315,13 +335,90 @@ void GRAPH::CreateGraph(Graph& graph, map_type& map, double minDist )
 				removeEdge.push_back(make_pair(U, u));
 	}
  }
-
+/*
  //Now remove edges-----------------------------------------------------
  sort(removeEdge.begin(), removeEdge.end()); 
  removeEdge.erase(std::unique(removeEdge.begin(), removeEdge.end()), removeEdge.end());  
  for ( vector < pair<vertex_type, vertex_type> >::const_iterator it = removeEdge.begin();  
 	it != removeEdge.end () ;  it++)
 		remove_edge(get<0>(*it), get<1>(*it), graph);
+		* */
+}
+
+void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
+{
+ Graph g;
+ map_vertex_type m;
+ GEOMETRIE geom;
+ long double Distance;
+ line_type fault, fault2;
+ edge_iter Eg, Eg_end, Eg2, Eg2_end;
+ vertex_type U, u, NewV, NewV2;
+ vector<point_type> Intersec;
+ vector<point_type> rmVert;
+
+ vector <std::pair<vertex_type, vertex_type >> removeEdge;
+ std::pair<vertex_type, vertex_type > removeS, removeT;
+ vector <std::tuple<long double, point_type, edge_iter>> cross;
+
+ typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, edge_iter>> >> UpGraph;
+ UpGraph GraphBuild;
+ 
+ const double threshold = 1.0;
+ 
+ for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
+ {
+	fault  = graph[*Eg].trace;
+	for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
+	{
+		fault2 = graph[*Eg2].trace;	
+		Intersec.clear();
+		if(Eg == Eg2) continue;
+//check for X-node------------------------------------------------------
+		if(geometry::intersects(fault, fault2)) 
+		{
+			geometry::intersection(fault, fault2, Intersec);
+			Distance =  geometry::length(geom.GetSegment(fault, fault.front(), Intersec.at(0)));
+			cross.push_back(make_tuple(Distance, Intersec.at(0), Eg2));
+		}
+//check for Y-node------------------------------------------------------
+		else
+		{ 
+			if (geometry::distance( fault, fault2.front()) < minDist )
+			{
+				Distance =  geometry::length(geom.GetSegment(fault, fault.front(), fault2.front()));
+				cross.push_back(make_tuple(Distance, fault2.front(), Eg2));
+			}
+			if (geometry::distance(fault, fault2.back()) < minDist )
+			{
+				Distance =  geometry::length(geom.GetSegment(fault, fault.front(), fault2.back()));
+				cross.push_back(make_tuple(Distance, fault2.back(), Eg2));
+			}
+		} 
+	}
+	
+	geom.SortDist(cross);
+	U = AddNewVertex(m, fault.front(), g);
+	u = AddNewVertex(m, fault.back(), g);
+	vertex_type prev_vertex = U;
+	
+	for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
+	{
+		point_type intersect = get<1>(*I);
+		bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
+		bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
+		if (is_start || is_end) continue;
+		NewV = AddNewVertex(m, intersect, g);
+		AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location));
+		prev_vertex = NewV;
+	}
+	AddNewEdge(g, prev_vertex, u, geom.GetSegment(fault, g[prev_vertex].location, g[u].location));
+	cross.clear();
+ }
+ 
+ cout << endl;
+ graph = g;
+ map = m;
 }
 
 //Topolgy analysis of graph---------------------------------------------
@@ -611,7 +708,7 @@ if (NbN != 0)
  }
  
  //populate vicinity of traces with potential fracture centres----------
-void GRAPH::CreateFractures(Graph& G, map_type& map, vector<line_type> FAULTS, string const& filename)
+void GRAPH::CreateFractures(Graph& G, map_vertex_type& map, vector<line_type> FAULTS, string const& filename)
  {
 	std::clock_t startcputime = std::clock();
 	cout << "Distribute fractures: "<< endl;
@@ -730,7 +827,7 @@ void GRAPH::CreateFractures(Graph& G, map_type& map, vector<line_type> FAULTS, s
 }
  
 //find shortest path between source and target--------------------------
- void GRAPH::ShortPath(Graph G, map_type m, point_type source, point_type target, double radius)
+ void GRAPH::ShortPath(Graph G, map_vertex_type m, point_type source, point_type target, double radius)
 { 
  GEOMETRIE geom;
  GEO Gref;
@@ -801,7 +898,7 @@ Gref.WriteSHP(shortP, "ShortestPath.shp");
  GEO Gref;  
  int i = 0;
  std::string line;
- map_type map;
+ map_vertex_type map;
  line_type fault;
   
   std::vector < edge_type > spanning_tree;
