@@ -10,33 +10,81 @@ GRAPH::GRAPH ()
 
 }
 
+void GetVertexData(map_vertex_type& map, point_type const &key, Graph &graph, std::vector<vertex_type> **vertex_list, vertex_type **found)
+{
+	*vertex_list = nullptr;
+	*found = nullptr;
+	const double threshold = 1; //verticies are considered to be in the same if the key and existing vertex are within this distance of each other
+	//check.set<0>();
+	//check.set<1>();
+	//check the "native" integer key first, then check all other integer keys around it
+	const long long xPos = (long long)key.x();
+	const long long yPos = (long long)key.y();
+	const long int check_threshold = lrint(ceil(threshold));
+	std::vector<point_int> key_list;
+	point_int base_key(xPos, yPos);
+	key_list.push_back(base_key);
+	for (long long xoff = -check_threshold; xoff <= check_threshold; xoff++){
+		for (long long yoff = -check_threshold; yoff <= check_threshold; yoff++){
+			if (xoff == 0 && yoff == 0) continue; //don't add the base again
+			point_int check(xPos+xoff, yPos+yoff);
+			key_list.push_back(check);
+		}
+	}
+	
+	for (auto cit = key_list.begin(); cit != key_list.end(); cit++) //iterating through list of keys to check
+	{
+		typename map_vertex_type::iterator it = map.find(*cit); //search the map for the current key
+		if (it == map.end()) continue; // no vertex found here, check other locations
+		std::vector<vertex_type> *possible = &(it->second);
+		
+		for (auto pit = possible->begin(); pit != possible->end(); pit++) //check the list of possible existing verticies
+		{
+			if (geometry::distance(graph[*pit].location, key) <= threshold){
+				//if we find a match, return it
+				if (vertex_list != NULL) *vertex_list = possible;
+				*found = &(*pit);
+				return;
+			}
+		}
+	}
+	//haven't found a vertex
+	if (vertex_list == NULL) return;
+	typename map_vertex_type::iterator it = map.find(base_key);
+	if (it != map.end()) *vertex_list = &(it->second); //we don't have a vertex, but we do have a list where it should go
+}
+
 //add new vertex to graph-----------------------------------------------
 vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph)
  {
-	const double threshold = 1;
-	point_int check;
-	check.set<0>((int)key.x());
-	check.set<1>((int)key.y());
-	typename map_vertex_type::iterator it = map.find(check);
-	
-	if (it != map.end())
+	std::vector<vertex_type> *possible = nullptr;
+	vertex_type *found = nullptr;
+	GetVertexData(map, key, graph, &possible, &found);
+	if (found != NULL)
 	{
-		std::vector<vertex_type> &possible = it->second;
-		for (auto pit = possible.begin(); pit != possible.end(); pit++)
-		{
-			if (geometry::distance(graph[*pit].location, key) <= threshold) return *pit;
-		}
-		vertex_type new_vertex = add_vertex(FVertex<point_type>(key), graph);
-		possible.push_back(new_vertex);
-		return new_vertex;
+		return *found; //we have a vector, return it
 	}
-	std::vector<vertex_type> possible(1);
+	if (possible == NULL)
+	{
+		point_int insert_key((long long)key.x(), (long long)key.y());
+		std::vector<vertex_type> possible_vector(1);
+		map[insert_key] = possible_vector;
+		possible = &(map.find(insert_key)->second);
+	}
 	vertex_type new_vertex = add_vertex(FVertex<point_type>(key), graph);
-	possible.push_back(new_vertex);
-	map[check] = possible;
+	possible->push_back(new_vertex);
 	return new_vertex;
 	//~ return it->second; 
  }
+ 
+//get a vertex from the graph, or null if there is no vertex at the specified location
+vertex_type GRAPH::GetVertex(map_vertex_type& map, point_type const& key, Graph& graph)
+{
+	std::vector<vertex_type> *possible = nullptr;
+	vertex_type *found = nullptr;
+	GetVertexData(map, key, graph, &possible, &found);
+	return *found;
+}
 
 //add new edge to teh graph---------------------------------------------
  void GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg)
@@ -364,7 +412,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
  typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, edge_iter>> >> UpGraph;
  UpGraph GraphBuild;
  
- const double threshold = 1.0;
+//  const double threshold = 1.0;
  
  for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
  {
@@ -407,7 +455,9 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 		point_type intersect = get<1>(*I);
 		bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
 		bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
-		if (is_start || is_end) continue;
+		if (is_start || is_end){
+			continue;
+		}
 		NewV = AddNewVertex(m, intersect, g);
 		AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location));
 		prev_vertex = NewV;
@@ -449,7 +499,7 @@ void GRAPH::GraphAnalysis(Graph& G, vector<float>& METRIC)
  **********************************************************************/
 
 //test whether graph is planer
-	if (boyer_myrvold_planarity_test(G))
+	if (true || boyer_myrvold_planarity_test(G))
 	{
 //number of connected components of the graph
 	numK = connected_components(G, &component[0]);
