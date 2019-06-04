@@ -20,6 +20,7 @@ class GRAPH
 	void CheckNetwork(Graph& G, map_type& map, double minDist);
 
 	vertex_type AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph);
+	vertex_type GetVertex(map_vertex_type& map, point_type const& key, Graph& graph);
 	void AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg);
 	void ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
