@@ -149,8 +149,9 @@ vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Gra
  {
 	 point_int rmP;
 	 vertex_type U ,u;
- cout << "Checking network" << endl;
+//  cout << "Checking network" << endl;
  restart:
+// 	cout << "Map size = " << map.size() << endl;
 	for (auto eg : boost::make_iterator_range(edges(G))) 
 	{
 		if (geometry::length(G[eg].trace) < minDist)
@@ -164,17 +165,17 @@ vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Gra
 				remove_edge(U, u, G);
 				if (degree(U,G) == 0)
 				{
-					cout << "WARNING: Removing edge to vertex " << endl;
+// 					cout << "WARNING: Removing edge to vertex " << endl;
 					rmP.set<0>((int)G[U].location.x());
-					rmP.set<1>((int)G[U].location.x());
+					rmP.set<1>((int)G[U].location.y());
 					remove_vertex(U, G);
 					map.erase(rmP);
 				}
 				if (degree(u,G) == 0)
 				{
-					cout << "WARNING: Removing edge to vertex " << endl;
+// 					cout << "WARNING: Removing edge to vertex " << endl;
 					rmP.set<0>((int)G[u].location.x());
-					rmP.set<1>((int)G[u].location.x());
+					rmP.set<1>((int)G[u].location.y());
 					remove_vertex(u, G);
 					map.erase(rmP);
 				}
