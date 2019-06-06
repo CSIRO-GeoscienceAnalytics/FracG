@@ -38,7 +38,7 @@ vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Gra
 	//~ return it->second; 
  }
 
-//add new edge to teh graph---------------------------------------------
+//add new edge to the graph---------------------------------------------
  void GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg)
  {
 	 //cout << "Assing edge between " << S << " and " << T << " with number of vertices " << num_vertices(G) << endl;
@@ -145,206 +145,45 @@ vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Gra
 			faults.push_back(graph[Eg].trace);
  }
   
-  
-  void GRAPH::CheckNetwork(Graph& G, map_type& map, double minDist)
+  void GRAPH::CheckNetwork(Graph& G, map_vertex_type& map, double minDist)
  {
- /*GEOMETRIE geom;
- float angle, angle1, angle2;
- vertex_type U, u;
- line_type fault;
- vector<point_type> rmVert;
- vector<edge_type> rmEdge;
-
-//check length of edges-------------------------------------------------
+	 point_int rmP;
+	 vertex_type U ,u;
+ cout << "Checking network" << endl;
+ restart:
 	for (auto eg : boost::make_iterator_range(edges(G))) 
 	{
 		if (geometry::length(G[eg].trace) < minDist)
 		{
-		U = source(eg, G);
-		u = target(eg, G);
-
+			U = source(eg, G);
+			u = target(eg, G);
+			
 			if (degree(U, G) == 1 || 
 				degree(u, G) == 1)
-				rmEdge.push_back(eg);
-		}
-	}
-//remove short edges----------------------------------------------------
-	sort(rmEdge.begin(), rmEdge.end()); 
-	rmEdge.erase(std::unique(rmEdge.begin(), rmEdge.end()), rmEdge.end());  
-
-	BOOST_FOREACH(edge_type E, rmEdge)
-	{
-	U = source(E, G);
-	u = target(E, G);
-
-		if (edge(U, u, G).second)
-		{
-		cout << "WARNING: Removed edge to vertex! " << endl;
+			{
 				remove_edge(U, u, G);
-		}
-	}
-//check degrees of vertices---------------------------------------------
-	for (auto vd : boost::make_iterator_range(vertices(G))) 
-	{
-		if (degree(vd, G) == 0)
-			rmVert.push_back(G[vd].location);
-		
-		if (degree(vd, G) == 2)
-		{
-		auto be = adjacent_vertices(vd, G);
-		   for (auto beit = be.first; beit != be.second; ++beit)
-			{
-				
-			angle1 = (float)(atan2(G[vd].location.x() - G[*beit].location.x(), G[vd].location.y() - G[*beit].location.y())) 
-							* (180 / math::constants::pi<double>());
-							
-							
-							
-				if (angle1 < 0) 
-					angle1 += 180;
-				
-				if (angle != 0)
-				
-			cout << angle << " " << angle1 << endl;
-			angle = angle1;	
-			}
-
-		}
-		
-		if (degree(vd, G) > 4)
-		{
-		cout << "ERROR: Too may edges at vertex \n"
-			<< G[vd].location.x() << " " << G[vd].location.y() << endl;
-			exit(EXIT_FAILURE);
-		}
-	}
-	
-	for (auto vd : boost::make_iterator_range(vertices(G))) 
-	{
-		BOOST_FOREACH(point_type P, rmVert)
-		{
-			if (geometry::equals(P, G[vd].location))
-			{
-			cout << "WARNING: Removed vertex!" << endl;
-				map.erase(G[vd].location);
-				remove_vertex(vd, G);
-			}
-		}
-	}*/
- }
- 
- //create the graph by insertic vertices at intersections and 
- //split traces into edges----------------------------------------------
-void GRAPH::CreateGraph(Graph& graph, map_vertex_type& map, double minDist )
-{
- GEOMETRIE geom;
- long double Distance;
- line_type fault, fault2;
- edge_iter Eg, Eg_end, Eg2, Eg2_end;
- vertex_type U, u, NewV, NewV2;
- vector<point_type> Intersec;
- vector<point_type> rmVert;
-
- vector <std::pair<vertex_type, vertex_type >> removeEdge;
- std::pair<vertex_type, vertex_type > removeS, removeT;
- vector <std::tuple<long double, point_type, edge_iter>> cross;
-
- typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, edge_iter>> >> UpGraph;
- UpGraph GraphBuild;
- 
- const double threshold = 1.0;
- 
- for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
- {
-	fault  = graph[*Eg].trace;
-	for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
-	{
-	fault2 = graph[*Eg2].trace;	
-	Intersec.clear();
-		if(!geometry::equals(fault, fault2)) 
-		{
-//check for X-node------------------------------------------------------
-			if(geometry::intersects(fault, fault2)) 
-			{
-				geometry::intersection(fault, fault2, Intersec);
-				Distance =  geometry::length(geom.GetSegment(fault, fault.front(), Intersec.at(0)));
-				cross.push_back(make_tuple(Distance, Intersec.at(0), Eg2));
-			}
-//check for Y-node------------------------------------------------------
-			else if (!geometry::intersects(fault, fault2))
-			{ 
-				if (geometry::distance( fault, fault2.front()) < minDist )
+				if (degree(U,G) == 0)
 				{
-					Distance =  geometry::length(geom.GetSegment(fault, fault.front(), fault2.front()));
-					cross.push_back(make_tuple(Distance, fault2.front(), Eg2));
+					cout << "WARNING: Removing edge to vertex " << endl;
+					rmP.set<0>((int)G[U].location.x());
+					rmP.set<1>((int)G[U].location.x());
+					remove_vertex(U, G);
+					map.erase(rmP);
 				}
-				if (geometry::distance(fault, fault2.back()) < minDist )
+				if (degree(u,G) == 0)
 				{
-					Distance =  geometry::length(geom.GetSegment(fault, fault.front(), fault2.back()));
-					cross.push_back(make_tuple(Distance, fault2.back(), Eg2));
+					cout << "WARNING: Removing edge to vertex " << endl;
+					rmP.set<0>((int)G[u].location.x());
+					rmP.set<1>((int)G[u].location.x());
+					remove_vertex(u, G);
+					map.erase(rmP);
 				}
+				goto restart;
 			}
 		}
 	}
-	if (cross.size() > 0)
-		GraphBuild.push_back(make_tuple(Eg, cross));
-	cross.clear();
  }
-
-//Now update the Graph with intersections-------------------------------	
- for (typename UpGraph::const_iterator i = GraphBuild.begin(); i != GraphBuild.end(); ++i) 
- {
-	Eg = get<0>(*i); 
-	fault = graph[*Eg].trace;
-	U = source(*Eg, graph);
-	u = target(*Eg, graph);
-
-	cross = get<1>(*i);
-
-	if (cross.size() > 1)
-	{
-		if (boost::edge(U, u, graph).second) 
-			removeEdge.push_back(make_pair(U, u));
-		geom.SortDist(cross);
-		for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
-		{
-			NewV = AddNewVertex(map, get<1>(*I), graph);
-			auto nx = std::next(I, 1);
-			if (abs(get<0>(*I) - get<0>(cross.at(0))) <= threshold)
-				AddNewEdge(graph, U, NewV, geom.GetSegment( fault, graph[U].location, graph[NewV].location));
-
-			if (abs(get<0>(*I) - get<0>(cross.back())) <= threshold)
-				AddNewEdge(graph, u, NewV, geom.GetSegment( fault, graph[u].location, graph[NewV].location));
-
-			else
-			{
-				NewV2 = AddNewVertex(map, get<1>(*nx), graph);
-				AddNewEdge(graph, NewV, NewV2, geom.GetSegment( fault, graph[NewV].location, graph[NewV2].location));
-			}
-		}
-	}
-	else
-	{
-		NewV = AddNewVertex(map, get<1>(cross.at(0)), graph);
-		AddNewEdge(graph, U, NewV, geom.GetSegment( fault, graph[NewV].location, graph[U].location));
-		AddNewEdge(graph, u, NewV, geom.GetSegment( fault, graph[NewV].location, graph[u].location));
-
-		if (!geometry::equals(graph[U].location, graph[NewV].location) &&
-			!geometry::equals(graph[u].location, graph[NewV].location) &&
-			 boost::edge(U, u, graph).second) 
-				removeEdge.push_back(make_pair(U, u));
-	}
- }
-/*
- //Now remove edges-----------------------------------------------------
- sort(removeEdge.begin(), removeEdge.end()); 
- removeEdge.erase(std::unique(removeEdge.begin(), removeEdge.end()), removeEdge.end());  
- for ( vector < pair<vertex_type, vertex_type> >::const_iterator it = removeEdge.begin();  
-	it != removeEdge.end () ;  it++)
-		remove_edge(get<0>(*it), get<1>(*it), graph);
-		* */
-}
-
+ 
 void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 {
  Graph g;
@@ -363,8 +202,6 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 
  typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, edge_iter>> >> UpGraph;
  UpGraph GraphBuild;
- 
- const double threshold = 1.0;
  
  for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
  {
@@ -405,9 +242,9 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 	for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 	{
 		point_type intersect = get<1>(*I);
-		bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
-		bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
-		if (is_start || is_end) continue;
+		//bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
+		//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
+		//if (is_start || is_end) continue;
 		NewV = AddNewVertex(m, intersect, g);
 		AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location));
 		prev_vertex = NewV;

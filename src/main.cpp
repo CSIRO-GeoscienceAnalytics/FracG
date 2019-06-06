@@ -96,9 +96,9 @@ std::clock_t startcputime = std::clock();
 	stats.CreateStats(txtF, faults);
 	G.ReadVEC(graph, map,faults);
 	G.SplitFaults(graph, map, Dist);
-	G.DrawGraph(graph);
+	//G.DrawGraph(graph);
 	
-//	G.CheckNetwork(graph, map, Dist);
+	G.CheckNetwork(graph, map, Dist);
  geo.AssignValuesAll(graph, rasFile);
 	G.GraphAnalysis(graph, METRICS); 
 

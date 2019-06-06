@@ -297,6 +297,16 @@ RASTER = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(),
 	string output = (string) filename.c_str() + "_results.txt";
 	ofstream txtF (output);	
 
+
+
+
+	
+
+
+
+
+
+
 	if (txtF.is_open())  
 	{ 
 		for (auto vd : boost::make_iterator_range(vertices(g))) 
