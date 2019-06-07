@@ -136,26 +136,19 @@ GEOMETRIE::GEOMETRIE ()
  return line_seg; 
  }
  
-
+//comparison operator that compares a particular index in a (vector of) tuples)
+template<int index, template<typename> class F = std::less>
+struct TupleCompare
+{
+	template<typename T>
+	bool operator()(T const &t1, T const &t2)
+	{
+		return F<typename tuple_element<index, T>::type>()(std::get<index>(t1), std::get<index>(t2));
+	}
+};
+ 
 //sort distances points of graph edge accoding to distrances to a point-
  void GEOMETRIE::SortDist(vector <std::tuple<long double, point_type, edge_iter>>& cross)
  {
- vector<long double> Distances;
- vector <std::tuple<long double, point_type, edge_iter>> NewCross;
- 
- for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
-	Distances.push_back(get<0>(*I));
- sort(Distances.begin(), Distances.end()); 
-
- for (vector<long double>::iterator it = Distances.begin() ; it != Distances.end(); ++it)
-	for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
-	{
-		if (*it == get<0>(*I))
-		{
-			 NewCross.push_back(*I);
-			 cross.erase(I);
-			 break;
-		 }
-	}
- cross = NewCross;
+	std::sort(cross.begin(), cross.end(), TupleCompare<0>());
  }
