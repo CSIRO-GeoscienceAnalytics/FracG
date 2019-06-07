@@ -17,7 +17,7 @@ class GRAPH
 	{}
 	;  
 	void DrawGraph(Graph G);
-	void CheckNetwork(Graph& G, map_type& map, double minDist);
+	void CheckNetwork(Graph& G, map_vertex_type& map, double minDist);
 
 	vertex_type AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph);
 	vertex_type GetVertex(map_vertex_type& map, point_type const& key, Graph& graph);
