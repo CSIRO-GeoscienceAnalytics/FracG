@@ -17,7 +17,7 @@ class GRAPH
 	{}
 	;  
 	void DrawGraph(Graph G);
-	void CheckNetwork(Graph& G, map_vertex_type& map, double minDist);
+	void RemoveSpurs(Graph& G, map_vertex_type& map, double minDist);
 
 	vertex_type AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph);
 	vertex_type GetVertex(map_vertex_type& map, point_type const& key, Graph& graph);
@@ -29,5 +29,5 @@ class GRAPH
 	void CreateFractures(Graph& G, map_vertex_type& map, vector<line_type> FAULTS, string const& filename);
 	void ShortPath(Graph G, map_vertex_type m, point_type source, point_type target, double radius);
 	void MinTree (Graph G);
- };
+};
 #endif
