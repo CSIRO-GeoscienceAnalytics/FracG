@@ -6,6 +6,8 @@
 using namespace boost;
 using namespace FGraph;
 
+enum class AttachPoint : signed char {front=-1, middle=0, back=+1};
+
 class GEOMETRIE
 {
 	public:
@@ -81,7 +83,7 @@ class GEOMETRIE
 	BUFFER DefineLineBuffer(line_type fault, const double Bdistance);
 	double minSpacing(line_type Trace);
 	line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
-	void SortDist(vector <std::tuple<long double, point_type, edge_iter>>& cross);
+	void SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross);
 
 };
  #endif
