@@ -153,11 +153,37 @@ struct TupleCompare
 		return F<typename tuple_element<index, T>::type>()(std::get<index>(t1), std::get<index>(t2));
 	}
 };
+
+//comparison operator that first checks indexa, then uses indexb if the two indexa values are the same
+template<int indexa, int indexb, template<typename> class F = std::less, template<typename> class G = std::equal_to>
+struct TupleTwoCompare
+{
+	template<typename T>
+	bool operator()(T const &t1, T const &t2)
+	{
+		bool first_same = G<typename tuple_element<indexa, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
+		if (!first_same) return F<typename tuple_element<indexa, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
+		return F<typename tuple_element<indexb, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
+	}
+};
+
+//need a specific comparator, not just selecting an appropriate element from the tuple
+struct FaultDistanceCompare
+{
+	bool operator()(std::tuple<long double, point_type, AttachPoint> const &t1, std::tuple<long double, point_type, AttachPoint> const &t2)
+	{
+		AttachPoint const &a1 = get<2>(t1);
+		AttachPoint const &a2 = get<2>(t2);
+		if (a1 != a2) return a1 < a2; //if they attach to different locations, then they go in the order of those locations
+		if (a1 == AttachPoint::front) return get<0>(t1) > get<0>(t2); //if they're both on the front, then the point with the *furthest* distance goes first
+		return get<0>(t1) < get<0>(t2); //if they're both on the end point or (more likely) middle sectoin, add them increasing order of distance, so smaller distances first
+	}
+};
  
 //sort a vector of points according to their distances along a line
-void GEOMETRIE::SortDist(vector <std::tuple<long double, point_type, edge_iter>>& cross)
+void GEOMETRIE::SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross)
 {
-	std::sort(cross.begin(), cross.end(), TupleCompare<0>());
+	std::sort(cross.begin(), cross.end(), FaultDistanceCompare());
 }
 
 
