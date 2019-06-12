@@ -241,7 +241,19 @@ void GRAPH::RemoveSpurs(Graph& G, map_vertex_type& map, double minDist)
 		}
 	}
 }
- 
+
+//return whether the given point should be attached to the front, middle, or end of this fault
+AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distance_along, double threshold){
+	double distance_from_fault = geometry::distance(fault, point);
+	const double fault_distance_threshold = 0.5;
+	if (distance_from_fault <= fault_distance_threshold) return AttachPoint::middle; //if this point is close enough to the fault, then attach it to the middle
+	//from here below, the point is *not* positioned directly on the fault, so figure out if it needs to be attached to either the front, middle, or back
+	if (distance_along <= threshold) return AttachPoint::front;
+	double distance_to_end = geometry::length(fault);
+	if (abs(distance_along - distance_to_end) <= threshold) return AttachPoint::back;
+	return AttachPoint::middle;
+}
+
 //take a graph and split the faults up into fault segments, according to where the faults intersect
 void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 {
@@ -251,23 +263,24 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 	long double Distance;
 	line_type fault, fault2;
 	edge_iter Eg, Eg_end, Eg2, Eg2_end;
-	vertex_type U, u, NewV;
+	vertex_type NewV;
 	vector<point_type> Intersec;
 	vector<point_type> rmVert;
 
 	vector <std::pair<vertex_type, vertex_type >> removeEdge;
 	std::pair<vertex_type, vertex_type > removeS, removeT;
-	vector <std::tuple<long double, point_type, edge_iter>> cross;
+	vector <std::tuple<long double, point_type, AttachPoint>> cross;
 
-	typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, edge_iter>> >> UpGraph;
+	typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, AttachPoint>> >> UpGraph;
 	UpGraph GraphBuild;
 	
 	for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
 	{
 		fault  = graph[*Eg].trace;
+		cross.push_back(make_tuple(0, fault.front(), AttachPoint::middle));
 		for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
 		{
-			fault2 = graph[*Eg2].trace;	
+			fault2 = graph[*Eg2].trace;
 			Intersec.clear();
 			if(Eg == Eg2) continue;
 			
@@ -276,31 +289,35 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 			{
 				geometry::intersection(fault, fault2, Intersec);
 				Distance =  geometry::length(geom.GetSegment(fault, fault.front(), Intersec.at(0)));
-				cross.push_back(make_tuple(Distance, Intersec.at(0), Eg2));
+				cross.push_back(make_tuple(Distance, Intersec.at(0), AttachPoint::middle));
 			}
 			//check for Y-node------------------------------------------------------
 			else
-			{ 
+			{ //cross-bugfix notes: finding a y-node near the border from the fault end point, from the end points that are left after cutting from the edges of the raster file
+				//the two end points are closer to each other then the next intersection they're supposed to be connected to, so they move to each other first, then move 'down' to the intersections they're supposed to be connected to
+				//for fixing this also need to account for situations where the "non-terminating" fault line is already split into two separate fault entries, or that the terminating fault intersects with more than one actual fault
 				if (geometry::distance( fault, fault2.front()) < minDist )
 				{
 					Distance =  geometry::length(geom.GetSegment(fault, fault.front(), fault2.front()));
-					cross.push_back(make_tuple(Distance, fault2.front(), Eg2));
+					AttachPoint attach_to = LocateAttachPoint(fault, fault2.front(), Distance, minDist);
+					cross.push_back(make_tuple(Distance, fault2.front(), attach_to));
 				}
 				if (geometry::distance(fault, fault2.back()) < minDist )
 				{
 					Distance =  geometry::length(geom.GetSegment(fault, fault.front(), fault2.back()));
-					cross.push_back(make_tuple(Distance, fault2.back(), Eg2));
+					AttachPoint attach_to = LocateAttachPoint(fault, fault2.back(), Distance, minDist);
+					cross.push_back(make_tuple(Distance, fault2.back(), attach_to));
 				}
 			}
 		}
+		cross.push_back(make_tuple(geometry::length(fault), fault.back(), AttachPoint::middle));
 		
 		geom.SortDist(cross);
-		U = AddNewVertex(m, fault.front(), g);
-		u = AddNewVertex(m, fault.back(), g);
-		vertex_type prev_vertex = U;
+		vertex_type prev_vertex = AddNewVertex(m, std::get<1>(cross.front()), g);
 		
-		for (typename vector <std::tuple<long double, point_type, edge_iter>>::const_iterator I = cross.begin(); I != cross.end(); I++)
+		for (vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 		{
+			if (I == cross.begin()) continue;
 			point_type intersect = get<1>(*I);
 			//bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
 			//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
@@ -309,7 +326,6 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 			AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location));
 			prev_vertex = NewV;
 		}
-		AddNewEdge(g, prev_vertex, u, geom.GetSegment(fault, g[prev_vertex].location, g[u].location));
 		cross.clear();
 	}
 	
