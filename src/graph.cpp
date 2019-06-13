@@ -119,17 +119,20 @@ void GRAPH::DrawGraph(Graph G)
 //read vector data into graph------------------------------------------
 void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
 {
-	vector <point_type> Intersec;
-	vector <std::tuple< std::pair<point_type, point_type>, line_type, int >> G;
+	geometry::model::multi_linestring<line_type> intersection;
+	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int >> G;
 	std::pair <point_type, point_type> NODES;
 	line_type TRACE;
 	long double Xmax, Xmin, Ymax, Ymin;
-	polygon_type pl;
 	vertex_type VA, VB;
 	box bx;
-	int type;
+	unsigned int type;
 	GEO g;
 	GEOMETRIE geom;
+	
+	const unsigned int FRONT_ENODE = 1 << 0;
+	const unsigned int BACK_ENODE  = 1 << 1;
+	const double endpoint_threshold=0.5;
 	
 	const double aoi_buffer = 10; //area of interest buffer: crop this distance (in metres) from the outside of the raster file
 	
@@ -145,34 +148,28 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 
 
 	//check for edge nodes (crop faults by raster area)--------------------
-	geometry::convert(bx, pl);
 
 	BOOST_FOREACH(line_type const& Fault, faults)
 	{
-		if (geometry::within(Fault.front(), pl) ||
-			geometry::within(Fault.back(), pl))
+		if (geometry::disjoint(Fault, bx)) continue;
+		
+		geometry::intersection(Fault, bx, intersection);
+		
+		if (intersection.size() <= 0) continue;
+		type = 0;
+		for (auto it = intersection.begin(); it != intersection.end(); it++)
 		{
-			geometry::intersection(Fault, pl, Intersec);
-			
-			if (Intersec.size() > 0)
-			{
-				if (geometry::within(Fault.front(), pl))
-					G.push_back(make_tuple(make_pair(Fault.front(),Intersec.at(0)), 
-						geom.GetSegment(Fault, Intersec.at(0), Fault.front()), 1));
-				
-				if (geometry::within(Fault.back(), pl))
-					G.push_back(make_tuple(make_pair(Intersec.at(0),Fault.back()), 
-						geom.GetSegment(Fault, Intersec.at(0), Fault.back()), 2));
-			}
-				
-			if (Intersec.size() == 0)
-				G.push_back(make_tuple(make_pair(Fault.front(),Fault.back()), Fault, 0));
-			Intersec.clear();
+			line_type &segment = *it;
+			//use the distance from the original fault's end points to determine if this segment's end points are from the original fault segment, or are cut off by the boundaries of the area of interest
+			if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold) type |= FRONT_ENODE;
+			if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold) type |=  BACK_ENODE;
+			G.push_back(make_tuple(make_pair(segment.front(),segment.back()), segment, type));
 		}
+		intersection.clear();
 	}
 
 	//create edges and nodes for faults in the graph-------------------------
-	for (typename vector <std::tuple< std::pair<point_type, point_type>, line_type, int >>::const_iterator it = G.begin(); it != G.end(); ++it)
+	for (typename vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int >>::const_iterator it = G.begin(); it != G.end(); ++it)
 	{
 		NODES = get<0> (*it);
 		TRACE = get<1> (*it);
@@ -183,12 +180,9 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 
 		//if( (degree(VA, graph) == 0) && (degree(VB, graph) == 0) )
 		AddNewEdge(graph, VA, VB, TRACE);
-			
-		if (type == 1)
-			graph[VB].Enode = true;
 				
-		if (type == 2)
-			graph[VA].Enode = true;
+		if (type & FRONT_ENODE) graph[VA].Enode = true;
+		if (type &  BACK_ENODE) graph[VB].Enode = true;
 	}
 
 	cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << endl;
