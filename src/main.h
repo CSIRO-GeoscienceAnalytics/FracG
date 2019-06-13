@@ -52,6 +52,7 @@
 #include <boost/geometry/algorithms/intersection.hpp> 
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/linestring.hpp>
+#include <boost/geometry/multi/geometries/multi_linestring.hpp>
 #include <boost/geometry/io/wkt/read.hpp>
 #include <boost/geometry/geometries/point.hpp>
 #include <boost/geometry/geometries/box.hpp>
