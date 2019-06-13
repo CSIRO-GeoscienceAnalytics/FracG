@@ -565,6 +565,28 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 				front_match_loc = match_loc;
 			}
 		}
+		//if there is more than one candidate, check to see if they should be merged into each other instead
+		if (front_match != faults.end() && front_matches.size() >= 2)
+		{
+			for (auto it1 = front_matches.begin(); it1 != front_matches.end(); it1++)
+			{
+				std::list<line_type>::iterator f1 = std::get<0>(*it1);
+				bool front1 = std::get<1>(*it1);
+				for (auto it2 = it1; it2 != front_matches.end(); it2++)
+				{
+					if (it1 == it2) continue;
+					std::list<line_type>::iterator f2 = std::get<0>(*it2);
+					bool front2 = std::get<1>(*it2);
+					double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
+					if (angle_diff < best_angle)
+					{
+						front_match = faults.end();
+						break;
+					}
+				}
+				if (front_match == faults.end()) break;
+			}
+		}
 		if (front_match != faults.end())
 		{
 			line_type prepend = *front_match;
@@ -588,6 +610,28 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 				back_match_loc = match_loc;
 			}
 		}
+		//if there is more than one candidate, check to see if they should be merged into each other instead
+		if (back_match != faults.end() && back_matches.size() >= 2)
+		{
+			for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
+			{
+				std::list<line_type>::iterator f1 = std::get<0>(*it1);
+				bool front1 = std::get<1>(*it1);
+				for (auto it2 = it1; it2 != back_matches.end(); it2++)
+				{
+					if (it1 == it2) continue;
+					std::list<line_type>::iterator f2 = std::get<0>(*it2);
+					bool front2 = std::get<1>(*it2);
+					double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
+					if (angle_diff < best_angle)
+					{
+						back_match = faults.end();
+						break;
+					}
+				}
+				if (back_match == faults.end()) break;
+			}
+		}
 		if (back_match != faults.end()){
 			line_type append = *back_match;
 			if (!back_match_loc) geometry::reverse(append);
@@ -608,7 +652,8 @@ void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 	list<line_type> unmerged_faults; //a list of faults that have not been merged yet. thye get removed from this list once they've been added to merged_faults, either by being merged with another fault segment, or on its own
 	unmerged_faults.insert(std::end(unmerged_faults), std::begin(F), std::end(F));
 	
-	while (!unmerged_faults.empty()){
+	while (!unmerged_faults.empty())
+	{
 		line_type base = unmerged_faults.front();
 		unmerged_faults.pop_front();
 		MergeConnections(unmerged_faults, base, dist);
