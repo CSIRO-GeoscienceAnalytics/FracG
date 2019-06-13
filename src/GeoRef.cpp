@@ -529,76 +529,82 @@ bool MergeConnections(vector<line_type>&in, vector<bool> &seen, line_type &base,
 	//1) Their endpoints are within threshold distance of each other
 	//2) Only two fault segments meet at the intersection point of the two candidate fault segments
 	//3) The angle between the two candidate fault segments is within angle_threshold (in radians)
-	//remmeber that a single fault could be split into more than two fault segments
+	//remember that a single fault could be split into more than two fault segments
+	//change: the damage zone distance depends on the length of the fault, so we need to ensure that they are all joined properly
+	//therefore, we still want to merge fault segments when there are multiple other intersecting faults
+	//and we choose to merge the segment with the smallest angle difference
 	const double angle_threshold = 25 * math::constants::pi<double>() / 180;
 	bool changed;
 	
 	do {
-		int front_match_count = 0; //only merge if there is one and only one other fault line that is close enough
-		int back_match_count = 0;
 		int front_match = -1, back_match = -1;
 		bool front_match_loc = false, back_match_loc = false; //true iff we're matching to the front of the other linestring
+		std::vector<std::tuple<int, bool>> front_matches, back_matches;
+		int candidate = -1;
+		bool match_loc;
 		for (auto comp_it = in.begin(); comp_it != in.end(); comp_it++)
 		{
 			const int comp_index = comp_it - in.begin();
 			if (seen.at(comp_index)) continue;
 			//the line segments could be in any order, so we need to check all four pairs of endpoints
-			if (geometry::distance(base.front(), comp_it->front()) <= threshold)
-			{
-				front_match_count++;
-				front_match = comp_index;
-				front_match_loc = true;
-			}
-			if (geometry::distance(base.front(), comp_it->back()) <= threshold)
-			{
-				front_match_count++;
-				front_match = comp_index;
-				front_match_loc = false;
-			}
-			if (geometry::distance(base.back(), comp_it->front()) <= threshold)
-			{
-				back_match_count++;
-				back_match = comp_index;
-				back_match_loc = true;
-			}
-			if (geometry::distance(base.back(), comp_it->back()) <= threshold)
-			{
-				back_match_count++;
-				back_match = comp_index;
-				back_match_loc = false;
-			}
+			if (geometry::distance(base.front(), comp_it->front()) <= threshold) front_matches.push_back(make_tuple(comp_index, true ));
+			if (geometry::distance(base.front(), comp_it->back() ) <= threshold) front_matches.push_back(make_tuple(comp_index, false));
+			if (geometry::distance(base.back() , comp_it->front()) <= threshold)  back_matches.push_back(make_tuple(comp_index, true ));
+			if (geometry::distance(base.back() , comp_it->back() ) <= threshold)  back_matches.push_back(make_tuple(comp_index, false));
 		}
 		changed = false;
-		if (front_match_count == 1)
+		//check for matches to the front of base
+		double best_angle = std::numeric_limits<double>::infinity();
+		for (auto match_it = front_matches.begin(); match_it != front_matches.end(); match_it++)
 		{
-			double theta = CalculateAngle(base, true, in.at(front_match), front_match_loc);
-			if (abs(theta) <= angle_threshold)
+			std::tie(candidate, match_loc) = *match_it;
+			const double theta = CalculateAngle(base, true, in.at(candidate), match_loc);
+			const double angle_diff = abs(theta);
+			if (angle_diff <= angle_threshold && angle_diff < best_angle)
 			{
-				line_type prepend = in.at(front_match);
-				if (front_match_loc) geometry::reverse(prepend);
-				geometry::append(prepend, base);
-				base = prepend;
-				seen.at(front_match) = true;
-				changed = true;
+				front_match = candidate;
+				best_angle = angle_diff;
+				front_match_loc = match_loc;
 			}
 		}
-		if (back_match_count == 1)
+		if (front_match >= 0)
 		{
-			double theta = CalculateAngle(base, false, in.at(back_match), back_match_loc);
-			if (abs(theta) <= angle_threshold){
-				line_type append = in.at(back_match);
-				if (!back_match_loc) geometry::reverse(append);
-				geometry::append(base, append);
-				seen.at(back_match) = true;
-				changed = true;
+			line_type prepend = in.at(front_match);
+			if (front_match_loc) geometry::reverse(prepend);
+			geometry::append(prepend, base);
+			base = prepend;
+			seen.at(front_match) = true;
+			changed = true;
+		}
+		//check for matches to the back of base
+		best_angle = std::numeric_limits<double>::infinity();
+		for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
+		{
+			std::tie(candidate, match_loc) = *match_it;
+			double theta = CalculateAngle(base, false, in.at(back_match), match_loc);
+			const double angle_diff = abs(theta);
+			if (angle_diff <= angle_threshold && angle_diff < best_angle)
+			{
+				back_match = candidate;
+				best_angle = angle_diff;
+				back_match_loc = match_loc;
 			}
 		}
+		if (back_match >= 0){
+			line_type append = in.at(back_match);
+			if (!back_match_loc) geometry::reverse(append);
+			geometry::append(base, append);
+			seen.at(back_match) = true;
+			changed = true;
+		}
+		
 	} while (changed);
 	return true;
 }
 
 //sometimes the data has faults that are split into different entries in the shapefile
 //this function checks the vector of input line_types for faults that were split, and merges them back together
+//TODO: merge faults together, even if there are 3+ intersecting at a point
 void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 {
 	GEOMETRIE geom;
