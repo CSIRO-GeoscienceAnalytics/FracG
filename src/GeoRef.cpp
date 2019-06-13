@@ -479,18 +479,19 @@ void GEO::Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double
 
 //calculate the angle (in radians) between the connecting end points of two line_type's that sharea  common point
 //the x_front boolean values are true if the user is checking the front of that line segment, and false if the user wants to know the angle from the end of that line segment
-double CalculateAngle(line_type &a, bool a_front, line_type &b, bool b_front)
+//returns close to 0 if the lines are close to having the same angle, or larger angles if the line_types are not in line with each other
+double CalculateAngleDifference(line_type &a, bool a_front, line_type &b, bool b_front)
 {
 	//get the two relevant end points of the oine segments, as it is the first/last two points that define the ending segment of the line_type
-	point_type a1, a2, b1, b2;
+	point_type a1, a2, b1, b2; //a/b1 are the end point(s), a/b2 are the inner points of the line segments being compared
 	if (a_front)
 	{
 		a1 = a[0];
 		a2 = a[1];
 	} else {
 		const int s = a.size();
-		a1 = a[s-2];
-		a2 = a[s-1];
+		a1 = a[s-1];
+		a2 = a[s-2];
 	}
 	if (b_front)
 	{
@@ -498,8 +499,8 @@ double CalculateAngle(line_type &a, bool a_front, line_type &b, bool b_front)
 		b2 = b[1];
 	} else {
 		const int s = b.size();
-		b1 = b[s-2];
-		b2 = b[s-1];
+		b1 = b[s-1];
+		b2 = b[s-2];
 	}
 	//make sure that this function compares the two ending segments in the correct direction
 	if (a_front == b_front){
@@ -516,7 +517,7 @@ double CalculateAngle(line_type &a, bool a_front, line_type &b, bool b_front)
 	const double la = std::sqrt(std::pow(dxa, 2) + std::pow(dya, 2));
 	const double lb = std::sqrt(std::pow(dxb, 2) + std::pow(dyb, 2));
 	const double dotprod = dxa*dxb + dya*dyb;
-	const double theta = acos(dotprod / (la*lb));
+	const double theta = boost::math::constants::pi<double>() - acos(dotprod / (la*lb)); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
 	return theta;
 }
 
@@ -558,7 +559,7 @@ bool MergeConnections(vector<line_type>&in, vector<bool> &seen, line_type &base,
 		for (auto match_it = front_matches.begin(); match_it != front_matches.end(); match_it++)
 		{
 			std::tie(candidate, match_loc) = *match_it;
-			const double theta = CalculateAngle(base, true, in.at(candidate), match_loc);
+			const double theta = CalculateAngleDifference(base, true, in.at(candidate), match_loc);
 			const double angle_diff = abs(theta);
 			if (angle_diff <= angle_threshold && angle_diff < best_angle)
 			{
@@ -581,7 +582,7 @@ bool MergeConnections(vector<line_type>&in, vector<bool> &seen, line_type &base,
 		for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
 		{
 			std::tie(candidate, match_loc) = *match_it;
-			double theta = CalculateAngle(base, false, in.at(back_match), match_loc);
+			double theta = CalculateAngleDifference(base, false, in.at(back_match), match_loc);
 			const double angle_diff = abs(theta);
 			if (angle_diff <= angle_threshold && angle_diff < best_angle)
 			{
