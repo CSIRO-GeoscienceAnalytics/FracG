@@ -483,7 +483,9 @@ void GEO::Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double
 double CalculateAngleDifference(line_type &a, bool a_front, line_type &b, bool b_front)
 {
 	//get the two relevant end points of the oine segments, as it is the first/last two points that define the ending segment of the line_type
-	point_type a1, a2, b1, b2; //a/b1 are the end point(s), a/b2 are the inner points of the line segments being compared
+	point_type a1, a2, b1, b2;
+	//normalise the points so that they are in the order (b2 -> b1) <-> (a1 -> a2)
+	//(matching to the "front" of a and the "back" of b, relative to this diagram)
 	if (a_front)
 	{
 		a1 = a[0];
@@ -502,22 +504,18 @@ double CalculateAngleDifference(line_type &a, bool a_front, line_type &b, bool b
 		b1 = b[s-1];
 		b2 = b[s-2];
 	}
-	//make sure that this function compares the two ending segments in the correct direction
-	if (a_front == b_front){
-		point_type temp = b1;
-		b1 = b2;
-		b2 = temp;
-	}
+
 	//calculate the segments
-	const double dxa = a1.x() - a2.x();
-	const double dya = a1.y() - a2.y();
+	//remember, these are relative to the diagram above
+	const double dxa = a2.x() - a1.x();
+	const double dya = a2.y() - a1.y();
 	const double dxb = b1.x() - b2.x();
 	const double dyb = b1.y() - b2.y();
 	//dot product: a . b == a.x * b.x + a.y * b.y == |a| |b| cos(theta) -> theta = acos(a . b / (|a| |b|))
 	const double la = std::sqrt(std::pow(dxa, 2) + std::pow(dya, 2));
 	const double lb = std::sqrt(std::pow(dxb, 2) + std::pow(dyb, 2));
 	const double dotprod = dxa*dxb + dya*dyb;
-	const double theta = boost::math::constants::pi<double>() - acos(dotprod / (la*lb)); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
+	const double theta = acos(dotprod / (la*lb)); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
 	return theta;
 }
 
