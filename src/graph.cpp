@@ -72,7 +72,7 @@ vertex_type GRAPH::AddNewVertex(map_vertex_type& map, point_type const& key, Gra
 	{
 		//no list of possible vertices, so make one
 		point_int insert_key((long long)key.x(), (long long)key.y());
-		std::vector<vertex_type> possible_vector(1);
+		std::vector<vertex_type> possible_vector;
 		map[insert_key] = possible_vector;
 		possible = &(map.find(insert_key)->second);
 	}
