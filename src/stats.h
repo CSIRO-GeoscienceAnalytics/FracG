@@ -22,7 +22,7 @@ class STATS
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
 	double LineExtractor(line_type L, double radius, double Transform[8], double** raster);
 
-	void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, point_type &offset);
+	void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset);
 	void DoBoxCount(vector<line_type> &faults);
 	void BoxCount(vector<line_type> faults, double &D);
 	void AdditionalData(vector<line_type> faults, Graph& G);
