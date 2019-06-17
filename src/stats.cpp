@@ -92,20 +92,16 @@ void CountQuadTreeBoxes(QuadTreeNode &node, std::vector<std::tuple<double, long 
 	}
 }
 
-void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, point_type &offset)
+void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset)
 {
 // 	const double inf = std::numeric_limits<double>::infinity();
 	box bbox(faults.front().front(), faults.front().front()); //bounding box for the entire fault set. start with an arbitrary point that is known to be inside the bounding box of the faults
 	vector<box> bboxes;
 	bboxes.reserve(faults.size());//bounding boxes for each fault
-	double x_max = 0;
 	for (auto it = faults.begin(); it != faults.end(); it++)
 	{
 		box fault_bbox = geometry::return_envelope<box>(*it);
-		x_max = max(x_max, (double)fault_bbox.max_corner().x());
 		geometry::expand(bbox, fault_bbox);
-		cout << "F(" << it-faults.begin() << ") has xrange (" << fault_bbox.min_corner().x() << "-" << fault_bbox.max_corner().x() << "), yrange (" << fault_bbox.min_corner().y() << ", " << fault_bbox.max_corner().y() << "), new maximum is " << x_max << ", bbox max is " << bbox.max_corner().x() << endl;
-		cout << "bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<endl;
 		bboxes.push_back(fault_bbox);//std::move()
 	}
 	const double xOff = offset.x(), yOff = offset.y();
@@ -114,10 +110,9 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 	const double xEnd = bbox.max_corner().x(), yEnd = bbox.max_corner().y();
 	const int nX = lrint(ceil((xEnd - xStart)/start_scale)) +1; //plus one here, so that nX and nY are exclusive upper bounds. (and also measn that they're the acutal number of elements)
 	const int nY = lrint(ceil((yEnd - yStart)/start_scale)) +1; //ie, the indices are in the range [0, nX) and [0, nY)
-	const int maxDepth = 10;
 	
-	cout << "FINAL bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<endl;
-	cout << "x = " << xStart << ", " << xEnd << ", y = " << yStart << ", " << yEnd << endl;
+// 	cout << "FINAL bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<endl;
+// 	cout << "x = " << xStart << ", " << xEnd << ", y = " << yStart << ", " << yEnd << endl;
 	
 	//setup the top-most layer of the Quad Tree
 	vector<vector<box>> node_bboxes; //the bounding boxes for the top-most layer of QuadTreeNode s
@@ -169,6 +164,8 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 			cout << "WARNING: box counting maximum y boundary returned " << max_y << " when using " << nY << "boxes" << endl;
 			max_y = nY-1;
 		}
+		//this parallelisation can be better, each fault might only be looking at a small range of the area, not enough to use all threads/cores
+#pragma omp parallel for
 		for (int xind = min_x; xind <= max_x; xind++)
 		{
 			vector<box> &row_bboxes = node_bboxes[xind];
@@ -185,7 +182,7 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 				//check the degments of the fault that overlap this node, and add them to the quadtree
 				geometry::model::multi_linestring<line_type> fault_segments;
 				geometry::intersection(fault, node_bbox, fault_segments);
-				for (auto it = fault_segments.begin(); it != fault_segments.end(); it++) QuadTreeAddFaultSegment(*node, *it, maxDepth);
+				for (auto it = fault_segments.begin(); it != fault_segments.end(); it++) QuadTreeAddFaultSegment(*node, *it, max_depth);
 			}
 		}
 	}
@@ -202,21 +199,28 @@ void STATS::DoBoxCount(vector<line_type> &faults)
 	std::clock_t startcputime = std::clock();
 	auto t_start = std::chrono::high_resolution_clock::now();
 	
+	//use the length of the longest fault as the starting box size
 	double longest = 0;
-	for (auto it = faults.begin(); it != faults.end(); it++) longest = max(longest, (double)geometry::length(*it));
+	double shortest = std::numeric_limits<double>::infinity();
+	for (auto it = faults.begin(); it != faults.end(); it++)
+	{
+		const double length = geometry::length(*it);
+		longest = max(longest, length);
+		shortest = min(shortest, length);
+	}
+	cout << "The fault length range is " << shortest << "m - " << longest << "m, for a range of 2^" << log2(longest/shortest) << endl;
+	const int max_depth = 10;
 	vector<std::tuple<double, long long int>> counts;
 	point_type offset(0,0);
-	BoxCountQuadTree(faults, counts, longest, offset);
+	BoxCountQuadTree(faults, counts, longest, max_depth, offset);
 	
 	auto t_end = std::chrono::high_resolution_clock::now();
-	cout << "Boxcounting2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
+	cout << "Boxcounting (QuadTree Method) 2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
 		 <<  std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << endl;
 	ofstream txtF ("BoxCounting.csv");
 	txtF <<"frequency \t size" << endl;
 	for (auto it = counts.begin(); it != counts.end(); it++)
 		txtF << std::get<1>(*it) << "\t" << std::get<0>(*it) << endl;
-	
-	
 }
 
 void STATS::BoxCount(vector<line_type> faults, double &D)
@@ -1122,7 +1126,7 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 	//slope-----------------------------------------------------------------
 					if (have_front && have_back)
 					{
-						if (m_front > m_back)
+						if (m_front > m_back) //NOTE: Uli: what happens if m_front == m_back?
 							Sl = (m_front - m_back) / geometry::distance(f,b);
 					
 						else if (m_front < m_back)
