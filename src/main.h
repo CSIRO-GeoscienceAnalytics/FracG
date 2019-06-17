@@ -47,9 +47,11 @@
 
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/algorithms/buffer.hpp> 
-#include <boost/geometry/geometries/geometries.hpp>
-#include <boost/geometry/algorithms/equals.hpp> 
+#include <boost/geometry/algorithms/equals.hpp>
+#include <boost/geometry/algorithms/expand.hpp> 
+#include <boost/geometry/algorithms/envelope.hpp> 
 #include <boost/geometry/algorithms/intersection.hpp> 
+#include <boost/geometry/geometries/geometries.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/linestring.hpp>
 #include <boost/geometry/multi/geometries/multi_linestring.hpp>

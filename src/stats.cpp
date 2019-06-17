@@ -30,6 +30,195 @@ vec STATS::Bootstrapping(vec Data)
 	return(sampled_data);
 }
 
+//struct to hold the quad tree data
+struct QuadTreeNode
+{
+	box bbox; //bounding box for the square
+	vector<box> child_bboxes; //bboxes for this node's children
+	vector<std::unique_ptr<QuadTreeNode>> children;
+	//how do I have this be null until i set them? if i use a vector, i cant guarantee that the nodes will line up with the bounding boxes? c++ is wierd
+};
+
+//Make a new QuadTreeNode from its bounding box
+QuadTreeNode NewQuadTreeNode(const box &bbox)
+{
+	QuadTreeNode node;
+	node.bbox = bbox;
+	const point_type &min = bbox.min_corner();
+	const point_type &max = bbox.max_corner();
+	const double min_x = min.x();
+	const double max_x = max.x();
+	const double min_y = min.y();
+	const double max_y = max.y();
+	const double half_x = (min_x + max_x)/2;
+	const double half_y = (min_y + max_y)/2;
+	node.child_bboxes.push_back(box(point_type( min_x,  min_y), point_type(half_x, half_y)));
+	node.child_bboxes.push_back(box(point_type(half_x,  min_y), point_type( max_x, half_y)));
+	node.child_bboxes.push_back(box(point_type( min_x, half_y), point_type(half_x,  max_y)));
+	node.child_bboxes.push_back(box(point_type(half_x, half_y), point_type( max_x,  max_y)));
+	for (unsigned int counter = 0; counter <= node.child_bboxes.size(); counter++) node.children.push_back(nullptr);
+	return std::move(node);
+}
+
+//Check a fault segment, and add it to this node and this node's children (where they overlap with the fault segment)
+void QuadTreeAddFaultSegment(QuadTreeNode &node, line_type &fault, int layers)
+{
+	const box fault_bbox = geometry::return_envelope<box>(fault);
+	for (unsigned int i = 0; i < node.children.size(); i++){
+		const box &child_bbox = node.child_bboxes[i];
+		if (geometry::disjoint(child_bbox, fault_bbox) || geometry::disjoint(child_bbox, fault)) continue; //check the fault's bounding box first, because it is faster
+		std::unique_ptr<QuadTreeNode> &child = node.children[i];
+		if (child == nullptr) child = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(child_bbox)));
+		if (layers < 1) continue;
+		geometry::model::multi_linestring<line_type> child_faults;
+		geometry::intersection(fault, child_bbox, child_faults);
+		for (auto it = child_faults.begin(); it != child_faults.end(); it++) QuadTreeAddFaultSegment(*child, *it, layers-1);
+	}
+}
+
+//Once the QuadTree has been constructed, call this to count the boxes
+void CountQuadTreeBoxes(QuadTreeNode &node, std::vector<std::tuple<double, long long int>> &counts, unsigned int index)
+{
+	if (index >= counts.size()) //this should never be off by more than one bexo, because the preceding elements of counts should have been set when checking the parent boxes
+	{
+		const double side_length = (node.bbox.max_corner().x() - node.bbox.min_corner().x()); //assuming that the boxes are square
+		counts.push_back(make_tuple(side_length, 0));
+	}
+	std::get<1>(counts[index]) += 1;//count this box
+	//now check its children
+	for (auto it = node.children.begin(); it != node.children.end(); it++)
+	{
+		if (*it != nullptr) CountQuadTreeBoxes(**it, counts, index+1);
+	}
+}
+
+void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, point_type &offset)
+{
+// 	const double inf = std::numeric_limits<double>::infinity();
+	box bbox(faults.front().front(), faults.front().front()); //bounding box for the entire fault set. start with an arbitrary point that is known to be inside the bounding box of the faults
+	vector<box> bboxes;
+	bboxes.reserve(faults.size());//bounding boxes for each fault
+	double x_max = 0;
+	for (auto it = faults.begin(); it != faults.end(); it++)
+	{
+		box fault_bbox = geometry::return_envelope<box>(*it);
+		x_max = max(x_max, (double)fault_bbox.max_corner().x());
+		geometry::expand(bbox, fault_bbox);
+		cout << "F(" << it-faults.begin() << ") has xrange (" << fault_bbox.min_corner().x() << "-" << fault_bbox.max_corner().x() << "), yrange (" << fault_bbox.min_corner().y() << ", " << fault_bbox.max_corner().y() << "), new maximum is " << x_max << ", bbox max is " << bbox.max_corner().x() << endl;
+		cout << "bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<endl;
+		bboxes.push_back(fault_bbox);//std::move()
+	}
+	const double xOff = offset.x(), yOff = offset.y();
+	const double xStart = bbox.min_corner().x() + ((xOff == 0) ? 0 : std::fmod(xOff, start_scale) - start_scale);
+	const double yStart = bbox.min_corner().y() + ((yOff == 0) ? 0 : std::fmod(yOff, start_scale) - start_scale);
+	const double xEnd = bbox.max_corner().x(), yEnd = bbox.max_corner().y();
+	const int nX = lrint(ceil((xEnd - xStart)/start_scale)) +1; //plus one here, so that nX and nY are exclusive upper bounds. (and also measn that they're the acutal number of elements)
+	const int nY = lrint(ceil((yEnd - yStart)/start_scale)) +1; //ie, the indices are in the range [0, nX) and [0, nY)
+	const int maxDepth = 10;
+	
+	cout << "FINAL bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<endl;
+	cout << "x = " << xStart << ", " << xEnd << ", y = " << yStart << ", " << yEnd << endl;
+	
+	//setup the top-most layer of the Quad Tree
+	vector<vector<box>> node_bboxes; //the bounding boxes for the top-most layer of QuadTreeNode s
+	vector<vector<unique_ptr<QuadTreeNode>>> nodes; //the (nodes that are) the top-most layer of QuadTreeNode s
+	node_bboxes.reserve(nX);
+	nodes.reserve(nX);
+	for (int ix = 0; ix < nX; ix++)
+	{
+		vector<box> bbox_row;
+		bbox_row.reserve(nY);
+		vector<unique_ptr<QuadTreeNode>> node_row;
+		node_row.reserve(nY);
+		for (int iy = 0; iy < nY; iy++)
+		{
+			bbox_row.push_back(box(point_type(xStart+ix*start_scale, yStart+iy*start_scale), point_type(xStart+(ix+1)*start_scale, yStart+(iy+1)*start_scale)));
+			node_row.push_back(nullptr);
+		}
+		node_bboxes.push_back(std::move(bbox_row));
+		nodes.push_back(std::move(node_row));
+	}
+	
+	//now make the QuadTree by adding the faults
+	for (int fi = 0; fi < (int)faults.size(); fi++) //fi = "fault index"
+	{
+		const box &fault_bbox  = bboxes[fi];
+		const line_type &fault = faults[fi];
+		//only check the quadtree nodes that overlap with the fault's bounding box
+		/*const */int min_x = std::lrint(std::floor((fault_bbox.min_corner().x() - xStart)/start_scale));
+		/*const */int max_x = std::lrint(std::ceil ((fault_bbox.max_corner().x() - xStart)/start_scale));
+		/*const */int min_y = std::lrint(std::floor((fault_bbox.min_corner().y() - yStart)/start_scale));
+		/*const */int max_y = std::lrint(std::ceil ((fault_bbox.max_corner().y() - yStart)/start_scale));
+		if (min_x < 0)
+		{
+			cout << "WARNING: box counting minimum x boundary returned " << min_x << endl;
+			min_x = 0;
+		}
+		if (max_x >= nX)
+		{
+			cout << "WARNING: box counting maximum x boundary returned " << max_x << " when using " << nX << " boxes, from position (" << fault_bbox.min_corner().x() << ", " << fault_bbox.max_corner().x() << "), (" << fault_bbox.min_corner().y() << ", " << fault_bbox.max_corner().y() << ")" << endl;
+			max_x = nX-1;
+		}
+		if (min_y < 0)
+		{
+			cout << "WARNING: box counting minimum y boundary returned " << min_y << endl;
+			min_y = 0;
+		}
+		if (max_y >= nY)
+		{
+			cout << "WARNING: box counting maximum y boundary returned " << max_y << " when using " << nY << "boxes" << endl;
+			max_y = nY-1;
+		}
+		for (int xind = min_x; xind <= max_x; xind++)
+		{
+			vector<box> &row_bboxes = node_bboxes[xind];
+			vector<unique_ptr<QuadTreeNode>> &row_nodes = nodes[xind];
+			for (int yind = min_y; yind <= max_y; yind++)
+			{
+				const box &node_bbox = row_bboxes[yind];
+				std::unique_ptr<QuadTreeNode> &node = row_nodes[yind];
+				//if there is no overlap, check the next candidate node
+				//check the simpler envelope first, then the full geometry of the fault
+				if (geometry::disjoint(fault_bbox, node_bbox) || geometry::disjoint(fault, node_bbox)) continue;
+				//if the node doesn't already exist, make it
+				if (node == nullptr) node = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(node_bbox)));
+				//check the degments of the fault that overlap this node, and add them to the quadtree
+				geometry::model::multi_linestring<line_type> fault_segments;
+				geometry::intersection(fault, node_bbox, fault_segments);
+				for (auto it = fault_segments.begin(); it != fault_segments.end(); it++) QuadTreeAddFaultSegment(*node, *it, maxDepth);
+			}
+		}
+	}
+	
+	//the quad tree has been constucted, now count them
+	for (auto itx = nodes.begin(); itx != nodes.end(); itx++)
+		for (auto ity = itx->begin(); ity != itx->end(); ity++)
+			if (*ity != nullptr) CountQuadTreeBoxes(**ity, counts, 0);
+}
+
+void STATS::DoBoxCount(vector<line_type> &faults)
+{
+	cout << "Box Counting (QuadTree Method)" << endl;
+	std::clock_t startcputime = std::clock();
+	auto t_start = std::chrono::high_resolution_clock::now();
+	
+	double longest = 0;
+	for (auto it = faults.begin(); it != faults.end(); it++) longest = max(longest, (double)geometry::length(*it));
+	vector<std::tuple<double, long long int>> counts;
+	point_type offset(0,0);
+	BoxCountQuadTree(faults, counts, longest, offset);
+	
+	auto t_end = std::chrono::high_resolution_clock::now();
+	cout << "Boxcounting2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
+		 <<  std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << endl;
+	ofstream txtF ("BoxCounting.csv");
+	txtF <<"frequency \t size" << endl;
+	for (auto it = counts.begin(); it != counts.end(); it++)
+		txtF << std::get<1>(*it) << "\t" << std::get<0>(*it) << endl;
+	
+	
+}
+
 void STATS::BoxCount(vector<line_type> faults, double &D)
 {
 	cout << "Box Counting" << endl;
@@ -710,6 +899,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	
 	double scaL  = ScanLineDensity(faults);
 	double D;
+	DoBoxCount(faults);
 	//BoxCount(faults, D);
 	//LSFitter(len_dir);
 	
@@ -834,6 +1024,8 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 		int Eg = 1;
 		for (auto ve : boost::make_iterator_range(edges(G))) 
 		{
+			U = source(ve, G);
+			u = target(ve, G);
 			if (!G[U].Enode && !G[u].Enode)
 			{
 				GEOMETRIE::Perpencicular <geometry::model::referring_segment<point_type>> functor;
