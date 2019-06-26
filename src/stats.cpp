@@ -94,7 +94,6 @@ void CountQuadTreeBoxes(QuadTreeNode &node, std::vector<std::tuple<double, long 
 
 void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, point_type &offset)
 {
-// 	const double inf = std::numeric_limits<double>::infinity();
 	box bbox(faults.front().front(), faults.front().front()); //bounding box for the entire fault set. start with an arbitrary point that is known to be inside the bounding box of the faults
 	vector<box> bboxes;
 	bboxes.reserve(faults.size());//bounding boxes for each fault
@@ -312,7 +311,524 @@ void STATS::BoxCount(vector<line_type> faults, double &D)
 	for(auto it : results)
 		txtF << it.first << "\t" << it.second << endl; 
 }
- 
+
+//caluclates the Kolmogorov-Smirnoff test for a given vector of values, a function that gives the cdf for the distribution being tested, the parameters for the cdf model, and the minimum x value to iterate from
+//the data in values *must* be sorted (so that tha CDF for the data values is calculated in the correct order)
+template<typename T>
+double KSTest(vector<double> &values, const ModelHolder<T> &model, const T &params, const vector<double>::iterator &xmin)
+{
+// 	//for debug purposes
+// 	std::ostringstream fname;
+// 	fname << "kstest_" << (xmin - values.begin()) << ".txt";
+// 	ofstream outF(fname.str());
+// 	outF << "#x data_cdf distribution_cdf" << endl;
+	
+	const int n_tail = values.end() - xmin;
+// 	for (auto it = values.begin(); it != values.end(); it++) if (*it >= xmin) n_tail++; //not needed, because the data is already sorted
+	double max = 0;
+	int counter = 0;
+	for (auto it = xmin; it != values.end(); it++)
+	{
+		const double dist_cdf_value = model.cdf_func(*it, *xmin, params);
+		const double data_cdf = (++counter) / (double)n_tail;
+		max = std::max(max, std::abs(data_cdf - dist_cdf_value));
+// 		outF << *it << " " << data_cdf << " " << dist_cdf_value << endl;
+	}
+	
+	return max;
+}
+
+//Calculate the best paramaters for the distribution, for the given dataset. Iterates over each element of the values to check if it is the best option for xmin
+template<typename T>
+void CalculateBestDistParams(vector<double> &values, const ModelHolder<T> &model, T &params, vector<double>::iterator &xmin, double &best_ks)
+{
+	best_ks = std::numeric_limits<double>::infinity();
+	//if we don't use xmin, then only calculate the results once
+	if (!model.use_xmin)
+	{
+		xmin = values.begin();
+		params = model.calculate_params_func(values, xmin);
+		best_ks = KSTest(values, model, params, xmin);
+		return;
+	}
+	//if we do need to select a value for xmin, try each value as a candidate
+	for (auto it = values.begin(); it != values.end(); it++)
+	{
+		//first check to see if we have any values that are strictly larger than our proposed minimum
+		if (*it >= values.back()) break; //they're sorted, so if this one doesn't have enything higher than it, none of the others will either
+		T this_params = model.calculate_params_func(values, it);
+		const double this_ks = KSTest(values, model, this_params, it);
+		if (this_ks < best_ks)
+		{
+			xmin = it;
+			params = std::move(this_params);
+			best_ks = this_ks;
+		}
+	}
+}
+
+//get the vector of values that are below xmin
+void GetLowerValues(const vector<double> &values, const double xmin, vector<double> lower, int &n_tail)
+{
+	lower.clear();
+	n_tail = 0;
+	for (auto it = values.begin(); it != values.end(); it++) if (*it < xmin) lower.push_back(*it);
+	n_tail = (int) (values.size() - lower.size());
+}
+
+//calculate/fit parameters for pdf p(x) = c * (x-xmin)**-alpha
+//cdf(x, c, alpha) = (x/x_min)**-(alpha + 1)
+//TODO: need to calculate optimal xmin, not just use the lowst value
+//returns <alpha, c>
+//default xmin = min(data)
+PowerLawParams PowerLawCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+{
+	const int N = data.end() - xmin;
+	double sum = 0;
+	for (auto it = xmin; it != data.end(); it++)
+	{
+		sum += std::log(*it / *xmin); //need a gap so / * doesn't become an opening comment character
+	}
+	const double alpha = 1 + N/sum;
+	PowerLawParams params = {(alpha - 1) / *xmin, alpha};
+	return std::move(params);
+}
+
+//generate the Cumulative Density Function for a particular x value
+double PowerLawCDF(const double x, const double xmin, const PowerLawParams &params)
+{
+	return 1 - std::pow(x/xmin, 1 - params.alpha);
+}
+
+//generate the Probability Density Function for a particular x value
+double PowerLawPDF(const double x, const double xmin, const PowerLawParams &params)
+{
+	return params.c * std::pow(x/xmin, -params.alpha);
+}
+
+//generate an element in the distribution
+double PowerLawGenerateValue(const double r, const double xmin, const PowerLawParams &params)
+{
+	return xmin * std::pow(r, -1/(params.alpha - 1));//1 - formerly (1 - r) //changing between (1-r) and (r) shouldn't change things, because they are both uniformly distributed between 0 and 1
+}
+
+//A "standard" way of generating (and consuming) multiple values at a time, using a converter that takes a single value at a time
+template<typename T>
+vector<double> StandardGenerateMultiValue(const vector<double> &r, const double xmin, const T &params, std::function<double(const double, const double, const T &params)> convert_func)
+{
+	vector<double> samples;
+	samples.reserve(r.size());
+	for (auto it = r.begin(); it != r.end(); it++) samples.push_back(convert_func(*it, xmin, params));
+	return std::move(samples);
+}
+
+//calculate exponential distribution parameters for pdf p(x,lambda) = (lambda) * exp(- lambda * x)
+//cdf(x, lambda) = 1 - exp[- lambda * x]
+//default xmin = 0
+ExponentialParams ExponentialCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+{
+	double sum = 0;
+	const int count = data.end() - xmin;
+	for (auto it = xmin; it != data.end(); it++)
+	{
+		sum += (*it - *xmin); //I think there is where to put xmin?
+	}
+	double lambda = count / sum;
+	ExponentialParams params = {lambda};
+	return std::move(params);
+}
+
+double ExponentialCDF(const double x, const double xmin, const ExponentialParams &params)
+{
+	return 1 - exp(-params.lambda * (x - xmin));
+}
+
+double ExponentialPDF(const double x, const double xmin, const ExponentialParams &params)
+{
+	return params.lambda * exp(-params.lambda * (x - xmin));
+}
+
+double ExponentialGenerateValue(const double r, const double xmin, const ExponentialParams &params)
+{
+	return xmin - (1/params.lambda)*log(r);//1 - 
+}
+
+//calculate LogNormal distribution parameters, for pdf p(x,mu,sigma) = (1/(x sigma sqrt(2 pi))) * exp[-(ln(x) - mu)**2/(2 sigma**2)]
+//cdf(x, mu, sigma) = 1/2 + (1/2) * erf[(ln(x) - mu) / (sqrt(2) sigma)]
+//returns mu, sigma
+//default xmin = 
+LogNormParams LogNormCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+{
+	double sum = 0;
+	int count = data.end() - xmin;
+	for (auto it = xmin; it != data.end(); it++)
+	{
+		sum += log(*it);
+	}
+	const double mu = sum / count;
+	sum = 0;
+	for (auto it = xmin; it != data.end(); it++)
+	{
+		const double val = log(*it) - mu;
+		sum += val*val;
+	}
+	const double sigma = sqrt(sum/count);
+	LogNormParams params = {mu, sigma};
+	return std::move(params);
+}
+
+double LogNormCDF(const double x, const double xmin, const LogNormParams &params)
+{
+	return 0.5 + 0.5*std::erf((log(x) - params.mu)/(sqrt(2)*params.sigma));
+}
+
+double LogNormPDF(const double x, const double xmin, const LogNormParams &params)
+{
+	const double top = log(x) - params.mu;
+	const double expterm = (-top*top)/(2*params.sigma*params.sigma);
+	return exp(expterm)/(x*params.sigma*sqrt(2*math::constants::pi<double>()));
+}
+
+double LogNormGenerateValue(const double r, const double xmin, const LogNormParams &params)
+{
+	//the paper says that there is no form for generating a single value, but this is the inverse of the LogNorm CDF function
+	//exp(params.mu - 2 * params.sigma * params.sigma * inverf(1 - 2*r)); //need to find an implementation of the inverse error function, first
+	return -1; //invalid operation
+}
+
+vector<double> LogNormGenerateMultiValue(const vector<double> &r, const double xmin, const LogNormParams &params)
+{
+	//this doesn't use mu, but then again the power law one doesn't use c either.
+	const int N = (int)r.size() / 2; //making this many pairs of values
+	vector<double> samples;
+	samples.reserve(2*N);
+	for (int i = 0; i < N; i++)
+	{
+		const double r1 = r[2*i  ];
+		const double r2 = r[2*i+1];
+		const double rho = std::sqrt(-2*params.sigma*params.sigma * std::log(r1));//1 - 
+		const double theta = 2*math::constants::pi<double>()*r2;
+		samples.push_back(std::exp(rho*std::sin(theta)));
+		samples.push_back(std::exp(rho*std::cos(theta)));
+	}
+	return std::move(samples);
+}
+
+template<typename T>
+vector<double> GetSampleSingles(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
+{
+	vector<double> samples;
+	samples.reserve(n_samples);
+	const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
+	const double p_lower = (xmin - values.begin())/values.size(); //probability with which to use the below-xmin portion of the samples 
+	std::uniform_real_distribution<double> uniform01(0.0, 1.0);
+	std::uniform_int_distribution<int> lower_selector(0, max_low);
+	for (int i = 0; i < n_samples; i++)
+	{
+		double value;
+		if (uniform01(gen) < p_lower){
+			//get sample from lower part
+			value = values[lower_selector(gen)];
+		} else {
+			//get from distribution
+			value = model.convert_single_func(uniform01(gen), *xmin, params);
+		}
+		samples.push_back(value);
+	}
+	// if (rng < p_lower) return sample(lower);
+	//return convert_func(rng(), xmin, params);
+	std::sort(samples.begin(), samples.end());
+	return std::move(samples);
+}
+
+template<typename T>
+vector<double> GetSampleMulti(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
+{
+	const int per_call = model.samples_per_call;
+	const int n_generations = std::lrint(std::ceil(n_samples/per_call));
+	vector<double> samples;
+	samples.reserve(n_generations*per_call);
+	const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
+	const double p_lower = (xmin - values.begin())/values.size(); //probability with which to use the below-xmin portion of the samples 
+	std::uniform_real_distribution<double> uniform01(0.0, 1.0);
+	std::uniform_int_distribution<int> lower_selector(0, max_low);
+	vector<double> random_values;
+	random_values.reserve(per_call);
+	for (int i = 0; i < n_generations; i++)
+	{
+		if (uniform01(gen) < p_lower){
+			for (int j = 0; j < per_call; j++)
+			{
+				//get sample from lower part
+				samples.push_back(values[lower_selector(gen)]);
+			}
+		} else {
+			//get from distribution
+			random_values.clear();
+			for (int j = 0; j < per_call; j++) random_values.push_back(uniform01(gen));
+			vector<double> model_values = model.convert_multi_func(random_values, *xmin, params);
+			samples.insert(samples.end(), model_values.begin(), model_values.end());
+		}
+	}
+	// if (rng < p_lower) return sample(lower);
+	//return convert_func(rng(), xmin, params);
+	std::sort(samples.begin(), samples.end());
+	return std::move(samples);
+}
+
+template<typename T1, typename T2>
+std::tuple<double, double> log_likelihood_ratio(const ModelHolder<T1> &model1, const T1 &params1, const ModelHolder<T2> &model2, const T2 params2, const std::vector<double> &values, const std::vector<double>::const_iterator &xmin1, const std::vector<double>::const_iterator &xmin2)
+{
+	std::vector<double>::const_iterator xmin = std::max(xmin1, xmin2); //use the range of data values where both models are valid
+	const int N = values.end() - xmin;
+	double l1 = 0, l2 = 0; //sum of l1 and l2
+	std::vector<double> l1s, l2s; //l_i(x) = log-likelihood of x = ln(p_i(x))
+	l1s.reserve(N);
+	l2s.reserve(N);
+	for (auto it = xmin; it != values.end(); it++)
+	{
+		double l1v = log(model1.pdf_func(*it, *xmin1, params1));
+		l1 += l1v;
+		l1s.push_back(l1v);
+		double l2v = log(model2.pdf_func(*it, *xmin2, params2));
+		l2 += l2v;
+		l2s.push_back(l2v);
+	}
+	const double l1m = l1/N; //calculate the mean so we can calculate the standard deviation
+	const double l2m = l2/N;
+	const double R = l1 - l2; //the ratio that is returned. R > 0 -> model1 is a closer match, R<0 -> model 2 is a closer match, R == 0, theyre the same
+	double sigma_sum = 0;
+	for (auto it = xmin; it != values.end(); it++)
+	{
+		const int index = it - xmin;
+		double l = (l1s[index] - l2s[index]) - (l1m - l2m);
+		sigma_sum += l*l;
+	}
+	const double sigma = std::sqrt(sigma_sum/N);
+// 	cout << "comparison: R = " << R << ", sigma = " << sigma << ", sigma_sum = " << sigma_sum <<", N = " << N << ", erfc input = " << std::abs(R)/(std::sqrt(2*N)*sigma) << endl;
+	const double p = (sigma_sum <= 0.0) ? 1 : erfc(std::abs(R)/(std::sqrt(2*N)*sigma)); //lower <-> more confidence that R value is meaningful
+	return std::make_tuple(R, p);//std::move()
+}
+
+//generate a number of samples from a distribution, including the values that are below xmin
+//split into single and multi calls, so as to avoid extra overhead in the (more common) single value case
+template<typename T>
+vector<double> GetSampleValues(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
+{
+	if (model.samples_per_call == 1) return std::move(GetSampleSingles<T>(model, params, n_samples, xmin, gen, values));
+	return std::move(GetSampleMulti<T>(model, params, n_samples, xmin, gen, values));
+}
+
+template<typename T>
+double GetPValue(const ModelHolder<T> &model, const T &params, const vector<double>::iterator &xmin, const std::vector<double> &values, const double data_ks, random::mt19937 &gen)
+{
+	const double err = 0.01; //accuracy to two significant figures
+	const int ntrials = std::lrint(std::ceil(0.25/(err*err))); //2500
+	int npass = 0;
+	for (int i = 0; i < ntrials; i++)
+	{
+		vector<double> samples = GetSampleValues<T>(model, params, (int)values.size(), xmin, gen, values);
+		vector<double>::iterator sample_xmin;
+		T sample_params;
+		double sample_ks;
+		CalculateBestDistParams(samples, model, sample_params, sample_xmin, sample_ks);
+		if (sample_ks > data_ks) npass++;
+	}
+	return npass / (double) ntrials;
+}
+
+//boost visitor object, which creates the specified statistics model, including calculating the ks value and the pvalue
+struct GenerateStats : public boost::static_visitor<void>//(DistStats<T> &stats)
+{
+	public:
+		vector<double> &values;
+		random::mt19937 &generator;
+		GenerateStats(vector<double> &v, random::mt19937 &gen) : values(v), generator(gen) {};
+		
+		template<typename T>
+		void operator()(DistStats<T> &stats)/* const*/
+		{
+			std::vector<double>::iterator xmin;
+			CalculateBestDistParams(values, stats.model, stats.params, xmin, stats.ks);
+			stats.pvalue = GetPValue(stats.model, stats.params, xmin, values, stats.ks, generator);
+			stats.xmin = *xmin;
+			stats.xmin_ind = xmin - values.begin();
+			cout << "Model " << stats.name << " with parameters " << stats.params << " has ks value " << stats.ks << ", pvalue = " << stats.pvalue << ", with xmin = " << stats.xmin << ", at index " << stats.xmin_ind << " of " << values.size() << endl;
+		}
+};
+
+//compare the models against each other, in order to determine which one(s) are the best fit
+void DecideBestModel(StatsModelData &model_data, const vector<double> &values, const double ACCEPT_THRESHOLD, const double DIFFERENCE_THRESHOLD)
+{
+	model_data.best_match = -1;
+	model_data.best_matches.clear();
+	bool have_model = false;
+	vector<DistStatsType> &models = model_data.models; //convenience name
+	const int N = model_data.models.size(); //Number of models
+	//initialise comparisons as a NxN 2D vector, initialised with R=0 (no difference), p = 1 (no certainty that there is a meaningful difference even if R is large)//= std::vector<
+	model_data.comparisons = std::vector<std::vector<std::tuple<double,double>>>(N, std::vector<std::tuple<double, double>>(N));
+	
+	//first, check to see if any models are acceptable.
+	for (auto it = models.begin(); it != models.end(); it++){
+		double pvalue = boost::apply_visitor([](auto& x)->double{return x.pvalue;}, *it);
+		if (pvalue >= ACCEPT_THRESHOLD)
+		{
+			have_model = true;
+			model_data.best_match = it - models.begin();
+			cout << "Model " << boost::apply_visitor([](auto &x){return x.name;}, *it) << " has not been rejected" << endl;
+		}
+	}
+	cout << endl;
+	
+	//if none are acceptable, stop now. there is no point in comparing them
+	if (!have_model)
+	{
+		cout << "All models are below the acceptance threshold" << endl;
+		return;
+	}
+	
+	//do a pairwise comparison between all the acceptable models
+	for (auto it1 = models.begin(); it1 != models.end(); it1++)
+	{
+		if (boost::apply_visitor([&](auto &x){return x.pvalue < ACCEPT_THRESHOLD;}, *it1)) continue; //if we don't accept this model, don't compare it to other models
+		int ind1 = it1 - models.begin();
+		std::string name1 = boost::apply_visitor([](auto &x){return x.name;}, *it1);
+		//need const_iterator because values is a const vector now. (also need const_iterator's in log_likelihood_ratio())
+		const std::vector<double>::const_iterator xmin1 = std::next(values.begin(), boost::apply_visitor([](auto &x){return x.xmin_ind;}, *it1)); //we can save this one to save a bit of time
+		for (auto it2 = it1; it2 != models.end(); it2++)
+		{
+			if (it1 == it2) continue;
+			if (boost::apply_visitor([&](auto &x){return x.pvalue < ACCEPT_THRESHOLD;}, *it2)) continue;
+			int ind2 = it2 - models.begin();
+			std::string name2 = boost::apply_visitor([](auto &x){return x.name;}, *it2);
+			std::tuple<double, double> comparison_result = boost::apply_visitor(
+				[&](auto &x1, auto &x2)->std::tuple<double, double>{return log_likelihood_ratio(x1.model, x1.params, x2.model, x2.params, values, xmin1, std::next(values.begin(), x2.xmin_ind));}
+				, *it1, *it2);
+			double R, p;
+			std::tie(R, p) = comparison_result;
+			model_data.comparisons[ind1][ind2] = std::move(comparison_result);
+			if (p > DIFFERENCE_THRESHOLD)
+			{
+				cout << "Models " << name1 << " and " << name2 << " cannot be distinguished, with R = " << R << ", and p = " << p << endl;
+				continue;
+			}
+			std::string best_name, worse_name;
+			if (R >= 0)
+			{
+				best_name = name1;
+				worse_name = name2;
+			} else {
+				best_name = name2;
+				worse_name = name1;
+			}
+			cout << "Model " << best_name << " is a better fit that model " << worse_name << ", with R = " << R << ", p = " << p << endl;
+// 			if (model_data.best_match == worse_ind) model_data.best_match = best_ind;
+		}
+	}
+	
+	//now make sure that we have the absolute best
+	std::vector<bool> seen(false, N); //keep track of which ones we've seen
+	bool changed = true;
+	while (changed)
+	{
+		changed = false;
+		for (int i = 0; i < N; i++)
+		{
+			if (i == model_data.best_match) continue;
+			int i1 = model_data.best_match, i2 = i;
+			bool bfirst = i1 < i2; //whether or not b(est_match) is before i in the index list. comparisons is ordered such that the lower-valued index is first
+			//and R is >0 if the first model is a better match, R is < 0 if the later model is a better match
+			if (!bfirst) {i1 = i; i2 = model_data.best_match;}
+			double R, p;
+			std::tie(R,p) = model_data.comparisons[i1][i2];
+			if (p > DIFFERENCE_THRESHOLD) continue;
+			if ((bfirst && R < 0) || (!bfirst && R > 0))
+			{
+				model_data.best_match = i;
+				changed = true;
+				break;
+			}
+		}
+	}
+	
+	//now see which models are equal to the selected best match
+	for (int i = 0; i < N; i++)
+	{
+		double R, p;
+		int i1 = model_data.best_match, i2 = i;
+		if (i1 > i2) {i1 = i; i2 = model_data.best_match;}
+		std::tie(R, p) = model_data.comparisons[i1][i2];
+		if (i == model_data.best_match || p >= DIFFERENCE_THRESHOLD) model_data.best_matches.push_back(i); //add the best match, and any other models that cannot be distinguished from the best match
+	}
+	//done
+}
+
+StatsModelData STATS::CompareStatsModels(std::vector<double> &values)
+{
+	StatsModelData results;
+	std::sort(values.begin(), values.end());
+	cout << "The values are in the range " << values.front() << ", " << values.back() << endl;
+// 	for (auto it = values.begin(); it != values.end(); it++)
+// 	{
+// 		if (it != values.begin()) cout << ", ";
+// 		cout << *it;
+// 	}
+// 	cout << endl;
+	std::random_device rd{};
+	random::mt19937 rng{rd()};
+	ModelHolder<PowerLawParams> power_law_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
+		[](const vector<double>&r, const double xmin, const PowerLawParams& params) -> vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, true, 1};
+	ModelHolder<ExponentialParams> exponential_model = {ExponentialCalculateParams, ExponentialCDF, ExponentialPDF, ExponentialGenerateValue,
+		[](const vector<double>&r, const double xmin, const ExponentialParams& params) -> vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, true, 1};
+	ModelHolder<ExponentialParams> exponential_all_model = {ExponentialCalculateParams, ExponentialCDF, ExponentialPDF, ExponentialGenerateValue,
+		[](const vector<double>&r, const double xmin, const ExponentialParams& params) -> vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, false, 1};
+	ModelHolder<LogNormParams> lognorm_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, true, 2};
+	ModelHolder<LogNormParams> lognorm_all_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, false, 2};
+
+	vector<DistStatsType> &models = results.models; //convenience name
+	
+	models.push_back(DistStats<PowerLawParams>{power_law_model, std::string{"Power Law"}});
+	
+	models.push_back(DistStats<ExponentialParams>{exponential_model, "Exponential"});
+	models.push_back(DistStats<ExponentialParams>{exponential_all_model, "Exponential All"});
+	
+	models.push_back(DistStats<LogNormParams>{lognorm_model, "Log Normal"});
+	models.push_back(DistStats<LogNormParams>{lognorm_all_model, "Log Normal All"});
+	
+	GenerateStats generate_visitor{values, rng};
+	
+	for (auto it = models.begin(); it != models.end(); it++)
+	{
+		 boost::apply_visitor(generate_visitor, *it);
+	}
+	
+	cout << endl;
+	
+// 	vector<double>::iterator power_law_xmin;
+// 	double power_law_ks;
+// 	PowerLawParams power_law_params;
+// 	//vector<double> &, const ModelHolder<T> &model, T &params, vector<double>::iterator &xmin, double &best_ks)
+// 	CalculateBestDistParams(values, power_law_model, power_law_params, power_law_xmin, power_law_ks);
+// 	cout << "The values have power law parameters c = " << power_law_params.c << ", alpha = " << power_law_params.alpha << ", xmin = " << *power_law_xmin << ", xmin pos = " << power_law_xmin - values.begin() << ", KS value = " << power_law_ks << endl;
+// 	double power_law_pvalue = GetPValue(power_law_model, power_law_params, power_law_xmin, values, power_law_ks, rng);
+// 	cout << "The power law has a pvalue (higher is better) of " << power_law_pvalue << ", which is " << ((power_law_pvalue >= 0.1) ? "ABOVE" : "BELOW") << " the threshold" << endl;
+// 	double power_c, power_alpha;
+// 	CalculatePowerLawParams(values, power_c, power_alpha);
+// 	double exp_lambda;
+// 	CalculateExponentialParams(values, exp_lambda);
+	
+	const double ACCEPT_THRESHOLD = 0.1; //models are accepted if their pvalue is *ABOVE* this threshold
+	
+	const double DIFFERENCE_THRESHOLD = 0.1; //comparisons are considered meaningful if the pvalue is *BELOW* this threshold
+	DecideBestModel(results, values, ACCEPT_THRESHOLD, DIFFERENCE_THRESHOLD); //compare the models against each other
+	
+// 	double best_pvalue = -std::numeric_limits<double>::infinity();
+	
+	
+	cout << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[results.best_match]) << endl << endl;
+	return results;
+}
+
 double STATS::ScanLineDensity(vector<line_type> faults)
 {
 /***********************************************************************
@@ -760,6 +1276,9 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	GEO georef;
 	FSTATS len_dir, sin_dir,len_sin, result;
 	line_type multiL;
+	
+	std::vector<double> fault_lengths;
+	fault_lengths.reserve(faults.size());
 
 	std::vector< std::pair< int, vector<float>>> DirecDist;
 	std::vector<float> Transfer;
@@ -784,6 +1303,8 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		len_dir.push_back(make_pair(length, strike));
 		len_sin.push_back(make_pair(sinuosity, length));
 		sin_dir.push_back(make_pair(sinuosity, strike));
+		
+		fault_lengths.push_back(length);
 
 		string coord = "LINESTRING(";
 		BOOST_FOREACH(point_type p, F)
@@ -899,9 +1420,11 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	
 	double scaL  = ScanLineDensity(faults);
 	double D;
-	DoBoxCount(faults);
+// 	DoBoxCount(faults);
 	//BoxCount(faults, D);
 	//LSFitter(len_dir);
+	
+	CompareStatsModels(fault_lengths);
 	
 	txtF.open ("Fault_Statistics.csv", ios::out | ios::app); 
 	txtF << "Fault sets:" << "\t" << FaultGenerations << endl;
