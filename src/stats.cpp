@@ -789,12 +789,12 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values)
 	
 	models.push_back(DistStats<PowerLawParams>{power_law_model, std::string{"Power Law"}});
 	
-	models.push_back(DistStats<ExponentialParams>{exponential_model, "Exponential"});
-	models.push_back(DistStats<ExponentialParams>{exponential_all_model, "Exponential All"});
-	
-	models.push_back(DistStats<LogNormParams>{lognorm_model, "Log Normal"});
-	models.push_back(DistStats<LogNormParams>{lognorm_all_model, "Log Normal All"});
-	
+// 	models.push_back(DistStats<ExponentialParams>{exponential_model, "Exponential"});
+// 	models.push_back(DistStats<ExponentialParams>{exponential_all_model, "Exponential All"});
+// 	
+// 	models.push_back(DistStats<LogNormParams>{lognorm_model, "Log Normal"});
+// 	models.push_back(DistStats<LogNormParams>{lognorm_all_model, "Log Normal All"});
+// 	
 	GenerateStats generate_visitor{values, rng};
 	
 	for (auto it = models.begin(); it != models.end(); it++)
@@ -824,8 +824,9 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values)
 	
 // 	double best_pvalue = -std::numeric_limits<double>::infinity();
 	
-	
-	cout << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[results.best_match]) << endl << endl;
+	const int best = results.best_match;
+	if (best >= 0)
+		cout << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
 	return results;
 }
 
