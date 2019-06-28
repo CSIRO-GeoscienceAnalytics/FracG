@@ -746,7 +746,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 	}
 	
 	//now make sure that we have the absolute best
-	std::vector<bool> seen(false, N); //keep track of which ones we've seen
+	std::vector<bool> seen(N, false); //keep track of which ones we've seen
 	bool changed = true;
 	bool have_loop = false;
 	while (changed)
