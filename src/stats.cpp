@@ -590,6 +590,46 @@ vector<double> GetSampleMulti(const ModelHolder<T> &model, const T &params, cons
 	return std::move(samples);
 }
 
+//visitor struct to print out the cdf of a single model
+//we have to print out the different models separately, because different xmin's mean different data CDF's
+struct PrintCDFSingle : public boost::static_visitor<void>//(DistStats<T> &stats)
+{
+	public:
+		const std::vector<double> &values;
+		const std::string fname;
+		PrintCDFSingle(const std::vector<double> &v, const std::string fn) : values(v), fname(fn) {};
+		
+		template<typename T>
+		void operator()(DistStats<T> &stats)
+		{
+			const int NV = values.size(); //total number of data values
+			const int N  = NV - stats.xmin_ind; //number of data values that are above xmin
+			const double ND = N; //save having to convert this multiple times
+			std::string model_fname = fname+"_"+stats.name+".txt";
+			std::replace(model_fname.begin(), model_fname.end(), ' ', '_');
+			std::transform(model_fname.begin(), model_fname.end(), model_fname.begin(), ::tolower);
+			std::ofstream fout(model_fname);
+			fout << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
+			fout << "#x_value data_cdf_low data_cdf_high model_cdf" << endl;
+			
+			for (int i = stats.xmin_ind; i < NV; i++)
+			{
+				const double data_low = (i     - stats.xmin_ind) / ND;
+				const double data_hi =  (i + 1 - stats.xmin_ind) / ND;
+				const double model_cdf = stats.model.cdf_func(values.at(i), stats.xmin, stats.params);
+				fout << values[i] << " " << data_low << " " << data_hi << " " << model_cdf << std::endl;
+			}
+		}
+};
+
+//print out all the model CDF's, as compared to their relative data CDF's
+void PrintCDFs(const StatsModelData dists, const vector<double> values, const std::string fname)
+{
+	PrintCDFSingle print_visitor(values, fname);
+	for (auto s : dists.models) //is is a DistStats<whatever> struct
+		boost::apply_visitor(print_visitor, s);
+}
+
 template<typename T1, typename T2>
 std::tuple<double, double> log_likelihood_ratio(const ModelHolder<T1> &model1, const T1 &params1, const ModelHolder<T2> &model2, const T2 params2, const std::vector<double> &values, const std::vector<double>::const_iterator &xmin1, const std::vector<double>::const_iterator &xmin2)
 {
@@ -835,16 +875,21 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values)
 	for (auto it = rngs.begin(); it < rngs.end(); it++) *it = std::move(random::mt19937{rd}); //make one random number generator per omp thread
 	ModelHolder<PowerLawParams> power_law_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
 		[](const vector<double>&r, const double xmin, const PowerLawParams& params) -> vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, true, 1};
+	ModelHolder<PowerLawParams> power_law_all_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
+		[](const vector<double>&r, const double xmin, const PowerLawParams& params) -> vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, false, 1};
+		
 	ModelHolder<ExponentialParams> exponential_model = {ExponentialCalculateParams, ExponentialCDF, ExponentialPDF, ExponentialGenerateValue,
 		[](const vector<double>&r, const double xmin, const ExponentialParams& params) -> vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, true, 1};
 	ModelHolder<ExponentialParams> exponential_all_model = {ExponentialCalculateParams, ExponentialCDF, ExponentialPDF, ExponentialGenerateValue,
 		[](const vector<double>&r, const double xmin, const ExponentialParams& params) -> vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, false, 1};
+		
 	ModelHolder<LogNormParams> lognorm_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, true, 2};
 	ModelHolder<LogNormParams> lognorm_all_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, false, 2};
 
 	vector<DistStatsType> &models = results.models; //convenience name
 	
 	models.push_back(DistStats<PowerLawParams>{power_law_model, std::string{"Power Law"}});
+	models.push_back(DistStats<PowerLawParams>{power_law_all_model, std::string{"Power Law All"}});
 	
 	models.push_back(DistStats<ExponentialParams>{exponential_model, "Exponential"});
 	models.push_back(DistStats<ExponentialParams>{exponential_all_model, "Exponential All"});
@@ -859,6 +904,8 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values)
 		 boost::apply_visitor(generate_visitor, *it);
 	}
 	cout << endl;
+	
+	PrintCDFs(results, values, "model_cdf"); //print the cdf's for testing purposes
 	
 	const double ACCEPT_THRESHOLD = 0.1; //models are accepted if their pvalue is *ABOVE* this threshold
 	
