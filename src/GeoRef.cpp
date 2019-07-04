@@ -250,11 +250,14 @@ void GEO::read_wkt(std::string const& filename, std::vector<line_type>& lineStri
 void GEO::read_shp(std::string const& filename, std::vector<line_type>& lineString)
 {
 	const char * name = filename.c_str();
-	const char * layer;
+// 	const char * layer;
 	line_type Line;
 	point_type P;
 	string f = filename.substr(filename.find_last_of('/')+1); 
-	layer = f.substr(0, f.find(".")).c_str();
+// 	cout << "f.find(\".\") = " << f.find(".") << " of " << f.size() << ", f.substr = " << f.substr(0, f.find(".")) << endl;
+// 	layer = ;
+	std::string layer_name = f.substr(0, f.find("."));
+// 	cout << "layer_name = \"" << layer_name << "\"" << endl;;
 
 	GDALAllRegister();
 	GDALDataset *poDS = static_cast<GDALDataset*>
@@ -267,9 +270,9 @@ void GEO::read_shp(std::string const& filename, std::vector<line_type>& lineStri
 		exit( 1 );
 	}   
 
-	//cout << "f = " << f << ", layer = " << layer <<endl;
+// 	cout << "f = " << f << ", layer_name = " << layer_name << ", layer_name.c_str = " << layer_name.c_str() <<endl;
 
-	OGRLayer  *poLayer = poDS->GetLayerByName( layer );
+	OGRLayer  *poLayer = poDS->GetLayerByName( layer_name.c_str() );
 	poLayer->ResetReading();
 	OGRFeature *poFeature;
 	while( (poFeature = poLayer->GetNextFeature()) != NULL )

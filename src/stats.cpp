@@ -912,9 +912,17 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values)
 	const double DIFFERENCE_THRESHOLD = 0.1; //comparisons are considered meaningful if the pvalue is *BELOW* this threshold
 	DecideBestModel(results, values, ACCEPT_THRESHOLD, DIFFERENCE_THRESHOLD); //compare the models against each other
 	
-	const int best = results.best_match;
-	if (best >= 0)
-		cout << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
+	if (results.best_matches.size() == 1)
+	{
+		const int best = results.best_match;
+		if (best >= 0)
+			cout << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
+	} else if (results.best_matches.size() > 1) {
+		std::cout << "The " << results.best_matches.size() << " best matches are: ";
+		for (auto it = results.best_matches.begin(); it < results.best_matches.end(); it++)
+			std::cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
+		std::cout << std::endl;
+	}
 	return results;
 }
 
