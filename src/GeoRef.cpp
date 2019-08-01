@@ -1,5 +1,6 @@
 #include "GeoRef.h"
 #include "geometrie.h"
+#include "stats.h"
 
 GEO::GEO ()
 
@@ -62,8 +63,141 @@ void GEO::AssignValuesAll(Graph& G, std::string const& filename)
 		G[vd].elevation = getElevationFromArray(p, data);
 		G[vd].Pressure = G[vd].elevation * 9.81 * 1;
 	}
-	
 	CPLFree(data);
+}
+
+void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
+{
+	STATS stats;
+	line_type curEdge;
+	point_type centre;
+
+	for (auto Ve : boost::make_iterator_range(vertices(G)))
+		G[Ve].data = getValue(G[Ve].location, transform, values);
+	
+	cout << "edge" << endl;
+	
+	for (auto Eg : boost::make_iterator_range(edges(G))) 
+	{
+		curEdge = G[Eg].trace;
+		geometry::centroid(G[Eg].trace, centre);
+		vertex_type U = source(Eg, G);
+		vertex_type u = target(Eg, G);
+		
+		G[Eg].Centre = getValue(centre, transform, values);
+		G[Eg].MeanValue = LineExtractor(G[Eg].trace, transform, values) ;
+		G[Eg].CentreGrad = CentreGradient(G[Eg].trace, transform, values);
+		G[Eg].CrossGrad = CrossGradient(G[Eg].trace, transform, values);
+		G[Eg].ParalGrad =  ParallelGradient(G[Eg].trace, transform, values) ;
+	}
+	cout <<"done" << endl;
+}
+
+polygon_type GEO::BoundingBox(double transform[8], double raster_crop_size)
+{
+	long double Xmax, Xmin, Ymax, Ymin;
+	polygon_type pl;
+	box bx;
+	
+	//create new box of raster
+	Xmax = transform[0] + transform[1] * transform[6] - raster_crop_size;      // west
+	Xmin = transform[0] + raster_crop_size; 								  // east
+	Ymax = transform[3] - raster_crop_size; 								 // north
+	Ymin = transform[3] + transform[5] * transform[7] + raster_crop_size;	// south
+		
+	bx.min_corner().set<0>( Xmin );
+	bx.min_corner().set<1>( Ymin );
+	bx.max_corner().set<0>( Xmax );
+	bx.max_corner().set<1>( Ymax );
+	geometry::convert(bx, pl);
+	
+	return(pl);
+}
+
+double GEO::CrossGradient(line_type F, double transform[8], double** values)
+{
+	GEOMETRIE::Perpencicular <geometry::model::referring_segment<point_type>> functor;
+	polygon_type pl = BoundingBox(transform, 10);
+	vector<double> D;
+
+	functor  = geometry::for_each_segment(F, functor );
+
+	BOOST_FOREACH(line_type cross, functor.all)
+	{
+		if (geometry::within(cross.front(), pl) && geometry::within(cross.back(),pl))
+		{
+			if(getValue(cross.front(), transform, values) > getValue(cross.back(), transform, values))
+				D.push_back(getValue(cross.front(), transform, values) - getValue(cross.back(), transform, values));
+			else
+				D.push_back( getValue(cross.back(), transform, values) - getValue(cross.front(), transform, values));
+		}
+	}
+
+	vec DATA(D);
+	if (DATA.size() != 0)
+		return( arma::mean(DATA) );
+	else
+		return(0);
+}
+
+double GEO::ParallelGradient(line_type F, double transform[8], double** values)
+{
+	GEOMETRIE::SegPoints	 <geometry::model::referring_segment<point_type>> functor2;
+	polygon_type pl = BoundingBox(transform, 10);
+
+	functor2 = geometry::for_each_segment(F, functor2);
+	vector<double>D;
+
+	for (vector<std::tuple<point_type, point_type, point_type>>::
+	const_iterator I = functor2.Points.begin(); I != functor2.Points.end(); ++I) 
+	{
+		int no = 0;
+		double grad1 = 0, grad2 = 0;
+		if (geometry::within(get<0>(*I), pl) && geometry::within(get<1>(*I), pl) && geometry::within(get<2>(*I), pl))
+		{
+			D.push_back((getValue(get<0>(*I), transform, values) - getValue(get<1>(*I), transform, values))  +
+						(getValue(get<1>(*I), transform, values) - getValue(get<2>(*I), transform, values)));
+		}
+	}
+	vec DATA(D);
+	if (DATA.size() > 0)
+		return(arma::mean(DATA));
+	else
+		return(0);
+}
+
+double GEO::CentreGradient(line_type F, double transform[8], double** values)
+{
+	const double raster_crop_size = 10;
+	long double Xmax, Xmin, Ymax, Ymin;
+	polygon_type pl = BoundingBox(transform, 10);
+	box bx;
+
+	//Convert from map to pixel coordinates and read values at centre of line
+	//Only works for geotransforms with no rotation.
+	double len =  transform[1] * transform[5]/2;
+	point_type point, p1, p2;
+	double rx = F.back().x() - F.front().x();
+	double ry = F.back().y() - F.front().y();
+	double l = sqrt(rx*rx + ry*ry);
+	
+	geometry::centroid(F, point);
+	p1.set<0>((point.x() + ( ry/l) * len ));
+	p1.set<1>((point.y() + (-rx/l) * len ));
+	p2.set<0>((point.x() + (-ry/l) * len ));
+	p2.set<1>((point.y() + ( rx/l) * len ));
+			
+	if (geometry::within(p1, pl) && geometry::within(p2, pl))
+	{		
+		if (getValue(p1, transform, values) > getValue(p2, transform, values))
+			return( abs(values[int((p1.x() - transform[0]) / transform[1])][int((p1.y() - transform[3]) / transform[5])] -
+					values[int((p2.x() - transform[0]) / transform[1])][int((p2.y() - transform[3]) / transform[5])]));
+		else
+			return( abs(values[int((p2.x() - transform[0]) / transform[1])][int((p2.y() - transform[3]) / transform[5])] -
+					values[int((p1.x() - transform[0]) / transform[1])][int((p1.y() - transform[3]) / transform[5])]));
+	}
+	else
+		return(0);
 }
 
 //convenience function to read a value from a 2D array, using a point as an index
@@ -134,6 +268,67 @@ int GEO::getElevation(point_type p, std::string const& filename)
 	GDALClose( poDataset );
 	return (value);
 }
+
+double GEO::getValue(point_type p, double transform[8], double** values)
+{
+	polygon_type pl = BoundingBox(transform, 10);
+	if(geometry::within(p,pl)){
+		int x = (int) (p.x() - transform[0]) / transform[1];
+		int y = (int) abs((p.y() - transform[3]) / transform[5]);
+		return(values[x][y]);
+	}
+	else 
+		//return std::numeric_limits<double>::quiet_NaN();
+		return (0);
+}
+
+double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
+{
+	polygon_type pl = BoundingBox(Transform, 10);
+	polygon_type pl2;
+	GEOMETRIE geom;
+	box AOI;
+	BUFFER envelop;
+	
+	point_type point;
+	int maxX, minX, maxY, minY;
+	double M = 0, radius;
+	vector<double> D;
+	
+    radius = Transform[1] * Transform[5] /2;
+	envelop = geom.DefineLineBuffer(L, radius);
+	geometry::envelope(envelop, AOI);
+	geometry::convert(AOI, pl2);
+	maxX = (int)(geometry::get<geometry::max_corner, 0>(AOI) - Transform[0]) / Transform[1];
+	minX = (int)(geometry::get<geometry::min_corner, 0>(AOI) - Transform[0]) / Transform[1]; 
+	maxY = (int)abs((geometry::get<geometry::max_corner, 1>(AOI) - Transform[3]) / Transform[5]);
+	minY = (int)abs((geometry::get<geometry::min_corner, 1>(AOI) - Transform[3]) / Transform[5]);
+	
+	if (geometry::within(pl2, pl))
+	{
+		for (int x = minX; x < maxX; x++)
+		{
+			point.set<0>(Transform[0] + x * Transform[1]);
+			for (int y = maxY; y < minY; y++)
+			{
+				point.set<1>(Transform[3] + y * Transform[5]);
+				
+				if (geometry::within(point, envelop))
+					D.push_back(raster[x][y]);
+			}
+		}
+	}
+	else
+		return(0);
+		
+	vec DATA(D);
+	if (DATA.size() > 0)
+		return(arma::mean(DATA));
+	else
+	return(0);
+ }
+
+
 
 //obtain information about raster's projection--------------------------
 void GEO::GetRasterProperties(std::string const& filename, double**& RASTER)
@@ -316,6 +511,7 @@ void GEO::WriteTxt(Graph& g, string const& filename)
 //convert graph edges to shp-file---------------------------------------
 void GEO::WriteSHP(Graph G, const char* Name)
 {
+
 	line_type fault;
 	std::string line;
 
@@ -338,7 +534,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		exit( 1 );
 	}
 
-	poLayer = poDS->CreateLayer( "Branches", &GeoRef, wkbLineString, NULL );
+	poLayer = poDS->CreateLayer( "Graph", &GeoRef, wkbLineString, NULL );
 	if( poLayer == NULL )
 	{
 		printf( "Layer creation failed.\n" );
@@ -378,18 +574,36 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		exit( 1 );
 	}
 
-	OGRFieldDefn oField3( "Offset", OFTReal );
-	oField2.SetWidth(10);
-	oField0.SetPrecision(5);
+	OGRFieldDefn oField3( "Centre", OFTReal );
+	oField3.SetWidth(10);
+	oField3.SetPrecision(5);
 	if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
 	{
-		printf( "Creating 'Offset' field failed.\n" );
+		printf( "Creating 'Centre' field failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField4( "MeanValue", OFTReal );
+	oField4.SetWidth(10);
+	oField4.SetPrecision(5);
+	if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'MeanValue' field failed.\n" );
 		exit( 1 );
 	}
 
-	OGRFieldDefn oField4( "Data", OFTReal );
-	oField2.SetWidth(10);
-	if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+	OGRFieldDefn oField5( "CrossGrad", OFTReal );
+	oField5.SetWidth(10);
+	oField5.SetPrecision(5);
+	if( poLayer->CreateField( &oField5 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'CrossGrad' field failed.\n" );
+		exit( 1 );
+	}
+
+	OGRFieldDefn oField6( "ParalGrad", OFTReal );
+	oField6.SetWidth(10);
+	if( poLayer->CreateField( &oField6 ) != OGRERR_NONE )
 	{
 		printf( "Creating 'Data' field failed.\n" );
 		exit( 1 );
@@ -409,8 +623,10 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		poFeature->SetField( "Length", L);
 		poFeature->SetField( "BranchType", T);
 		poFeature->SetField( "Component", C);
-		poFeature->SetField( "Offset", G[Eg].offset);
-		poFeature->SetField( "Data", G[Eg].data);
+		poFeature->SetField( "Centre", G[Eg].Centre);
+		poFeature->SetField( "MeanValue", G[Eg].MeanValue);
+		poFeature->SetField( "CrossGrad", G[Eg].CrossGrad);
+		poFeature->SetField( "Paralgrad", G[Eg].ParalGrad);
 
 		line.append("LINESTRING(");
 		BOOST_FOREACH(point_type P,fault) 

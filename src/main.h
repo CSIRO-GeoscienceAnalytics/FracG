@@ -16,6 +16,7 @@
 #include <list>
 #include <assert.h> 
 
+#include <limits>
 #include <thread>
  
 #include <boost/shared_ptr.hpp>
@@ -85,6 +86,20 @@ namespace FGraph
 	typedef geometry::model::polygon<point_type> polygon_type;
 	typedef geometry::model::multi_polygon<polygon_type> BUFFER;
 	typedef geometry::model::box<point_type> box;
+	
+	struct READ
+	{
+		string name;
+		double** values;
+		double transform[8];
+		READ(string n, double** v, double t[8])
+		{
+			name	= n;
+			values	= v;
+			memcpy(transform, t, 8*sizeof(double));
+		}
+	}; 
+	
 	//=======================GRAPH==========================================
 	// Fault Vetex Properties
 	template <typename Point>
@@ -111,11 +126,13 @@ namespace FGraph
 	{
 		long double length;
 		line_type trace;
-		double dx = 0;
 		std::string BranchType;
 		std::string component;
-		double offset;
-		double data;
+		double Centre;
+		double MeanValue;
+		double CentreGrad;
+		double CrossGrad;
+		double ParalGrad;
 	};
 
 	//now we can define the graph as an adjacency list

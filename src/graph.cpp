@@ -119,6 +119,23 @@ void GRAPH::DrawGraph(Graph G)
 //read vector data into graph------------------------------------------
 void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
 {
+	GEO g;
+	GEOMETRIE geom;
+	vertex_type VA, VB;
+
+	//create edges and nodes for faults in the graph-------------------------
+	BOOST_FOREACH(line_type f, faults)
+	{
+		
+		VA = AddNewVertex(map, f.front(), graph);
+		VB = AddNewVertex(map, f.back(), graph);
+		AddNewEdge(graph, VA, VB, f);
+	}
+	cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << endl;
+}
+
+void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
+{
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int >> G;
 	std::pair <point_type, point_type> NODES;
@@ -191,6 +208,7 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 	for (auto Eg : make_iterator_range(edges(graph)))
 		faults.push_back(graph[Eg].trace);
 }
+
 
 //find and remove spurs from the network
 //a "spur" is a fault segment that extends only slightly past a fault intersection
@@ -327,7 +345,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 }
 
 //Topolgy analysis of graph---------------------------------------------
-void GRAPH::GraphAnalysis(Graph& G, vector<float>& METRIC)
+void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 {
 	assert (num_vertices(G) != 0 && num_edges(G) != 0);
 	
@@ -517,7 +535,6 @@ void GRAPH::GraphAnalysis(Graph& G, vector<float>& METRIC)
 			<< "Branches: " <<NbN << " Lines: "<< Nl << " Number of Branches: " << NbB << "\n"
 			<< "Number of components (c): " << numK << endl;
 
-		ofstream txtG ("Graph_results.txt");
 		if (txtG.is_open())  
 		{ 
 			txtG <<"*********************************************************************\n"
@@ -527,24 +544,28 @@ void GRAPH::GraphAnalysis(Graph& G, vector<float>& METRIC)
 				<<"Journal of Structural Geology.									\n"
 				<<"*********************************************************************\n" << endl;
 
-			txtG << "Nodes: " << num_vertices(G) << " EDGES: " << num_edges(G) << "\n"
-				<< "Edgenodes: " << Enodes << "\n"
-				<< "Number of connected Nodes: " << Nc << " (Xnodes + Ynodes)" << "\n"
-				<< "Branches: " <<NbN << " Lines: "<< Nl <<"\n"
-				<< "Number of Branches: " << NbB << "\n"
-				<< "Connections per line: " << Cl <<"\n" 
-				<< "Connections per Branch: "<< Cb << "\n"
-				<< "Average Branch length: " << avLenB << "\n"
-				<< "Average Line length: " << avLenL << "\n"
-				<< "Connecting node frequency: " << NCfreq << "\n"
-				<< "Branch frequency: " << B20 << "\n"
-				<< "Line frequency: " << P20 << "\n"
-				<< "2D Intesnsity: " << P21 << "\n"
-				<< "Dimesnonless intesity: " << B22 << "\n"
-				<< "Average degree of network (2e/n): " << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
-				<< "Average number of connections per line: " << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
-				<< "Number of components (c): " << numK << "\n"
-				<< "number of faces (f): " << num_edges(G) + numK - num_vertices(G) +1 << "\n" << endl;
+			txtG<< "Nodes: " << "\t" << num_vertices(G) << "\n"
+				<< "EDGES: " << "\t" << num_edges(G) << "\n"
+				<< "Components: " << "\t" << connected_components(G, &component[0]) <<"\n" 
+				<< "Edgenodes: " << "\t" << Enodes << "\n"
+				<< "Number of connected Nodes (Xnodes + Ynodes): " << "\t" << Nc << "\n"
+				<< "Branches: " << "\t" << NbN << "\n" 
+				<< "Lines: " << "\t" << Nl << "\n"
+				<< "Number of Branches: " << "\t" << NbB << "\n"
+				<< "Connections per line: " << "\t" << Cl <<"\n" 
+				<< "Connections per Branch: "<< "\t" << Cb << "\n"
+				<< "Average Branch length: " << "\t" << avLenB << "\n"
+				<< "Average Line length: " << "\t" << avLenL << "\n"
+				<< "Connecting node frequency: " << "\t" << NCfreq << "\n"
+				<< "Branch frequency: " << "\t" << B20 << "\n"
+				<< "Line frequency: " << "\t" << P20 << "\n"
+				<< "2D Intesnsity: " << "\t" << P21 << "\n"
+				<< "Dimesnonless intesity: " << "\t" << B22 << "\n"
+				<< "Average degree of network (2e/n): " << "\t" << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
+				<< "Average number of connections per line: " << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
+				<< "Number of components (c): " << "\t" << numK << "\n"
+				<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" << endl;
+	
 
 			//Analyse the different component of the network------------------------
 			for (int i =0; i < numK; i++)
@@ -585,19 +606,21 @@ void GRAPH::GraphAnalysis(Graph& G, vector<float>& METRIC)
 					}
 					NbN = (Inodes + 3*Ynodes + 4*Xnodes) / 2;
 				}
+				/*
 				if (NbB > 1)
 				{
-					txtG << "COMPONENT NO. " << i << "\n"
-						<< "Branches: " << NbB   << "\n" 
-						<< "Branches (calc): "   << NbN << "\n" 
-						<< "Inodes: " << Inodes  << "\n" 
-						<< "Ynodes: " << Ynodes  << "\n" 
-						<< "Xnodes: " << Xnodes  << "\n" 
-						<< "Enodes: " << Enodes  << "\n"
-						<<" Connections (Y +X): "<< (Ynodes + Xnodes) << "\n"
-						<<" Cummulative length: "<< totalLength << "\n"
-						<<" Average length: "    << totalLength / NbB<< "\n" << endl;
+					txtG << "COMPONENT NO. "	 << "\t" << i << "\n"
+						<< "Branches: " 		 << "\t" << NbB << "\n" 
+						<< "Branches (calc): "	 << "\t" << NbN << "\n" 
+						<< "Inodes: " 			 << "\t" << Inodes <<  "\n" 
+						<< "Ynodes: " 			 << "\t" << Ynodes <<  "\n" 
+						<< "Xnodes: " 			 << "\t" << Xnodes  << "\n" 
+						<< "Enodes: " 			 << "\t" << Enodes  << "\n"
+						<<" Connections (Y +X): "<< "\t" << (Ynodes + Xnodes) << "\n"
+						<<" Cummulative length: "<< "\t" << totalLength << "\n"
+						<<" Average length: "    << "\t" << totalLength / NbB<< "\n" << endl;
 				}
+				**/
 			}
 		}
 		else 
@@ -608,8 +631,7 @@ void GRAPH::GraphAnalysis(Graph& G, vector<float>& METRIC)
 		cout << " ERROR: GRAPH IS NOT PLANAR!" << endl;
 		exit (EXIT_FAILURE);
 	}
-	METRIC.push_back ((float) 2 *    num_edges(G)   / num_vertices(G)); 
-	METRIC.push_back ((float)(2 * Xnodes + Ynodes) / num_vertices(G));
+	txtG.close();
 }
  
 //populate vicinity of traces with potential fracture centres----------
@@ -793,8 +815,8 @@ void GRAPH::ShortPath(Graph G, map_vertex_type m, point_type source, point_type 
 	}
 	cout <<"Dijkstra shortest paths: " << distance << " ("<<path.size() << ") \n" << endl;
 
-	if (distance > 0)
-		Gref.WriteSHP(shortP, "ShortestPath.shp");
+	//if (distance > 0)
+		//Gref.WriteSHP(shortP, "ShortestPath.shp");
 }
 
 //create minimum spanning tree (backbone of network)--------------------
@@ -824,6 +846,6 @@ void  GRAPH::MinTree (Graph G)
 					min_graph);
 		i++;  
 	}
-	Gref.WriteSHP(min_graph, "MinTree.shp");
+	//Gref.WriteSHP(min_graph, "MinTree.shp");
 	cout <<"minTree Total eges: " << i << endl;
 }
