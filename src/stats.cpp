@@ -482,6 +482,65 @@ vector<double> LogNormGenerateMultiValue(const vector<double> &r, const double x
 	return std::move(samples);
 }
 
+WeibullParams WeibullCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+{
+	const int N = data.end() - xmin;
+	double lambda = 0, beta = 0;
+	double logsum = 0;
+	for (auto it = xmin; it < data.end(); it++) logsum += log(*it);
+	logsum = logsum / N;
+	boost::uintmax_t max_iters = 1000;
+// 	boost::math::tools::eps_tolerance<double> tol(0.001);
+	//need to solve beta numerically
+	const double result = boost::math::tools::newton_raphson_iterate(
+		[&](double b)->std::pair<double, double>{
+			double tsum = 0, bsum = 0;
+			double dtsum = 0, dbsum = 0;
+			for (auto it = xmin; it < data.end(); it++)
+			{
+				const double log_val = log(*it);
+				const double pow_val = std::pow(*it, b);
+				 tsum += pow_val * log_val;
+				 bsum += pow_val;
+				dtsum += pow_val * log_val * log_val;
+				dbsum += pow_val * log_val;
+			}
+			const double lxm = log(*xmin);
+			const double  subval =   N*pow(*xmin, b);
+			const double dsubval = subval*lxm;
+			const double  topv =  tsum -  subval * lxm;
+			const double dtopv = dtsum - dsubval * lxm;
+			const double  botv =  bsum -  subval;
+			const double dbotv = dbsum - dsubval;
+			const double func_val = topv / botv - logsum;
+			const double diff_val = (botv*dtopv - topv*dbotv) / (botv*botv); //d/dx (t(x)/b(x)) = dt(x)/db(x) = (b(x) dt(x) - t(x) db(x)) / (b(x)**2)
+			return make_pair(func_val, diff_val); //I think these calculations are correct, but I'm not entirely sure
+		},
+		//intial guess, min, max, number of digits precision, max iterations
+		2.0, 0.001, 20.0, 5, max_iters);
+// 	cout << "used " << max_iters << " iterations" << endl;
+	beta = result;//(result.first + result.second) / 2;
+	const double xbmin = std::pow(*xmin, beta);
+	for (auto it = xmin; it < data.end(); it++) lambda += std::pow(*it, beta) - xbmin;
+	lambda = lambda / N;
+	return WeibullParams{lambda, beta};
+}
+
+double WeibullCDF(const double x, const double xmin, const WeibullParams &params)
+{
+	return 1 - exp(-std::pow((x/*-xmin*/)/params.lambda, params.beta));
+}
+
+double WeibullPDF(const double x, const double xmin, const WeibullParams &params)
+{
+	return (params.beta / params.lambda) * std::pow((x/*-xmin*/)/params.lambda, params.beta - 1) * exp(-std::pow((x/*-xmin*/)/params.lambda, params.beta));
+}
+
+double WeibullGenerateValue(const double r, const double xmin, const WeibullParams &params)
+{
+	return /*xmin +*/ params.lambda * std::pow(-log(1-r), 1/params.beta);
+}
+
 template<typename T>
 vector<double> GetSampleSingles(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
 {
@@ -839,6 +898,11 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 		
 	ModelHolder<LogNormParams> lognorm_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, true, 2};
 	ModelHolder<LogNormParams> lognorm_all_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, false, 2};
+	
+	ModelHolder<WeibullParams> weibull_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
+		[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, true, 1};
+	ModelHolder<WeibullParams> weibull_all_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
+		[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, false, 1};
 
 	vector<DistStatsType> &models = results.models; //convenience name
 	
@@ -850,6 +914,10 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 	
 	models.push_back(DistStats<LogNormParams>{lognorm_model, "Log Normal"});
 	models.push_back(DistStats<LogNormParams>{lognorm_all_model, "Log Normal All"});
+	
+	//weibull is slow, because you need to iteratively solve for the parameters
+// 	models.push_back(DistStats<WeibullParams>{weibull_model, "Weibull"});
+// 	models.push_back(DistStats<WeibullParams>{weibull_all_model, "Weibull All"});
 
 	GenerateStats generate_visitor{values, rngs};
 	
