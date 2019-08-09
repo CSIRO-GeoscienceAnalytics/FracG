@@ -50,8 +50,6 @@ class GEO
 		double_t len;
 	};
 
-
-
 	template<typename T> T** RasterConvert(int rows, int cols, T **M);
 	
 	seg_tree Seg_Tree(vector<line_type>F);
@@ -63,6 +61,15 @@ class GEO
 	int getElevationFromArray(point_type p, const int *data);
 	void AssignValues(Graph& G, std::string const& filename);
 	void AssignValuesAll(Graph& G, std::string const& filename);
+	
+	void AssignValuesGraph(Graph& G, double transform[8], double** values);
+	polygon_type BoundingBox(double transform[8], double raster_crop_size);
+	double getValue(point_type p, double transform[8], double** values);
+	double LineExtractor(line_type L, double Transform[8], double** raster);
+	double CentreGradient(line_type F, double transform[8], double** values);
+	double CrossGradient(line_type F, double transform[8], double** values);
+	double ParallelGradient(line_type F, double transform[8], double** values);
+	
 	template<typename T> int readRaster(std::string const filename, T *&data);
 	void GetRasterProperties(std::string const& filename, double**& RASTER);
 	void read_wkt(std::string const& filename, std::vector<line_type>& lineString);

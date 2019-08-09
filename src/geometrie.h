@@ -17,7 +17,7 @@ class GEOMETRIE
 	{}
 	;  
 		
-	//construct perpendicular line through midpoint of segment--------------
+//construct perpendicular line through midpoint of segment--------------
 	template <typename Segment>
 	struct Perpencicular
 	{
@@ -54,6 +54,25 @@ class GEOMETRIE
 			geometry::append(cross, centre);
 			geometry::append(cross, p2);
 			all.push_back(cross);
+		}
+	};
+	
+	template <typename Segment>
+	struct SegPoints
+	{
+		line_type cross;
+		point_type centre, p1, p2;
+		int seg_count;
+		vector<std::tuple<point_type, point_type, point_type>> Points;
+		
+		SegPoints() : cross(), centre(), p1(), p2(), Points()
+		{seg_count = 0;}
+
+		inline void operator()(Segment const& s)
+		{
+			geometry::convert(s, cross);
+			geometry::centroid(cross, centre);
+			Points.push_back(make_tuple(cross.front(), centre, cross.back()));
 		}
 	};
 	
