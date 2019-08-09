@@ -650,18 +650,21 @@ std::tuple<double, double> log_likelihood_ratio(const ModelHolder<T1> &model1, c
 	const int N = values.end() - xmin;
 	double l1 = 0, l2 = 0; //sum of l1 and l2
 	std::vector<double> l1s(N), l2s(N); //l_i(x) = log-likelihood of x = ln(p_i(x)) //init them with enough values
+	//scale the (log) likelihood values so that the pdf from the mutual xmin to the final data point still integrates to one, so scale by 1/(1-cdf(mutual xmin))
+	const double log_scale1 = -log(1 - model1.cdf_func(*xmin, *xmin1, params1)); //remember -log(x) == log(1/x)
+	const double log_scale2 = -log(1 - model2.cdf_func(*xmin, *xmin2, params2));
 	l1s.reserve(N);
 	l2s.reserve(N);
 	#pragma omp parallel for reduction(+:l1,l2)
 	for (auto it = xmin; it < values.end(); it++)
 	{
 		const int index = it - xmin;
-		double l1v = log(model1.pdf_func(*it, *xmin1, params1));
-		l1 += l1v;
+		double l1v = log(model1.pdf_func(*it, *xmin1, params1)) + log_scale1; //and remember log(a*b) == log(a) + log(b)
 		l1s[index] = l1v;
-		double l2v = log(model2.pdf_func(*it, *xmin2, params2));
-		l2 += l2v;
+		l1 += l1v;
+		double l2v = log(model2.pdf_func(*it, *xmin2, params2)) + log_scale2;
 		l2s[index] = l2v;
+		l2 += l2v;
 	}
 	const double l1m = l1/N; //calculate the mean so we can calculate the standard deviation
 	const double l2m = l2/N;
