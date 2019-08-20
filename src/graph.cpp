@@ -93,13 +93,26 @@ vertex_type GRAPH::GetVertex(map_vertex_type& map, point_type const& key, Graph&
 }
 
 //add new edge to the graph---------------------------------------------
+//Graph G, Source S, Target T, FaultSeg is the segment of the fault that makes up this edge
  void GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg)
 {
+	GRAPH::AddNewEdge(G, S, T, FaultSeg, geometry::length(FaultSeg));
+}
+
+//add a new edge to the graph, and record the full length of the fault that comprises this fault segment
+void GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg, double FaultLength)
+{
 	//cout << "Assing edge between " << S << " and " << T << " with number of vertices " << num_vertices(G) << endl;
+	edge_type edge;
+	bool success = false;
 	if (!boost::edge(S, T, G).second && !geometry::equals(G[S].location, G[T].location))
-		add_edge(S, T,
+	{
+		std::tie(edge, success) = add_edge(S, T,
 			{geometry::length(FaultSeg)/1000, FaultSeg},
 			G);
+		G[edge].fault_length = FaultLength;
+	}
+	
 }
  
 //draw graph as png (only for samll graphs)----------------------------
@@ -137,7 +150,7 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
 {
 	geometry::model::multi_linestring<line_type> intersection;
-	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int >> G;
+	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
 	std::pair <point_type, point_type> NODES;
 	line_type TRACE;
 	long double Xmax, Xmin, Ymax, Ymin;
@@ -174,29 +187,31 @@ void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_
 		
 		if (intersection.size() <= 0) continue;
 		type = 0;
+		const double fault_length = geometry::length(Fault);
 		for (auto it = intersection.begin(); it != intersection.end(); it++)
 		{
 			line_type &segment = *it;
 			//use the distance from the original fault's end points to determine if this segment's end points are from the original fault segment, or are cut off by the boundaries of the area of interest
 			if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold) type |= FRONT_ENODE;
 			if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold) type |=  BACK_ENODE;
-			G.push_back(make_tuple(make_pair(segment.front(),segment.back()), segment, type));
+			G.push_back(make_tuple(make_pair(segment.front(),segment.back()), segment, type, fault_length));
 		}
 		intersection.clear();
 	}
 
 	//create edges and nodes for faults in the graph-------------------------
-	for (typename vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int >>::const_iterator it = G.begin(); it != G.end(); ++it)
+	for (typename vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double>>::const_iterator it = G.begin(); it != G.end(); ++it)
 	{
 		NODES = get<0> (*it);
 		TRACE = get<1> (*it);
 		type  = get<2> (*it);
+		const double fault_length = get<3>(*it);
 		
 		VA = AddNewVertex(map, NODES.first, graph);
 		VB = AddNewVertex(map, NODES.second, graph);
 
 		//if( (degree(VA, graph) == 0) && (degree(VB, graph) == 0) )
-		AddNewEdge(graph, VA, VB, TRACE);
+		AddNewEdge(graph, VA, VB, TRACE, fault_length);
 				
 		if (type & FRONT_ENODE) graph[VA].Enode = true;
 		if (type &  BACK_ENODE) graph[VB].Enode = true;
@@ -212,7 +227,7 @@ void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_
 
 //find and remove spurs from the network
 //a "spur" is a fault segment that extends only slightly past a fault intersection
-//these are assumed to be an issue of the digitisation/data quality, and that real physical faults either end at the fault intersection, or continue for a large enough distance past the fault intersectoin
+//these are assumed to be an issue of the digitisation/data quality, and that real physical faults either end at the fault intersection, or continue for a large enough distance past the fault intersection
 //this function assumes that the fault graph has already been split into the fault segments between intersections
 void GRAPH::RemoveSpurs(Graph& G, map_vertex_type& map, double minDist)
 {
@@ -255,6 +270,7 @@ void GRAPH::RemoveSpurs(Graph& G, map_vertex_type& map, double minDist)
 }
 
 //return whether the given point should be attached to the front, middle, or end of this fault
+//this is used to sort the other faults that intersect with this one
 AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distance_along, double threshold){
 	double distance_from_fault = geometry::distance(fault, point);
 	const double fault_distance_threshold = 0.5;
@@ -270,7 +286,7 @@ AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distan
 void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 {
 	Graph g;
-	map_vertex_type m;
+	map_vertex_type m; //the map translates physical coordinates and nodes in the graph.
 	GEOMETRIE geom;
 	long double Distance;
 	line_type fault, fault2;
@@ -281,7 +297,8 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 
 	vector <std::pair<vertex_type, vertex_type >> removeEdge;
 	std::pair<vertex_type, vertex_type > removeS, removeT;
-	vector <std::tuple<long double, point_type, AttachPoint>> cross;
+	vector <std::tuple<long double, point_type, AttachPoint>> cross; //point type is the start/end point of the fault, the double is the distance along the (other) fault that the intersection occurrs at, AttachPoint is whether the other fault attaches to the front or back of this fault (for cases where the intersection point is outside of the fault but withing the threshold distance) or middle, if the faults intersect
+	//the AttachPoint is used in the sorting of the intersections
 
 	typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, AttachPoint>> >> UpGraph;
 	UpGraph GraphBuild;
@@ -289,6 +306,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 	for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
 	{
 		fault  = graph[*Eg].trace;
+		const double fault_length = geometry::length(fault);
 		cross.push_back(make_tuple(0, fault.front(), AttachPoint::middle));
 		for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
 		{
@@ -322,7 +340,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 		}
 		cross.push_back(make_tuple(geometry::length(fault), fault.back(), AttachPoint::middle));
 		
-		geom.SortDist(cross);
+		geom.SortDist(cross); //sort the vertices so that we get them in order of how far along the fault they appear (while taking into account that some intersection points appear off the fault line itself)
 		vertex_type prev_vertex = AddNewVertex(m, std::get<1>(cross.front()), g);
 		
 		for (vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
@@ -333,7 +351,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 			//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
 			//if (is_start || is_end) continue;
 			NewV = AddNewVertex(m, intersect, g);
-			AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location));
+			AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location), fault_length);//also remember the length of the original fault
 			prev_vertex = NewV;
 		}
 		cross.clear();
