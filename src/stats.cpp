@@ -237,7 +237,7 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 		NB++;
 	}
 	
-	double SUM_yres, SUM_res, R2;
+	double SUM_yres = 0, SUM_res = 0, R2;
 	int n = counts.size();
 	double xsum  = arma::accu(X );
 	double ysum  = arma::accu(Y );
@@ -248,9 +248,9 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	double b = (x2sum*ysum-xsum*xysum)/(x2sum*n-xsum*xsum);		//intercept
 	double y_interc = arma::mean(Y) - a * arma::mean(X);
 	
-	double y_fit[counts.size()]; 							//fitted values of y   
+	double *y_fit = new double[counts.size()]; 							//fitted values of y
 
-	for (int ii = 0;ii < n; ii++)
+	for (int ii = 0; ii < n; ii++)
 	{
 		y_fit[ii] = a*X[ii] + b;						//y(fitted) at x 
 		SUM_yres += pow(Y[ii] - y_interc -( a * X[ii]),2);
@@ -266,7 +266,9 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 
 	txtF << " LS-Fit: "<< a  << "x + " << b << endl; 
 	txtF << " R^2: "   << R2 <<endl; 
-	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = R2 " << endl;
+	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = " << R2 << " )" << endl;
+	
+	delete[] y_fit;
 }
 
 
@@ -972,8 +974,8 @@ double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<doubl
 	point_type rn_p;
 	point_type p1, p2;
 	line_type ScanLine1, ScanLine2;
-	int line, intersec1, intersec2;
-	double rX1, rX2, rY1, rY2;
+	int line;// intersec1, intersec2; //commenting out these unsused variables
+// 	double rX1, rX2, rY1, rY2;
 	vector<pair<int, double>> TotalIntersec;
 	polygon_type pl = georef.BoundingBox(GeoTransform, 10);
 	vector<double> directions(100);
@@ -981,7 +983,7 @@ double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<doubl
 	random::uniform_int_distribution<> distX(GeoTransform[0], GeoTransform[0] + GeoTransform[1]*GeoTransform[6]);
 	random::uniform_int_distribution<> distY(GeoTransform[3], GeoTransform[3] + GeoTransform[5]*GeoTransform[7]);
 	
-	for (int i =0; i < Maximas.size();i++)
+	for (unsigned int i =0; i < Maximas.size();i++)
 	{
 		for (int j =0; j < (Maximas[i].second * 100);j++)
 			directions.push_back(Maximas[i].first);
@@ -1077,7 +1079,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	{ 
 		pl = georef.BoundingBox(input[i].transform, 100);
 		cout << "Analyse Raster '"<< input[i].name << "' for entire fault set" << endl;
-		double len = (abs(input[i].transform[1]) + abs(input[i].transform[5])) / 2;
+// 		double len = (abs(input[i].transform[1]) + abs(input[i].transform[5])) / 2;
 		Result = ResultsF + input[i].name + ".csv";
 		ofstream txtF (Result);
 		txtF << "File: " << input[i].name << endl;
@@ -1157,7 +1159,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 							grad1 = georef.getElevation(get<0>(*I), input[i].name) - georef.getElevation(get<1>(*I), input[i].name);
 						else
 							grad1 = georef.getElevation(get<1>(*I), input[i].name) - georef.getElevation(get<0>(*I), input[i].name);
-					no++;
+						no++;
 					}
 					if (geometry::within(get<1>(*I), pl) && geometry::within(get<2>(*I), pl))
 					{
@@ -1165,7 +1167,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 							grad2 = georef.getElevation(get<1>(*I), input[i].name) - georef.getElevation(get<2>(*I), input[i].name);
 						else
 							grad2 = georef.getElevation(get<2>(*I), input[i].name) - georef.getElevation(get<1>(*I), input[i].name);
-					no++;
+						no++;
 					}
 					if (no != 0)
 					{
@@ -1184,7 +1186,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	}
  }
  
- void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults)
+ void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target)
  {
 	GEO geo;
 	GRAPH G;
@@ -1195,7 +1197,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	{
 		Graph graph;
 		map.clear();
-		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4;
+		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4; //distance threshold for considering separated objects to be at the same locations
 		
 		ofstream txtF; 
 		txtF.open ("Graph_"+input[i].name+".csv"); 
@@ -1210,11 +1212,15 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
 		geo.WriteSHP(graph, "GRAPH.shp"); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
+		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
+		geo.setup_maximum_flow(flow_graph);
+		double max_flow = geo.maximum_flow(flow_graph, source, target);
+		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
 		cout << "  done" << endl;
 	}
  }
  
-void STATS::AddData(vector<line_type> faults)
+void STATS::AddData(vector<line_type> faults, point_type source, point_type target)
 {
 	GEO georef;
 	GEOMETRIE geom;
@@ -1253,7 +1259,7 @@ void STATS::AddData(vector<line_type> faults)
 	}
 
 	AnalyseRasterFaults(input, faults);
-	AnalyseRasterGraph(input, faults);
+	AnalyseRasterGraph(input, faults, source, target);
 
 	std::copy(std::begin(old_GeoTransform), std::end(old_GeoTransform), std::begin(GeoTransform));
 }
@@ -1375,31 +1381,31 @@ vector< std::pair<double, float> > kde(arma::vec val, int len, float b)
  
  vector<float> MA_filter(vector< std::pair<double,float>>KDE, int window)
  {
- int wn = (int) (window - 1) / 2;
+ unsigned int wn = (int) (window - 1) / 2;
  vector<float>KDE_filtered(KDE.size());
 
- for (int i = 0; i < KDE.size(); i++) 
+ for (unsigned int i = 0; i < KDE.size(); i++) 
  {
- float av = 0;
+	float av = 0;
 	if ((i - wn) < 0)
 	{
-		for (int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
+		for (unsigned int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
 			av += KDE[ii].second;
 	}
 	else
 	{
-		for (int ii = i; ii > (i-wn); ii--)
+		for (unsigned int ii = i; ii > (i-wn); ii--)
 			av += KDE[ii].second;
 	}
 	
 	if (i + wn > KDE.size())
 	{
-		for (int ii = 0; ii < wn; ii++)
+		for (unsigned int ii = 0; ii < wn; ii++)
 			av += KDE[ii].second;
 	}
 	else
 	{
-		for (int iii = i; iii < (i+wn); iii++)
+		for (unsigned int iii = i; iii < (i+wn); iii++)
 			av += KDE[iii].second;
 	}
 	KDE_filtered.at(i) = av / wn;
@@ -1418,7 +1424,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	float mean_length, med_length, stddev_length, var_length, range_length, length;
 	float mean_sin, med_sin, stddev_sin, var_sin, range_sin;
 	point_type centre;
-	double bin_size;
+// 	double bin_size; //unused
 	//						index  wkt   strike  length  sinu   cdf_stri cdf_len cdf_sin nearf  distance to nearest fault
 	std::vector<std::tuple<int, string, double, double, double, double, double, double, int, double, int, double>> faultInfo;
 	vector<p_index> points;
@@ -1585,10 +1591,10 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 
 	cout << "Estimated Lineament sets: "<< Maximas.size() << endl;
 
-	int m = 0;
+	unsigned int m = 0;
 	vector< std::pair<double, float> >::iterator vs = GAUSS.begin();
 	
-	for (int i = 0; i < GAUSS.size(); i++)
+	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		cout << GAUSS[i].first << " " << Maximas[m].first << endl;
 		if (GAUSS[i].first == Maximas[m].first)
@@ -1612,7 +1618,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 
 	txtF << "Fault sets:" << "\t" << Maximas.size() << endl;
 	txtF << "Angle \t Density \t Smoothed Density" << endl;
-	for(int i =0; i < GAUSS.size(); i++)
+	for(unsigned int i =0; i < GAUSS.size(); i++)
 		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << kde_filter[i] <<  endl;   
 	txtF << endl;
 		

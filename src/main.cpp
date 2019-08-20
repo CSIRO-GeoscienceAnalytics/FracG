@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	
 	std::clock_t startcputime = std::clock();
 //----------------------------------------------------------------------
-	//read in the fault information
+	//read in the fault information from the vector file
 	if (ext == ".shp")
 		geo.read_shp(vecFile, faults);
 	if (ext == ".txt")
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 	//G.CreateFractures(frac_graph, map, faults, rasFile ); 
 	//geo.WriteTxt(frac_graph, "frac_graph.txt");
 	//----------------------------------------------------------------------
-	stats.AddData(faults);
+	stats.AddData(faults, source, target); //this asks for additional raster files
 	cout << "Finished in " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n" << endl;
 	return EXIT_SUCCESS; 
 } 
