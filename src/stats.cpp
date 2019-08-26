@@ -38,13 +38,23 @@ struct QuadTreeNode
 	box bbox; //bounding box for the square
 	vector<box> child_bboxes; //bboxes for this node's children
 	vector<std::unique_ptr<QuadTreeNode>> children;
+	int generation;
 	//how do I have this be null until i set them? if i use a vector, i cant guarantee that the nodes will line up with the bounding boxes? c++ is wierd
+	friend std::ostream& operator<<(std::ostream &os, const QuadTreeNode &n) {
+		const point_type &min = n.bbox.min_corner();
+		const point_type &max = n.bbox.max_corner();
+		const double min_x = min.x();
+		const double max_x = max.x();
+		const double min_y = min.y();
+		const double max_y = max.y();
+		return os << "QuadTreeNode gen " << n.generation << " (" << min_x << ", " << min_y << ") -> (" << max_x << ", " << max_y << ")";}
 };
 
 //Make a new QuadTreeNode from its bounding box
-QuadTreeNode NewQuadTreeNode(const box &bbox)
+QuadTreeNode NewQuadTreeNode(const box &bbox, const int generation = -1)
 {
 	QuadTreeNode node;
+	node.generation = generation;
 	node.bbox = bbox;
 	const point_type &min = bbox.min_corner();
 	const point_type &max = bbox.max_corner();
@@ -58,24 +68,33 @@ QuadTreeNode NewQuadTreeNode(const box &bbox)
 	node.child_bboxes.push_back(box(point_type(half_x,  min_y), point_type( max_x, half_y)));
 	node.child_bboxes.push_back(box(point_type( min_x, half_y), point_type(half_x,  max_y)));
 	node.child_bboxes.push_back(box(point_type(half_x, half_y), point_type( max_x,  max_y)));
-	for (unsigned int counter = 0; counter <= node.child_bboxes.size(); counter++) node.children.push_back(nullptr);
+	for (unsigned int counter = 0; counter < node.child_bboxes.size(); counter++) node.children.push_back(nullptr); //why was this < an <=? did I change it? why didn't it cause problems earlier?
 	return std::move(node);
 }
 
 //Check a fault segment, and add it to this node and this node's children (where they overlap with the fault segment)
-void QuadTreeAddFaultSegment(QuadTreeNode &node, line_type &fault, int layers)
+void QuadTreeAddFaultSegment(QuadTreeNode &node, const line_type &fault, int layers)
 {
+	if (node.children.size() != 4)
+	{
+		cout << "ERROR - node " << node << " has children length " << node.children.size() << " at layer " << layers << endl;
+		return;
+	}
 	const box fault_bbox = geometry::return_envelope<box>(fault);
 	for (unsigned int i = 0; i < node.children.size(); i++){
-		const box &child_bbox = node.child_bboxes[i];
+		const box child_bbox = node.child_bboxes[i];
 		if (geometry::disjoint(child_bbox, fault_bbox) || geometry::disjoint(child_bbox, fault)) continue; //check the fault's bounding box first, because it is faster
 		std::unique_ptr<QuadTreeNode> &child = node.children[i];
-		if (child == nullptr) child = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(child_bbox)));
+		if (child == nullptr) child = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(child_bbox, node.generation+1)));
 		if (layers < 1) continue;
-		geometry::model::multi_linestring<line_type> child_faults;
-		geometry::intersection(fault, child_bbox, child_faults);
-		for (auto it = child_faults.begin(); it != child_faults.end(); it++) QuadTreeAddFaultSegment(*child, *it, layers-1);
+// 		#pragma omp task shared(node, fault, child)
+		{
+			geometry::model::multi_linestring<line_type> child_faults;
+			geometry::intersection(fault, node.child_bboxes[i], child_faults);//child_bbox
+			for (auto it = child_faults.begin(); it != child_faults.end(); it++) QuadTreeAddFaultSegment(*node.children[i], *it, layers-1);
+		}
 	}
+// 	#pragma omp taskwait
 }
 
 //Once the QuadTree has been constructed, call this to count the boxes
@@ -166,24 +185,26 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 			max_y = nY-1;
 		}
 		//this parallelisation can be better, each fault might only be looking at a small range of the area, not enough to use all threads/cores
-#pragma omp parallel for
+		//
+#pragma omp parallel for collapse(2)
 		for (int xind = min_x; xind <= max_x; xind++)
 		{
-			vector<box> &row_bboxes = node_bboxes[xind];
-			vector<unique_ptr<QuadTreeNode>> &row_nodes = nodes[xind];
+// 			vector<box> &row_bboxes = ;
+// 			vector<unique_ptr<QuadTreeNode>> &row_nodes = ;
 			for (int yind = min_y; yind <= max_y; yind++)
 			{
-				const box &node_bbox = row_bboxes[yind];
-				std::unique_ptr<QuadTreeNode> &node = row_nodes[yind];
+				const box &node_bbox = node_bboxes[xind][yind];
+				std::unique_ptr<QuadTreeNode> &node = nodes[xind][yind];
 				//if there is no overlap, check the next candidate node
 				//check the simpler envelope first, then the full geometry of the fault
 				if (geometry::disjoint(fault_bbox, node_bbox) || geometry::disjoint(fault, node_bbox)) continue;
 				//if the node doesn't already exist, make it
-				if (node == nullptr) node = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(node_bbox)));
+				if (node == nullptr) node = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(node_bbox, 0)));
 				//check the degments of the fault that overlap this node, and add them to the quadtree
 				geometry::model::multi_linestring<line_type> fault_segments;
 				geometry::intersection(fault, node_bbox, fault_segments);
 				for (auto it = fault_segments.begin(); it != fault_segments.end(); it++) QuadTreeAddFaultSegment(*node, *it, max_depth);
+// #pragma omp taskwait
 			}
 		}
 	}
@@ -214,6 +235,11 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	vector<std::tuple<double, long long int>> counts;
 	point_type offset(0,0);
 	BoxCountQuadTree(faults, counts, longest, max_depth, offset);
+	cout << "Box counting results:" << endl;
+	for (auto t = counts.begin(); t < counts.end(); t++)
+	{
+		cout << std::get<0>(*t) << ", " << std::get<1>(*t) << endl;
+	}
 	
 	auto t_end = std::chrono::high_resolution_clock::now();
 	cout << "Boxcounting (QuadTree Method) 2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
@@ -238,19 +264,19 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	}
 	
 	double SUM_yres = 0, SUM_res = 0, R2;
-	int n = counts.size();
+	const int N = counts.size();
 	double xsum  = arma::accu(X );
 	double ysum  = arma::accu(Y );
 	double x2sum = arma::accu(XX);
 	double xysum = arma::accu(XY);
 
-	double a = (n * xysum-xsum*ysum)/(n*x2sum-xsum*xsum);		 // slope
-	double b = (x2sum*ysum-xsum*xysum)/(x2sum*n-xsum*xsum);		//intercept
+	double a = (N * xysum-xsum*ysum)/(N*x2sum-xsum*xsum);		 // slope
+	double b = (x2sum*ysum-xsum*xysum)/(x2sum*N-xsum*xsum);		//intercept
 	double y_interc = arma::mean(Y) - a * arma::mean(X);
 	
-	double *y_fit = new double[counts.size()]; 							//fitted values of y
+	double *y_fit = new double[N]; 							//fitted values of y
 
-	for (int ii = 0; ii < n; ii++)
+	for (int ii = 0; ii < N; ii++)
 	{
 		y_fit[ii] = a*X[ii] + b;						//y(fitted) at x 
 		SUM_yres += pow(Y[ii] - y_interc -( a * X[ii]),2);
@@ -261,7 +287,7 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	
 	txtF <<  "No \t x(S) \t log(y(observed)) \t log(y(fitted))" << endl;
 	
-	for (int ii=0; ii<n; ii++)
+	for (int ii=0; ii<N; ii++)
 		txtF <<"" << ii+1 << "\t"<< X[ii] << "\t" <<Y[ii] << "\t" << y_fit[ii] << endl;    
 
 	txtF << " LS-Fit: "<< a  << "x + " << b << endl; 
@@ -1596,7 +1622,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
-		cout << GAUSS[i].first << " " << Maximas[m].first << endl;
+		//cout << GAUSS[i].first << " " << Maximas[m].first << endl; //this takes up a lot of screen space
 		if (GAUSS[i].first == Maximas[m].first)
 		{
 			auto result = *std::min_element(vs, GAUSS.begin() + i, [](const auto& lhs, const auto& rhs) 
