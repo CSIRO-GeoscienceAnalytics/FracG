@@ -90,7 +90,7 @@ void QuadTreeAddFaultSegment(QuadTreeNode &node, const line_type &fault, int lay
 // 		#pragma omp task shared(node, fault, child)
 		{
 			geometry::model::multi_linestring<line_type> child_faults;
-			geometry::intersection(fault, node.child_bboxes[i], child_faults);//child_bbox
+			geometry::intersection(fault, node.child_bboxes[i], child_faults);
 			for (auto it = child_faults.begin(); it != child_faults.end(); it++) QuadTreeAddFaultSegment(*node.children[i], *it, layers-1);
 		}
 	}
@@ -189,8 +189,6 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 #pragma omp parallel for collapse(2)
 		for (int xind = min_x; xind <= max_x; xind++)
 		{
-// 			vector<box> &row_bboxes = ;
-// 			vector<unique_ptr<QuadTreeNode>> &row_nodes = ;
 			for (int yind = min_y; yind <= max_y; yind++)
 			{
 				const box &node_bbox = node_bboxes[xind][yind];
@@ -204,7 +202,6 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 				geometry::model::multi_linestring<line_type> fault_segments;
 				geometry::intersection(fault, node_bbox, fault_segments);
 				for (auto it = fault_segments.begin(); it != fault_segments.end(); it++) QuadTreeAddFaultSegment(*node, *it, max_depth);
-// #pragma omp taskwait
 			}
 		}
 	}
@@ -235,11 +232,13 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	vector<std::tuple<double, long long int>> counts;
 	point_type offset(0,0);
 	BoxCountQuadTree(faults, counts, longest, max_depth, offset);
-	cout << "Box counting results:" << endl;
-	for (auto t = counts.begin(); t < counts.end(); t++)
-	{
-		cout << std::get<0>(*t) << ", " << std::get<1>(*t) << endl;
-	}
+	
+	//for debug purposes
+// 	cout << "Box counting results:" << endl;
+// 	for (auto t = counts.begin(); t < counts.end(); t++)
+// 	{
+// 		cout << std::get<0>(*t) << ", " << std::get<1>(*t) << endl;
+// 	}
 	
 	auto t_end = std::chrono::high_resolution_clock::now();
 	cout << "Boxcounting (QuadTree Method) 2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
