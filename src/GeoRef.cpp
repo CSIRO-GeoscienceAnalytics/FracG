@@ -127,9 +127,13 @@ double GEO::CrossGradient(line_type F, double transform[8], double** values)
 		if (geometry::within(cross.front(), pl) && geometry::within(cross.back(),pl))
 		{
 			if(getValue(cross.front(), transform, values) > getValue(cross.back(), transform, values))
-				D.push_back(getValue(cross.front(), transform, values) - getValue(cross.back(), transform, values));
+				D.push_back(
+				(getValue(cross.front(), transform, values) - getValue(cross.back(), transform, values))/geometry::length(cross)
+				);
 			else
-				D.push_back( getValue(cross.back(), transform, values) - getValue(cross.front(), transform, values));
+				D.push_back( (
+				getValue(cross.back(), transform, values) - getValue(cross.front(), transform, values))/geometry::length(cross)
+				);
 		}
 	}
 
@@ -165,36 +169,41 @@ double GEO::ParallelGradient(line_type F, double transform[8], double** values)
 	else
 		return(0);
 }
-
 double GEO::CentreGradient(line_type F, double transform[8], double** values)
 {
 	const double raster_crop_size = 10;
-	long double Xmax, Xmin, Ymax, Ymin;
-	polygon_type pl = BoundingBox(transform, 10);
-	box bx;
-
 	//Convert from map to pixel coordinates and read values at centre of line
 	//Only works for geotransforms with no rotation.
-	double len =  transform[1] * transform[5]/2;
+	box bx;
+	line_type cross;
 	point_type point, p1, p2;
-	double rx = F.back().x() - F.front().x();
-	double ry = F.back().y() - F.front().y();
-	double l = sqrt(rx*rx + ry*ry);
+	long double Xmax, Xmin, Ymax, Ymin;
+	polygon_type pl = BoundingBox(transform, raster_crop_size);
+	double len =  ceil((abs(transform[1]) + abs(transform[5])) / 2);
 	
 	geometry::centroid(F, point);
+	
+	double rx = F.back().x() - F.front().x();
+	double ry = F.back().y() - F.front().y();
+	
+	double l = sqrt(rx*rx + ry*ry);
+	
 	p1.set<0>((point.x() + ( ry/l) * len ));
 	p1.set<1>((point.y() + (-rx/l) * len ));
+	
 	p2.set<0>((point.x() + (-ry/l) * len ));
 	p2.set<1>((point.y() + ( rx/l) * len ));
-			
+	
+	geometry::append(cross, p1);
+	geometry::append(cross, point);
+	geometry::append(cross, p2);
+
 	if (geometry::within(p1, pl) && geometry::within(p2, pl))
 	{		
 		if (getValue(p1, transform, values) > getValue(p2, transform, values))
-			return( abs(values[int((p1.x() - transform[0]) / transform[1])][int((p1.y() - transform[3]) / transform[5])] -
-					values[int((p2.x() - transform[0]) / transform[1])][int((p2.y() - transform[3]) / transform[5])]));
+			return( (getValue(p1, transform, values) - getValue(p2,transform, values)) / geometry::length(cross) );
 		else
-			return( abs(values[int((p2.x() - transform[0]) / transform[1])][int((p2.y() - transform[3]) / transform[5])] -
-					values[int((p1.x() - transform[0]) / transform[1])][int((p1.y() - transform[3]) / transform[5])]));
+			return( (getValue(p2, transform, values) - getValue(p1,transform, values)) / geometry::length(cross));
 	}
 	else
 		return(0);
@@ -241,7 +250,7 @@ int GEO::readRaster(std::string const filename, T *&data){
 	return err;
 }
 
- //read pixel vaule of DEM at coodinate
+ //read pixel value of DEM at coodinate
 int GEO::getElevation(point_type p, std::string const& filename)
 {
 	const char * name = filename.c_str();
@@ -272,14 +281,14 @@ int GEO::getElevation(point_type p, std::string const& filename)
 double GEO::getValue(point_type p, double transform[8], double** values)
 {
 	polygon_type pl = BoundingBox(transform, 10);
-	if(geometry::within(p,pl)){
+	if(geometry::within(p,pl))
+	{
 		int x = (int) (p.x() - transform[0]) / transform[1];
 		int y = (int) abs((p.y() - transform[3]) / transform[5]);
 		return(values[x][y]);
 	}
 	else 
-		//return std::numeric_limits<double>::quiet_NaN();
-		return (0);
+		return std::numeric_limits<double>::quiet_NaN();
 }
 
 double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
@@ -511,7 +520,6 @@ void GEO::WriteTxt(Graph& g, string const& filename)
 //convert graph edges to shp-file---------------------------------------
 void GEO::WriteSHP(Graph G, const char* Name)
 {
-
 	line_type fault;
 	std::string line;
 
@@ -534,7 +542,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		exit( 1 );
 	}
 
-	poLayer = poDS->CreateLayer( "Graph", &GeoRef, wkbLineString, NULL );
+	poLayer = poDS->CreateLayer(Name, &GeoRef, wkbLineString, NULL );
 	if( poLayer == NULL )
 	{
 		printf( "Layer creation failed.\n" );
@@ -591,19 +599,28 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		printf( "Creating 'MeanValue' field failed.\n" );
 		exit( 1 );
 	}
-
-	OGRFieldDefn oField5( "CrossGrad", OFTReal );
+	
+	OGRFieldDefn oField5( "CentreGrad", OFTReal );
 	oField5.SetWidth(10);
 	oField5.SetPrecision(5);
 	if( poLayer->CreateField( &oField5 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'CentreGrad' field failed.\n" );
+		exit( 1 );
+	}
+
+	OGRFieldDefn oField6( "CrossGrad", OFTReal );
+	oField6.SetWidth(10);
+	oField6.SetPrecision(5);
+	if( poLayer->CreateField( &oField6 ) != OGRERR_NONE )
 	{
 		printf( "Creating 'CrossGrad' field failed.\n" );
 		exit( 1 );
 	}
 
-	OGRFieldDefn oField6( "ParalGrad", OFTReal );
-	oField6.SetWidth(10);
-	if( poLayer->CreateField( &oField6 ) != OGRERR_NONE )
+	OGRFieldDefn oField7( "ParalGrad", OFTReal );
+	oField7.SetWidth(10);
+	if( poLayer->CreateField( &oField7 ) != OGRERR_NONE )
 	{
 		printf( "Creating 'Data' field failed.\n" );
 		exit( 1 );
@@ -625,6 +642,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		poFeature->SetField( "Component", C);
 		poFeature->SetField( "Centre", G[Eg].Centre);
 		poFeature->SetField( "MeanValue", G[Eg].MeanValue);
+		poFeature->SetField( "CentreGrad",G[Eg].CentreGrad);
 		poFeature->SetField( "CrossGrad", G[Eg].CrossGrad);
 		poFeature->SetField( "Paralgrad", G[Eg].ParalGrad);
 
@@ -636,7 +654,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 				line.append(", ");
 		}
 		line.append( ")");
-		char* branch = (char*) line.c_str();
+		const char* branch = (const char*) line.c_str();
 		l.importFromWkt(&branch);
 		poFeature->SetGeometry( &l );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
@@ -650,6 +668,105 @@ void GEO::WriteSHP(Graph G, const char* Name)
 	OGRFeature::DestroyFeature( poFeature );
 	GDALClose( poDS );
 }
+
+
+
+//convert graph edges to shp-file---------------------------------------
+void GEO::WriteSHP2(Graph G, const char* Name)
+{
+	assert (num_vertices(G) != 0 && num_edges(G) != 0);
+	vector<int> component(num_vertices(G));
+	
+	point_type point;
+	std::string Point;
+	
+	GDALAllRegister();
+	GDALDataset *poDS;
+	GDALDriver *poDriver;
+	OGRLayer *poLayer;
+	OGRFeature *poFeature;
+	OGRPoint PO;
+	
+	const char *pszDriverName = "ESRI Shapefile";
+	char * pszWKT;
+	
+	GeoRef.exportToWkt( &pszWKT );
+
+	poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
+	poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
+	if( poDS == NULL )
+	{
+		printf( "Creation of shp-file failed.\n" );
+		exit( 1 );
+	}
+
+	poLayer = poDS->CreateLayer(Name, &GeoRef, wkbPoint, NULL );
+	if( poLayer == NULL )
+	{
+		printf( "Layer creation failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField( "No", OFTInteger );
+	oField.SetWidth(10);
+	if( poLayer->CreateField( &oField ) != OGRERR_NONE )
+	{
+		printf( "Creating 'No' field failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField1( "Degree", OFTInteger );
+	oField1.SetWidth(10);
+	if( poLayer->CreateField( &oField1 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Degree' field failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField2( "Component", OFTInteger );
+	oField2.SetWidth(10);
+	if( poLayer->CreateField( &oField2 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Component' field failed.\n" );
+		exit( 1 );
+	}
+	
+
+	int NO = 1;
+	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
+	
+	//write shp file----------------------------------------------------
+	for (auto Ve : boost::make_iterator_range(vertices(G))) 
+	{
+		point = G[Ve].location;
+		int de = degree(Ve, G);
+		int co = connected_components(G, &component[0]);
+
+		poFeature->SetField( "No", NO);
+		poFeature->SetField( "Degree", de);
+		poFeature->SetField( "Component", co);
+		Point.append("POINT(");
+		Point.append(std::to_string(point.x()) + " " + std::to_string(point.y()));
+		Point.append( ")");
+		const char* p = (const char*) Point.c_str();
+		
+		PO.importFromWkt(&p);
+		poFeature->SetGeometry( &PO );
+		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
+		{
+			printf( "Failed to create feature in shapefile.\n" );
+			exit( 1 );
+		}
+		Point.clear();
+		NO++;
+	}
+	OGRFeature::DestroyFeature( poFeature );
+	GDALClose( poDS );
+}
+
+
+
+
  
 //
 seg_tree GEO::Seg_Tree(vector<line_type>F)

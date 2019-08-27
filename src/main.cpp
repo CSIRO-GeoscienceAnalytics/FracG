@@ -5,6 +5,7 @@
 #include "geometrie.h"
 #include "main.h"
 #include "stats.h"
+#include "model.h"
 
 #include <iostream>
 #include <iomanip>
@@ -45,10 +46,12 @@ int main(int argc, char *argv[])
 		<< "* Armadillo version: " << arma::arma_version::as_string() << "*\n"
 		<< "******************************************** "<< endl;
 
+
 	GEO geo;
 	GRAPH G; 
 	STATS stats;
 	GEOMETRIE geom;
+	MODEL m;
 	map_vertex_type map; //a map of the vertices in graph G, for quick retrieval of vertices by their location
 
 	point_type source, target; //source and target for shortest path calculation
@@ -85,10 +88,15 @@ int main(int argc, char *argv[])
 	geo.CorrectNetwork(faults, Dist);//rejoin faults that are incorrectly split in the data file
 	stats.CreateStats(txtF, faults); // statistical analysis of network
 	
+	cout << "here" << endl;
+	
 	G.ReadVEC(graph1, map, faults); //convert the faults into a graph
 	G.SplitFaults(graph1, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
 	G.RemoveSpurs(graph1, map, Dist); //remove any spurs from the graph network
 	G.GraphAnalysis(graph1, txtF); 
+	geo.WriteSHP(graph1,  "Branches.shp");
+	geo.WriteSHP2(graph1, "Vertices.shp");
+
 	//---------------------------------------------------------------------- 
 	source.set<0>(14301336.315685500000);
 	source.set<1>(-1800551.207095710000);
@@ -100,6 +108,15 @@ int main(int argc, char *argv[])
 	//geo.WriteTxt(frac_graph, "frac_graph.txt");
 	//----------------------------------------------------------------------
 	stats.AddData(faults);
+	
+	
+	
+	
+	m.WriteGeo(faults, "ElCrosso");
+	
+	
+	
+	
 	cout << "Finished in " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n" << endl;
 	return EXIT_SUCCESS; 
 } 

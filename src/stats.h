@@ -100,7 +100,7 @@ class STATS
 	void DEManalysis(Graph& G, double radius, string filename, double** RASTER);
 	FSTATS KMCluster(bool input, int No, FSTATS faultStats);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	double ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, float> >Maximas);
+	double ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, double> >Maximas);
 
 	void WriteData(ofstream& txtF);
 };

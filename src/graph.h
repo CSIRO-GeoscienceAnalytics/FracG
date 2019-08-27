@@ -17,6 +17,7 @@ class GRAPH
 	~GRAPH()
 	{}
 	;  
+	
 	void DrawGraph(Graph G);
 	void RemoveSpurs(Graph& G, map_vertex_type& map, double minDist);
 
@@ -25,6 +26,7 @@ class GRAPH
 	void AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg);
 	void ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
 	void ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
+	void ReadVEC4MODEL(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults, box bx);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
 	void SplitFaults(Graph& graph, map_vertex_type& map, double minDist );
 	void GraphAnalysis(Graph& G, std::ofstream& txtF);

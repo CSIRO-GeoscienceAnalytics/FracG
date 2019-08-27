@@ -76,6 +76,7 @@ class GEO
 	void read_shp(std::string const& filename, std::vector<line_type>& lineString);
 	void WriteTxt(Graph& g, string const& filename);
 	void WriteSHP(Graph G, const char* Name);
+	void WriteSHP2(Graph G, const char* Name);
 	void CorrectNetwork(vector<line_type>&F, double dist);
 
 };

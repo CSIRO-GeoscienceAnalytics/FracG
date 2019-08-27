@@ -264,9 +264,9 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	for (int ii=0; ii<n; ii++)
 		txtF <<"" << ii+1 << "\t"<< X[ii] << "\t" <<Y[ii] << "\t" << y_fit[ii] << endl;    
 
-	txtF << " LS-Fit: "<< a  << "x + " << b << endl; 
-	txtF << " R^2: "   << R2 <<endl; 
-	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = R2 " << endl;
+	txtF << " LS-Fit: "<< "\t" << a  << "x + " << b << endl; 
+	txtF << " R^2: "   << "\t" << R2 <<endl; 
+	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = " << R2  << endl;
 }
 
 
@@ -890,7 +890,7 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 	return results;
 }
 
-double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, float>>Maximas)
+double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, double>>Maximas)
 {
 /***********************************************************************
 * Berkowitz, B. (1995). Analysis of fracture network connectivity 
@@ -1058,14 +1058,11 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 				txtF << georef.LineExtractor(F, input[i].transform, input[i].values) << "\t";
 				
 				if(georef.getElevation(F.front(), input[i].name) > georef.getElevation(F.back(), input[i].name))
-					txtF << georef.getElevation(F.front(), input[i].name) - georef.getElevation(F.back(), input[i].name) << "\t";
+					txtF << (georef.getElevation(F.front(), input[i].name) - georef.getElevation(F.back(), input[i].name))/geometry::length(F) << "\t";
 				else
-					txtF << georef.getElevation(F.back(), input[i].name) - georef.getElevation(F.front(), input[i].name)  << "\t";
+					txtF << (georef.getElevation(F.back(), input[i].name) - georef.getElevation(F.front(), input[i].name))/geometry::length(F)  << "\t";
 				
 				txtF << georef.CrossGradient(F, input[i].transform, input[i].values);
-				
-				
-				
 				
 				GEOMETRIE::SegPoints	 <geometry::model::referring_segment<point_type>> functor2;
 				
@@ -1123,6 +1120,9 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	for(std::vector<READ>::size_type i = 0; i != input.size(); i++) 
 	{
 		Graph graph;
+		
+		string g_name ="GRAPH_"+input[i].name+".shp";
+		const char *G_n = g_name.c_str();
 		map.clear();
 		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4;
 		
@@ -1131,13 +1131,13 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		
 		cout << " Analyse Raster '"<< input[i].name <<"' for Graph" << endl;
 		cout << "  Building new Graph for raster" << endl;
-		G.ReadVEC(graph, map, faults); //convert the faults into a graph
+		G.ReadVEC4raster(graph, map, faults); //convert the faults into a graph
 		G.SplitFaults(graph, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
 		G.RemoveSpurs(graph, map, Dist); //remove any spurs from the graph network
 		cout << " Assigning weights to vertices and edges" << endl;
 		G.GraphAnalysis(graph, txtF);
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
-		geo.WriteSHP(graph, "GRAPH.shp"); //write out the graph data as a file
+		geo.WriteSHP(graph, G_n); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
 		cout << "  done" << endl;
 	}
@@ -1277,39 +1277,47 @@ FSTATS STATS::KMCluster(bool input, int No, FSTATS faultStats)
 //gaussion kernel for kde
 float k_gauss( double val)
 {
- const float p = 1.0 / sqrt( 2.0 * M_PI);
- float result = (float)0.5 * (val*val);
+ const double p = 1.0 / sqrt( 2.0 * M_PI);
+ float result = 0.5 * (val*val);
  result = p * std::exp(- result);
  return result;
 }
 
 //simple KDE
-vector< std::pair<double, float> > kde(arma::vec val, int len, float b)
+vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
  {
- vector< std::pair<double, float> > density( len );
- const float p = 1.0 / (b * len );
+ vector< std::pair<double, double> > density( len );
+ 
+ arma::vec val2(len,fill::zeros);
+ int i = 0;
+ for (auto& v : val)
+	 val2[i] = v + 180;
+	 
+ vec val3 = join_cols<vec>(val, val2);
+ len = val.size();
+ 
+ const double p = 1.0 / (b * len );
 	for(int r = 0; r < len; r++)
 	{
-		float sum = 0;
+		double sum = 0;
 		for(int i = 0; i < len; i++)
 		{
 			double dist = abs(val[r] - val[i]);
-			sum += (float) k_gauss( dist / b );
-			sum += (float) k_gauss( (180 - dist) / b );
+			sum +=  k_gauss( dist / b );
 		}
 	density[r] = std::make_pair( val[r], p*sum );
 	}
   return density;
  }
  
- vector<float> MA_filter(vector< std::pair<double,float>>KDE, int window)
+ void MA_filter(vector< std::pair<double,double>>&KDE, int window)
  {
  int wn = (int) (window - 1) / 2;
- vector<float>KDE_filtered(KDE.size());
+ vector<double>KDE_filtered(KDE.size());
 
  for (int i = 0; i < KDE.size(); i++) 
  {
- float av = 0;
+ double av = 0;
 	if ((i - wn) < 0)
 	{
 		for (int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
@@ -1331,10 +1339,35 @@ vector< std::pair<double, float> > kde(arma::vec val, int len, float b)
 		for (int iii = i; iii < (i+wn); iii++)
 			av += KDE[iii].second;
 	}
-	KDE_filtered.at(i) = av / wn;
+	KDE_filtered[i] = av / wn;
  }
-	return(KDE_filtered); 
+ for (int i =0; i < KDE.size();i++)
+ {
+	KDE[i].second = KDE_filtered[i];
+}
  }
+ 
+ 
+ void interpolate(vector< std::pair<double, double>>&KDE)
+{
+// <boost/math/interpolators/barycentric_rational.hpp>
+	std::map<double, double> r;
+	for (auto e : KDE)
+	{
+		cout << e.first << " " << e.second << endl;
+		r[e.first] = e.second;
+	}
+
+	auto x_range = boost::adaptors::keys(r);
+    auto y_range = boost::adaptors::values(r);
+    math::barycentric_rational<double> interpolant(x_range.begin(), x_range.end(), y_range.begin());
+
+	KDE.clear();
+     for (int i = 0; i< 180; i++)
+		KDE.push_back(make_pair(i, interpolant(i)));
+}
+ 
+ 
  
 //create statisics from input file--------------------------------------
 void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
@@ -1386,14 +1419,26 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		
 		fault_lengths.push_back(length);
 
-		string coord = "LINESTRING(";
+		int i = 0;
+		//string coord = "LINESTRING(";
+		string coord = "";
 		BOOST_FOREACH(point_type p, F)
 		{
-			geometry::append(p,multiL);
-			coord += to_string(p.x()) + " ";
-			coord += to_string(p.y()) + ", ";
+			if (i < F.size())
+			{
+				geometry::append(p,multiL);
+				coord += to_string(p.x()) + " ";
+				coord += to_string(p.y()) + ", ";
+			}
+			else 
+			{
+				coord += to_string(p.x()) + " ";
+				coord += to_string(p.y()) + "";
+				
+			}
+			i++;
 		}
-		coord += ")";
+
 
 		geometry::centroid(F, centre);
 		
@@ -1489,33 +1534,39 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		
 //KDE estimation of orientation to obtain number of lineament sets------
  sort(ANGLE.begin(), ANGLE.end());
- vector< std::pair<double, float> > GAUSS =  kde( ANGLE, ANGLE.size(), 10);
- vector<float> kde_filter= MA_filter(GAUSS, 5);
- vector< std::pair<double, float> >Maximas;
+ vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 10);
+ vector< std::pair<double, double>> Maximas;
+	
+ MA_filter(GAUSS, 5);
+ //interpolate(GAUSS);
 
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
-			if (kde_filter[i] > kde_filter[kde_filter.size()] && 
-				kde_filter[i] > kde_filter[i+1])
+			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
+				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 
-		if (i != 0 && i != kde_filter.size())
-			if (kde_filter[i] > kde_filter[i-1] &&
-				kde_filter[i] > kde_filter[i+1])
+		if (i != 0 && i != GAUSS.size())
+			if (GAUSS[i].second > GAUSS[i-1].second &&
+				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 		
 		
-		if (i == kde_filter.size())
-			if (kde_filter[i] > kde_filter[i-1] && 
-				kde_filter[i] > kde_filter[0])
+		if (i == GAUSS.size())
+			if (GAUSS[i].second > GAUSS[i-1].second && 
+				GAUSS[i].second > GAUSS[0].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 	}
 
 	cout << "Estimated Lineament sets: "<< Maximas.size() << endl;
 
+
+	//model.GaussianMix(GAUSS, Maximas.size());
+
+/*
 	int m = 0;
-	vector< std::pair<double, float> >::iterator vs = GAUSS.begin();
+	vector< std::pair<double, double> >::iterator vs = GAUSS.begin();
 	
 	for (int i = 0; i < GAUSS.size(); i++)
 	{
@@ -1534,15 +1585,14 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 				m = 0;
 		}
 	}
-			
-	
-	ScanLineDensity(faults, Maximas);
+*/
+	//ScanLineDensity(faults, Maximas);
 
 
 	txtF << "Fault sets:" << "\t" << Maximas.size() << endl;
 	txtF << "Angle \t Density \t Smoothed Density" << endl;
 	for(int i =0; i < GAUSS.size(); i++)
-		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << kde_filter[i] <<  endl;   
+		txtF << GAUSS[i].first << "\t " << GAUSS[i].second <<  endl;   
 	txtF << endl;
 		
 	txtF << "Generation \t Angle \t Probability" << endl;

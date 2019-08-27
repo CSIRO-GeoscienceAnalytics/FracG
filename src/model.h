@@ -12,12 +12,12 @@ class MODEL
 {
 	public:
 
+
 		MODEL();
 		~MODEL()
 		{}
 
-	void GaussianMix(vec data1, int g);
-
+	void WriteGeo(vector<line_type> faults, string filename);
 };
 #endif
  

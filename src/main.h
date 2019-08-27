@@ -29,8 +29,10 @@
 
 #include "boost/multi_array.hpp"
 
+#include <boost/range/adaptors.hpp>
 #include <boost/math/distributions.hpp>
 #include <boost/math/constants/constants.hpp>
+#include <boost/math/interpolators/barycentric_rational.hpp>
 
 #include <boost/graph/copy.hpp>
 #include <boost/graph/random.hpp>
@@ -133,14 +135,33 @@ namespace FGraph
 		double CentreGrad;
 		double CrossGrad;
 		double ParalGrad;
+		int FaultNb;
 	};
-
-	//now we can define the graph as an adjacency list
+	
+		struct FEdge2
+	{
+		long double length;
+		line_type trace;
+		int FaultNb;
+	};
+	
+	
+		//now we can define the graph as an adjacency list
 	//we also need a vertex descriptor to add vertices to the graph
 	//and a map that stores the vertices that have already been added (control)
 	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
 		FVertex<point_type>, FEdge
 			>Graph;  
+	
+	//now we can define the graph as an adjacency list
+	//we also need a vertex descriptor to add vertices to the graph
+	//and a map that stores the vertices that have already been added (control)
+	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
+		FVertex<point_type>, FEdge2
+			>MGraph;  
+
+	
+
 
 	typedef graph_traits<Graph>::vertex_descriptor vertex_type;
 	typedef graph_traits<Graph>::vertex_iterator vertex_iter;
