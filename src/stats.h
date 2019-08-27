@@ -4,6 +4,7 @@
 #include <boost/variant.hpp>
 #include <boost/variant/static_visitor.hpp>
 #include <boost/variant/apply_visitor.hpp>
+#include <boost/math/tools/roots.hpp>
 #include <armadillo>
 
 using namespace FGraph;
@@ -63,7 +64,13 @@ struct LogNormParams
 	friend std::ostream& operator<<(std::ostream &os, const LogNormParams &p) {return os << "mu = " << p.mu << ", sigma = " << p.sigma;}
 };
 
-typedef boost::variant<DistStats<PowerLawParams>, DistStats<ExponentialParams>, DistStats<LogNormParams>> DistStatsType;
+struct WeibullParams
+{
+	double lambda, beta;
+	friend std::ostream& operator<<(std::ostream &os, const WeibullParams &p) {return os << "lambda = " << p.lambda << ", beta = " << p.beta;}
+};
+
+typedef boost::variant<DistStats<PowerLawParams>, DistStats<ExponentialParams>, DistStats<LogNormParams>, DistStats<WeibullParams>> DistStatsType;
 
 struct StatsModelData
 {
@@ -92,9 +99,9 @@ class STATS
 	void DoBoxCount(vector<line_type> faults, std::ofstream& txtF);
 	StatsModelData CompareStatsModels(std::vector<double> &values, std::ofstream& txtF);
 	
-	void AddData(vector<line_type> faults);
+	void AddData(vector<line_type> faults, point_type source, point_type target);
 	void AnalyseRasterFaults(vector<READ> input, vector<line_type> faults);
-	void AnalyseRasterGraph(vector<READ> input, vector<line_type> faults);
+	void AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target);
 	
 	void CreateStats(ofstream& txtF, vector<line_type> faults);
 	void DEManalysis(Graph& G, double radius, string filename, double** RASTER);

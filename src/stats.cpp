@@ -38,13 +38,23 @@ struct QuadTreeNode
 	box bbox; //bounding box for the square
 	vector<box> child_bboxes; //bboxes for this node's children
 	vector<std::unique_ptr<QuadTreeNode>> children;
+	int generation;
 	//how do I have this be null until i set them? if i use a vector, i cant guarantee that the nodes will line up with the bounding boxes? c++ is wierd
+	friend std::ostream& operator<<(std::ostream &os, const QuadTreeNode &n) {
+		const point_type &min = n.bbox.min_corner();
+		const point_type &max = n.bbox.max_corner();
+		const double min_x = min.x();
+		const double max_x = max.x();
+		const double min_y = min.y();
+		const double max_y = max.y();
+		return os << "QuadTreeNode gen " << n.generation << " (" << min_x << ", " << min_y << ") -> (" << max_x << ", " << max_y << ")";}
 };
 
 //Make a new QuadTreeNode from its bounding box
-QuadTreeNode NewQuadTreeNode(const box &bbox)
+QuadTreeNode NewQuadTreeNode(const box &bbox, const int generation = -1)
 {
 	QuadTreeNode node;
+	node.generation = generation;
 	node.bbox = bbox;
 	const point_type &min = bbox.min_corner();
 	const point_type &max = bbox.max_corner();
@@ -58,24 +68,33 @@ QuadTreeNode NewQuadTreeNode(const box &bbox)
 	node.child_bboxes.push_back(box(point_type(half_x,  min_y), point_type( max_x, half_y)));
 	node.child_bboxes.push_back(box(point_type( min_x, half_y), point_type(half_x,  max_y)));
 	node.child_bboxes.push_back(box(point_type(half_x, half_y), point_type( max_x,  max_y)));
-	for (unsigned int counter = 0; counter <= node.child_bboxes.size(); counter++) node.children.push_back(nullptr);
+	for (unsigned int counter = 0; counter < node.child_bboxes.size(); counter++) node.children.push_back(nullptr); //why was this < an <=? did I change it? why didn't it cause problems earlier?
 	return std::move(node);
 }
 
 //Check a fault segment, and add it to this node and this node's children (where they overlap with the fault segment)
-void QuadTreeAddFaultSegment(QuadTreeNode &node, line_type &fault, int layers)
+void QuadTreeAddFaultSegment(QuadTreeNode &node, const line_type &fault, int layers)
 {
+	if (node.children.size() != 4)
+	{
+		cout << "ERROR - node " << node << " has children length " << node.children.size() << " at layer " << layers << endl;
+		return;
+	}
 	const box fault_bbox = geometry::return_envelope<box>(fault);
 	for (unsigned int i = 0; i < node.children.size(); i++){
-		const box &child_bbox = node.child_bboxes[i];
+		const box child_bbox = node.child_bboxes[i];
 		if (geometry::disjoint(child_bbox, fault_bbox) || geometry::disjoint(child_bbox, fault)) continue; //check the fault's bounding box first, because it is faster
 		std::unique_ptr<QuadTreeNode> &child = node.children[i];
-		if (child == nullptr) child = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(child_bbox)));
+		if (child == nullptr) child = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(child_bbox, node.generation+1)));
 		if (layers < 1) continue;
-		geometry::model::multi_linestring<line_type> child_faults;
-		geometry::intersection(fault, child_bbox, child_faults);
-		for (auto it = child_faults.begin(); it != child_faults.end(); it++) QuadTreeAddFaultSegment(*child, *it, layers-1);
+// 		#pragma omp task shared(node, fault, child)
+		{
+			geometry::model::multi_linestring<line_type> child_faults;
+			geometry::intersection(fault, node.child_bboxes[i], child_faults);
+			for (auto it = child_faults.begin(); it != child_faults.end(); it++) QuadTreeAddFaultSegment(*node.children[i], *it, layers-1);
+		}
 	}
+// 	#pragma omp taskwait
 }
 
 //Once the QuadTree has been constructed, call this to count the boxes
@@ -166,20 +185,19 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 			max_y = nY-1;
 		}
 		//this parallelisation can be better, each fault might only be looking at a small range of the area, not enough to use all threads/cores
-#pragma omp parallel for
+		//
+#pragma omp parallel for collapse(2)
 		for (int xind = min_x; xind <= max_x; xind++)
 		{
-			vector<box> &row_bboxes = node_bboxes[xind];
-			vector<unique_ptr<QuadTreeNode>> &row_nodes = nodes[xind];
 			for (int yind = min_y; yind <= max_y; yind++)
 			{
-				const box &node_bbox = row_bboxes[yind];
-				std::unique_ptr<QuadTreeNode> &node = row_nodes[yind];
+				const box &node_bbox = node_bboxes[xind][yind];
+				std::unique_ptr<QuadTreeNode> &node = nodes[xind][yind];
 				//if there is no overlap, check the next candidate node
 				//check the simpler envelope first, then the full geometry of the fault
 				if (geometry::disjoint(fault_bbox, node_bbox) || geometry::disjoint(fault, node_bbox)) continue;
 				//if the node doesn't already exist, make it
-				if (node == nullptr) node = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(node_bbox)));
+				if (node == nullptr) node = std::move(std::make_unique<QuadTreeNode>(NewQuadTreeNode(node_bbox, 0)));
 				//check the degments of the fault that overlap this node, and add them to the quadtree
 				geometry::model::multi_linestring<line_type> fault_segments;
 				geometry::intersection(fault, node_bbox, fault_segments);
@@ -215,6 +233,13 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	point_type offset(0,0);
 	BoxCountQuadTree(faults, counts, longest, max_depth, offset);
 	
+	//for debug purposes
+// 	cout << "Box counting results:" << endl;
+// 	for (auto t = counts.begin(); t < counts.end(); t++)
+// 	{
+// 		cout << std::get<0>(*t) << ", " << std::get<1>(*t) << endl;
+// 	}
+	
 	auto t_end = std::chrono::high_resolution_clock::now();
 	cout << "Boxcounting (QuadTree Method) 2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
 		 <<  std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << endl;
@@ -237,20 +262,20 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 		NB++;
 	}
 	
-	double SUM_yres, SUM_res, R2;
-	int n = counts.size();
+	double SUM_yres = 0, SUM_res = 0, R2;
+	const int N = counts.size();
 	double xsum  = arma::accu(X );
 	double ysum  = arma::accu(Y );
 	double x2sum = arma::accu(XX);
 	double xysum = arma::accu(XY);
 
-	double a = (n * xysum-xsum*ysum)/(n*x2sum-xsum*xsum);		 // slope
-	double b = (x2sum*ysum-xsum*xysum)/(x2sum*n-xsum*xsum);		//intercept
+	double a = (N * xysum-xsum*ysum)/(N*x2sum-xsum*xsum);		 // slope
+	double b = (x2sum*ysum-xsum*xysum)/(x2sum*N-xsum*xsum);		//intercept
 	double y_interc = arma::mean(Y) - a * arma::mean(X);
 	
-	double y_fit[counts.size()]; 							//fitted values of y   
+	double *y_fit = new double[N]; 							//fitted values of y
 
-	for (int ii = 0;ii < n; ii++)
+	for (int ii = 0; ii < N; ii++)
 	{
 		y_fit[ii] = a*X[ii] + b;						//y(fitted) at x 
 		SUM_yres += pow(Y[ii] - y_interc -( a * X[ii]),2);
@@ -261,12 +286,14 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	
 	txtF <<  "No \t x(S) \t log(y(observed)) \t log(y(fitted))" << endl;
 	
-	for (int ii=0; ii<n; ii++)
+	for (int ii=0; ii<N; ii++)
 		txtF <<"" << ii+1 << "\t"<< X[ii] << "\t" <<Y[ii] << "\t" << y_fit[ii] << endl;    
 
 	txtF << " LS-Fit: "<< "\t" << a  << "x + " << b << endl; 
 	txtF << " R^2: "   << "\t" << R2 <<endl; 
-	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = " << R2  << endl;
+	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = " << R2 << " )"  << endl;
+
+	delete[] y_fit;
 }
 
 
@@ -482,6 +509,65 @@ vector<double> LogNormGenerateMultiValue(const vector<double> &r, const double x
 	return std::move(samples);
 }
 
+WeibullParams WeibullCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+{
+	const int N = data.end() - xmin;
+	double lambda = 0, beta = 0;
+	double logsum = 0;
+	for (auto it = xmin; it < data.end(); it++) logsum += log(*it);
+	logsum = logsum / N;
+	boost::uintmax_t max_iters = 1000;
+// 	boost::math::tools::eps_tolerance<double> tol(0.001);
+	//need to solve beta numerically
+	const double result = boost::math::tools::newton_raphson_iterate(
+		[&](double b)->std::pair<double, double>{
+			double tsum = 0, bsum = 0;
+			double dtsum = 0, dbsum = 0;
+			for (auto it = xmin; it < data.end(); it++)
+			{
+				const double log_val = log(*it);
+				const double pow_val = std::pow(*it, b);
+				 tsum += pow_val * log_val;
+				 bsum += pow_val;
+				dtsum += pow_val * log_val * log_val;
+				dbsum += pow_val * log_val;
+			}
+			const double lxm = log(*xmin);
+			const double  subval =   N*pow(*xmin, b);
+			const double dsubval = subval*lxm;
+			const double  topv =  tsum -  subval * lxm;
+			const double dtopv = dtsum - dsubval * lxm;
+			const double  botv =  bsum -  subval;
+			const double dbotv = dbsum - dsubval;
+			const double func_val = topv / botv - logsum;
+			const double diff_val = (botv*dtopv - topv*dbotv) / (botv*botv); //d/dx (t(x)/b(x)) = dt(x)/db(x) = (b(x) dt(x) - t(x) db(x)) / (b(x)**2)
+			return make_pair(func_val, diff_val); //I think these calculations are correct, but I'm not entirely sure
+		},
+		//intial guess, min, max, number of digits precision, max iterations
+		2.0, 0.001, 20.0, 5, max_iters);
+// 	cout << "used " << max_iters << " iterations" << endl;
+	beta = result;//(result.first + result.second) / 2;
+	const double xbmin = std::pow(*xmin, beta);
+	for (auto it = xmin; it < data.end(); it++) lambda += std::pow(*it, beta) - xbmin;
+	lambda = lambda / N;
+	return WeibullParams{lambda, beta};
+}
+
+double WeibullCDF(const double x, const double xmin, const WeibullParams &params)
+{
+	return 1 - exp(-std::pow((x/*-xmin*/)/params.lambda, params.beta));
+}
+
+double WeibullPDF(const double x, const double xmin, const WeibullParams &params)
+{
+	return (params.beta / params.lambda) * std::pow((x/*-xmin*/)/params.lambda, params.beta - 1) * exp(-std::pow((x/*-xmin*/)/params.lambda, params.beta));
+}
+
+double WeibullGenerateValue(const double r, const double xmin, const WeibullParams &params)
+{
+	return /*xmin +*/ params.lambda * std::pow(-log(1-r), 1/params.beta);
+}
+
 template<typename T>
 vector<double> GetSampleSingles(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
 {
@@ -591,18 +677,21 @@ std::tuple<double, double> log_likelihood_ratio(const ModelHolder<T1> &model1, c
 	const int N = values.end() - xmin;
 	double l1 = 0, l2 = 0; //sum of l1 and l2
 	std::vector<double> l1s(N), l2s(N); //l_i(x) = log-likelihood of x = ln(p_i(x)) //init them with enough values
+	//scale the (log) likelihood values so that the pdf from the mutual xmin to the final data point still integrates to one, so scale by 1/(1-cdf(mutual xmin))
+	const double log_scale1 = -log(1 - model1.cdf_func(*xmin, *xmin1, params1)); //remember -log(x) == log(1/x)
+	const double log_scale2 = -log(1 - model2.cdf_func(*xmin, *xmin2, params2));
 	l1s.reserve(N);
 	l2s.reserve(N);
 	#pragma omp parallel for reduction(+:l1,l2)
 	for (auto it = xmin; it < values.end(); it++)
 	{
 		const int index = it - xmin;
-		double l1v = log(model1.pdf_func(*it, *xmin1, params1));
-		l1 += l1v;
+		double l1v = log(model1.pdf_func(*it, *xmin1, params1)) + log_scale1; //and remember log(a*b) == log(a) + log(b)
 		l1s[index] = l1v;
-		double l2v = log(model2.pdf_func(*it, *xmin2, params2));
-		l2 += l2v;
+		l1 += l1v;
+		double l2v = log(model2.pdf_func(*it, *xmin2, params2)) + log_scale2;
 		l2s[index] = l2v;
+		l2 += l2v;
 	}
 	const double l1m = l1/N; //calculate the mean so we can calculate the standard deviation
 	const double l2m = l2/N;
@@ -839,6 +928,11 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 		
 	ModelHolder<LogNormParams> lognorm_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, true, 2};
 	ModelHolder<LogNormParams> lognorm_all_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, false, 2};
+	
+	ModelHolder<WeibullParams> weibull_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
+		[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, true, 1};
+	ModelHolder<WeibullParams> weibull_all_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
+		[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, false, 1};
 
 	vector<DistStatsType> &models = results.models; //convenience name
 	
@@ -850,6 +944,10 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 	
 	models.push_back(DistStats<LogNormParams>{lognorm_model, "Log Normal"});
 	models.push_back(DistStats<LogNormParams>{lognorm_all_model, "Log Normal All"});
+	
+	//weibull is slow, because you need to iteratively solve for the parameters
+// 	models.push_back(DistStats<WeibullParams>{weibull_model, "Weibull"});
+// 	models.push_back(DistStats<WeibullParams>{weibull_all_model, "Weibull All"});
 
 	GenerateStats generate_visitor{values, rngs};
 	
@@ -901,8 +999,8 @@ double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<doubl
 	point_type rn_p;
 	point_type p1, p2;
 	line_type ScanLine1, ScanLine2;
-	int line, intersec1, intersec2;
-	double rX1, rX2, rY1, rY2;
+	int line;// intersec1, intersec2; //commenting out these unsused variables
+// 	double rX1, rX2, rY1, rY2;
 	vector<pair<int, double>> TotalIntersec;
 	polygon_type pl = georef.BoundingBox(GeoTransform, 10);
 	vector<double> directions(100);
@@ -910,7 +1008,7 @@ double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<doubl
 	random::uniform_int_distribution<> distX(GeoTransform[0], GeoTransform[0] + GeoTransform[1]*GeoTransform[6]);
 	random::uniform_int_distribution<> distY(GeoTransform[3], GeoTransform[3] + GeoTransform[5]*GeoTransform[7]);
 	
-	for (int i =0; i < Maximas.size();i++)
+	for (unsigned int i =0; i < Maximas.size();i++)
 	{
 		for (int j =0; j < (Maximas[i].second * 100);j++)
 			directions.push_back(Maximas[i].first);
@@ -1006,7 +1104,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	{ 
 		pl = georef.BoundingBox(input[i].transform, 100);
 		cout << "Analyse Raster '"<< input[i].name << "' for entire fault set" << endl;
-		double len = (abs(input[i].transform[1]) + abs(input[i].transform[5])) / 2;
+// 		double len = (abs(input[i].transform[1]) + abs(input[i].transform[5])) / 2;
 		Result = ResultsF + input[i].name + ".csv";
 		ofstream txtF (Result);
 		txtF << "File: " << input[i].name << endl;
@@ -1083,7 +1181,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 							grad1 = georef.getElevation(get<0>(*I), input[i].name) - georef.getElevation(get<1>(*I), input[i].name);
 						else
 							grad1 = georef.getElevation(get<1>(*I), input[i].name) - georef.getElevation(get<0>(*I), input[i].name);
-					no++;
+						no++;
 					}
 					if (geometry::within(get<1>(*I), pl) && geometry::within(get<2>(*I), pl))
 					{
@@ -1091,7 +1189,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 							grad2 = georef.getElevation(get<1>(*I), input[i].name) - georef.getElevation(get<2>(*I), input[i].name);
 						else
 							grad2 = georef.getElevation(get<2>(*I), input[i].name) - georef.getElevation(get<1>(*I), input[i].name);
-					no++;
+						no++;
 					}
 					if (no != 0)
 					{
@@ -1110,7 +1208,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	}
  }
  
- void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults)
+ void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target)
  {
 	GEO geo;
 	GRAPH G;
@@ -1124,7 +1222,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		string g_name ="GRAPH_"+input[i].name+".shp";
 		const char *G_n = g_name.c_str();
 		map.clear();
-		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4;
+		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4; //distance threshold for considering separated objects to be at the same locations
 		
 		ofstream txtF; 
 		txtF.open ("Graph_"+input[i].name+".csv"); 
@@ -1139,11 +1237,15 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
 		geo.WriteSHP(graph, G_n); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
+		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
+		geo.setup_maximum_flow(flow_graph);
+		double max_flow = geo.maximum_flow(flow_graph, source, target);
+		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
 		cout << "  done" << endl;
 	}
  }
  
-void STATS::AddData(vector<line_type> faults)
+void STATS::AddData(vector<line_type> faults, point_type source, point_type target)
 {
 	GEO georef;
 	GEOMETRIE geom;
@@ -1182,7 +1284,7 @@ void STATS::AddData(vector<line_type> faults)
 	}
 
 	AnalyseRasterFaults(input, faults);
-	AnalyseRasterGraph(input, faults);
+	AnalyseRasterGraph(input, faults, source, target);
 
 	std::copy(std::begin(old_GeoTransform), std::end(old_GeoTransform), std::begin(GeoTransform));
 }
@@ -1312,39 +1414,41 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
  
  void MA_filter(vector< std::pair<double,double>>&KDE, int window)
  {
- int wn = (int) (window - 1) / 2;
- vector<double>KDE_filtered(KDE.size());
 
- for (int i = 0; i < KDE.size(); i++) 
- {
- double av = 0;
-	if ((i - wn) < 0)
+	unsigned int wn = (int) (window - 1) / 2;
+	vector<float>KDE_filtered(KDE.size());
+
+	for (unsigned int i = 0; i < KDE.size(); i++) 
 	{
-		for (int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
-			av += KDE[ii].second;
+
+		double av = 0;
+		if ((i - wn) < 0)
+		{
+			for (unsigned int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
+				av += KDE[ii].second;
+		}
+		else
+		{
+			for (unsigned int ii = i; ii > (i-wn); ii--)
+				av += KDE[ii].second;
+		}
+
+		if (i + wn > KDE.size())
+		{
+			for (unsigned int ii = 0; ii < wn; ii++)
+				av += KDE[ii].second;
+		}
+		else
+		{
+			for (unsigned int iii = i; iii < (i+wn); iii++)
+				av += KDE[iii].second;
+		}
+		KDE_filtered[i] = av / wn;
 	}
-	else
+	for (int i =0; i < KDE.size();i++)
 	{
-		for (int ii = i; ii > (i-wn); ii--)
-			av += KDE[ii].second;
+		KDE[i].second = KDE_filtered[i];
 	}
-	
-	if (i + wn > KDE.size())
-	{
-		for (int ii = 0; ii < wn; ii++)
-			av += KDE[ii].second;
-	}
-	else
-	{
-		for (int iii = i; iii < (i+wn); iii++)
-			av += KDE[iii].second;
-	}
-	KDE_filtered[i] = av / wn;
- }
- for (int i =0; i < KDE.size();i++)
- {
-	KDE[i].second = KDE_filtered[i];
-}
  }
  
  
@@ -1380,7 +1484,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	float mean_length, med_length, stddev_length, var_length, range_length, length;
 	float mean_sin, med_sin, stddev_sin, var_sin, range_sin;
 	point_type centre;
-	double bin_size;
+// 	double bin_size; //unused
 	//						index  wkt   strike  length  sinu   cdf_stri cdf_len cdf_sin nearf  distance to nearest fault
 	std::vector<std::tuple<int, string, double, double, double, double, double, double, int, double, int, double>> faultInfo;
 	vector<p_index> points;
@@ -1565,12 +1669,12 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	//model.GaussianMix(GAUSS, Maximas.size());
 
 /*
-	int m = 0;
+	unsigned int m = 0;
 	vector< std::pair<double, double> >::iterator vs = GAUSS.begin();
 	
-	for (int i = 0; i < GAUSS.size(); i++)
+	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
-		cout << GAUSS[i].first << " " << Maximas[m].first << endl;
+		//cout << GAUSS[i].first << " " << Maximas[m].first << endl; //this takes up a lot of screen space
 		if (GAUSS[i].first == Maximas[m].first)
 		{
 			auto result = *std::min_element(vs, GAUSS.begin() + i, [](const auto& lhs, const auto& rhs) 
@@ -1591,8 +1695,8 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 
 	txtF << "Fault sets:" << "\t" << Maximas.size() << endl;
 	txtF << "Angle \t Density \t Smoothed Density" << endl;
-	for(int i =0; i < GAUSS.size(); i++)
-		txtF << GAUSS[i].first << "\t " << GAUSS[i].second <<  endl;   
+	for(unsigned int i =0; i < GAUSS.size(); i++)
+		txtF << GAUSS[i].first << "\t " << GAUSS[i].second  <<  endl;   
 	txtF << endl;
 		
 	txtF << "Generation \t Angle \t Probability" << endl;

@@ -1,7 +1,9 @@
 #ifndef _geo_h
 #define _geo_h
 
+#include <boost/graph/boykov_kolmogorov_max_flow.hpp>
 #include "main.h"
+
 
 using namespace FGraph;
 
@@ -63,6 +65,10 @@ class GEO
 	void AssignValuesAll(Graph& G, std::string const& filename);
 	
 	void AssignValuesGraph(Graph& G, double transform[8], double** values);
+	DGraph MakeDirectedGraph(Graph &g);
+	void setup_maximum_flow(DGraph &dg);
+	double maximum_flow(DGraph &dg, point_type source, point_type target);
+	double maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t);
 	polygon_type BoundingBox(double transform[8], double raster_crop_size);
 	double getValue(point_type p, double transform[8], double** values);
 	double LineExtractor(line_type L, double Transform[8], double** raster);

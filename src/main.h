@@ -126,8 +126,8 @@ namespace FGraph
 	// Fault Edges Properties
 	struct FEdge
 	{
-		long double length;
-		line_type trace;
+		long double length; //length of the fault segment that makes up this edge
+		line_type trace; //the fault segment that makes up this edge
 		std::string BranchType;
 		std::string component;
 		double Centre;
@@ -136,6 +136,7 @@ namespace FGraph
 		double CrossGrad;
 		double ParalGrad;
 		int FaultNb;
+		double fault_length; //the length of the entire fault that the fault segment is taken from
 	};
 	
 		struct FEdge2
@@ -150,18 +151,13 @@ namespace FGraph
 	//we also need a vertex descriptor to add vertices to the graph
 	//and a map that stores the vertices that have already been added (control)
 	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
-		FVertex<point_type>, FEdge
-			>Graph;  
+		FVertex<point_type>, FEdge> Graph;  
 	
 	//now we can define the graph as an adjacency list
 	//we also need a vertex descriptor to add vertices to the graph
 	//and a map that stores the vertices that have already been added (control)
 	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
-		FVertex<point_type>, FEdge2
-			>MGraph;  
-
-	
-
+		FVertex<point_type>, FEdge2> MGraph;
 
 	typedef graph_traits<Graph>::vertex_descriptor vertex_type;
 	typedef graph_traits<Graph>::vertex_iterator vertex_iter;
@@ -175,6 +171,40 @@ namespace FGraph
 	typedef std::vector<edge_type> short_path;
 	typedef map<point_type, vertex_type, geometry::less<point_type> > map_type;
 	typedef map<point_int, std::vector<vertex_type>, geometry::less<point_int> > map_vertex_type;
+	
+	
+	typedef adjacency_list_traits<boost::vecS, boost::vecS, boost::directedS> DGraphTraits;
+	typedef DGraphTraits::edge_descriptor dedge_type;
+	typedef DGraphTraits::vertex_descriptor dvertex_type;
+	//Structure for a directed vertex, for use in the maximum flow algorithm
+	struct DVertex
+	{
+		point_type location; //the node's physical location
+		bool Enode; //whether or not this node is an end node (off the edge of the raster file)
+		double elevation; //the elevation of the vertex's location
+		long long index;
+		dedge_type predecessor; //store the edge to this vertex's predecessor
+		boost::default_color_type colour; //colour property used by the maximum flow algorithm
+		double distance; //distance from this vertex to the sink
+		DVertex(){};
+		DVertex(point_type loc, bool end, double elev, long long ind) : location(loc), Enode(end), elevation(elev), index(ind) {};
+	};
+	
+	//Structure for a directed edge, for use in the maximum flow algorithm
+	struct DEdge
+	{
+		double length; //the length of this fault/fracture segment
+		double full_length; //the full length of the fault/fracture that this segment belongs to (used to determine the width of the damage zone)
+		double capacity; //the capacity for this edge
+		double residual_capacity; //the unused capacity for this edge
+		dedge_type reverse; //holds a link/pointer/whatever to the edge that links the same two vertices, but in the opposite direction
+		DEdge(){};
+		DEdge(double len, double full_len, double cap) : length(len), full_length(full_len), capacity(cap), residual_capacity(cap) {};
+		DEdge(double len, double full_len) : length(len), full_length(full_len), capacity(0), residual_capacity(0) {};
+		friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
+	};
+	//<edge list for each vertex, vectex list, un/directed, vertex properties, edge properties, graph properties, (all?) edges list>
+	typedef adjacency_list<boost::vecS, boost::vecS, boost::directedS, DVertex, DEdge> DGraph;
 	
 	typedef std::vector<std::pair<double, double>> FSTATS;
 	typedef std::vector<std::tuple<double, double, double>> FSTATS2; 

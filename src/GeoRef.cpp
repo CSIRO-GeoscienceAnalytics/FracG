@@ -73,7 +73,10 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 	point_type centre;
 
 	for (auto Ve : boost::make_iterator_range(vertices(G)))
+	{
 		G[Ve].data = getValue(G[Ve].location, transform, values);
+		if (std::isnan(G[Ve].data)) cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
+	}
 	
 	cout << "edge" << endl;
 	
@@ -81,8 +84,8 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 	{
 		curEdge = G[Eg].trace;
 		geometry::centroid(G[Eg].trace, centre);
-		vertex_type U = source(Eg, G);
-		vertex_type u = target(Eg, G);
+// 		vertex_type U = source(Eg, G);
+// 		vertex_type u = target(Eg, G);
 		
 		G[Eg].Centre = getValue(centre, transform, values);
 		G[Eg].MeanValue = LineExtractor(G[Eg].trace, transform, values) ;
@@ -91,6 +94,114 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 		G[Eg].ParalGrad =  ParallelGradient(G[Eg].trace, transform, values) ;
 	}
 	cout <<"done" << endl;
+}
+
+//make a directed graph from an undirected graph
+//assumes that AssignValuesGraph() has already been called on the graph, and an appropriate raster file, to initialise the height values (which are stored in FVertex.data, not FVertex.elevation)
+DGraph GEO::MakeDirectedGraph(Graph &g)
+{
+	DGraph dg; //this is the directed graph object that will be made, then returned
+	
+	std::map<vertex_type, dvertex_type> vertex_map; //use this to keep track of which nodes in the new graph correspond to particular nodes in the existing graph
+	
+	//start by making the indices
+	Graph::vertex_iterator v, vstart, vend;
+	boost::tie(vstart, vend) = boost::vertices(g);
+	for (v = vstart; v < vend; v++)
+	{
+		FVertex<point_type> fv = g[*v];
+		DVertex dv(fv.location, fv.Enode, fv.data, v - vstart);
+		dvertex_type dvd = boost::add_vertex(dv, dg);
+		vertex_map[*v] = dvd;
+	}
+// 	typedef boost::vertex_index_map<DGraph, long long>::type index_map_type;
+	
+	Graph::edge_iterator e, estart, eend;
+	boost::tie(estart, eend) = boost::edges(g);
+	for (e = estart; e != eend; e++) //can't do e < eend here, I suppose these iterators are unordered
+	{
+		vertex_type s = source(*e, g); //source and target from the unidirectinal graph
+		vertex_type t = target(*e, g);
+		dvertex_type ds = vertex_map[s]; //get the corresponding source and target for the new graph
+		dvertex_type dt = vertex_map[t];
+		FEdge fe = g[*e];
+// // 		double capacity = 
+		DEdge de(fe.length, fe.fault_length); //currently one set of edge properties. will fill out the other values inside the maximum flow function.
+		dedge_type frwd, back;
+		bool fadded, badded;
+		boost::tie(frwd, fadded) = boost::add_edge(ds, dt, de, dg);
+		boost::tie(back, badded) = boost::add_edge(dt, ds, de, dg);
+		if (!fadded || !badded) cout << "Warning: Edge from " << dg[ds].index << " to " << dg[dt].index << " already exists (forward " << !fadded << ", back " << !badded << ")" << endl;
+		dg[frwd].reverse = back;
+		dg[back].reverse = frwd;
+	}
+	return dg;
+}
+
+//set up the capacity values for the maximum flow algorithm
+void GEO::setup_maximum_flow(DGraph &dg)
+{
+	DGraph::edge_iterator e, estart, eend;
+	boost::tie(estart, eend) = boost::edges(dg);
+	for (e = estart; e != eend; e++)
+	{
+		dvertex_type s = source(*e, dg), t = target(*e, dg);
+		double hs = dg[s].elevation, ht = dg[t].elevation;
+		//flow = K(rock property) * area * (pressure(source) - pressure(target)) / (mu(viscocity) * length)
+		DEdge de = dg[*e];
+		const double area = 10*(1 - std::exp(-de.full_length)); //this will become a function later
+		const double flow = area * (std::max<double>(hs - ht, 0)) / de.length;
+		dg[*e].capacity = flow;
+		dg[*e].residual_capacity = flow;
+	}
+}
+
+//perform the maximum flow from the source location to the target location
+double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
+{
+// 	DGraph::edge_iterator e, eend, eprev;
+// 	boost::tie(e, eend) = boost::edges(dg);
+	DGraph::vertex_iterator v, vstart, vend;
+	boost::tie(vstart, vend) = boost::vertices(dg);
+	dvertex_type s = *vstart, t = *vstart;
+	double sdist, tdist;
+	sdist = geometry::distance(source, dg[*vstart].location);
+	tdist = geometry::distance(target, dg[*vstart].location);
+	for (v = vstart; v < vend; v++)// eprev = e;
+	{
+		const double ds = geometry::distance(source, dg[*v].location);
+		if (ds < sdist)
+		{
+			sdist = ds;
+			s = *v;
+		}
+		const double dt = geometry::distance(target, dg[*v].location);
+		if (dt < tdist)
+		{
+			tdist = dt;
+			t = *v;
+		}
+	}
+// 	s = boost::source(*e, dg); //still testing, so pick two arbitrary locations
+// 	e++;
+// 	eprev = e;
+// 	t = boost::target(*eprev, dg);
+	return maximum_flow(dg, s, t);
+}
+
+//calculate the maximum flow from source s to sink/target t
+double GEO::maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t)
+{
+	auto capacity_map = boost::get(&DEdge::capacity, dg);
+	auto res_cap_map  = boost::get(&DEdge::residual_capacity, dg);
+	auto rev_map      = boost::get(&DEdge::reverse, dg);
+	auto pred_map     = boost::get(&DVertex::predecessor, dg);
+	auto colour_map   = boost::get(&DVertex::colour, dg);
+	auto distance_map = boost::get(&DVertex::distance, dg);//not using a distance map currently. this should be distance to the target vertex, and improves the speed of the algorithm
+	auto index_map    = boost::get(&DVertex::index, dg); //no idea what the type is, but it will do for now
+	//
+	const double flow = boost::boykov_kolmogorov_max_flow(dg, capacity_map, res_cap_map, rev_map, pred_map, colour_map, distance_map, index_map, s, t);
+	return flow;//0
 }
 
 polygon_type GEO::BoundingBox(double transform[8], double raster_crop_size)
@@ -155,8 +266,8 @@ double GEO::ParallelGradient(line_type F, double transform[8], double** values)
 	for (vector<std::tuple<point_type, point_type, point_type>>::
 	const_iterator I = functor2.Points.begin(); I != functor2.Points.end(); ++I) 
 	{
-		int no = 0;
-		double grad1 = 0, grad2 = 0;
+// 		int no = 0;
+// 		double grad1 = 0, grad2 = 0; //unused
 		if (geometry::within(get<0>(*I), pl) && geometry::within(get<1>(*I), pl) && geometry::within(get<2>(*I), pl))
 		{
 			D.push_back((getValue(get<0>(*I), transform, values) - getValue(get<1>(*I), transform, values))  +
@@ -174,7 +285,6 @@ double GEO::CentreGradient(line_type F, double transform[8], double** values)
 	const double raster_crop_size = 10;
 	//Convert from map to pixel coordinates and read values at centre of line
 	//Only works for geotransforms with no rotation.
-	box bx;
 	line_type cross;
 	point_type point, p1, p2;
 	long double Xmax, Xmin, Ymax, Ymin;
@@ -280,7 +390,7 @@ int GEO::getElevation(point_type p, std::string const& filename)
 
 double GEO::getValue(point_type p, double transform[8], double** values)
 {
-	polygon_type pl = BoundingBox(transform, 10);
+	polygon_type pl = BoundingBox(transform, 5);
 	if(geometry::within(p,pl))
 	{
 		int x = (int) (p.x() - transform[0]) / transform[1];
@@ -301,7 +411,7 @@ double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 	
 	point_type point;
 	int maxX, minX, maxY, minY;
-	double M = 0, radius;
+	double radius;//unused //M = 0, 
 	vector<double> D;
 	
     radius = Transform[1] * Transform[5] /2;
