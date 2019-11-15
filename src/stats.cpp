@@ -1647,7 +1647,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
-			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
+			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && //the final element in an array/vector is arr[arr.size()-1]. arr[arr.size()] is an out-of-bounds error
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 

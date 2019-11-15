@@ -102,8 +102,8 @@ int main(int argc, char *argv[])
 	source.set<1>(-1800551.207095710000);
 	target.set<0>(14260164.968410300000);
 	target.set<1>(-1809965.628127270000);
-	//G.ShortPath(graph, map, source, target, 500);
-	//G.MinTree (graph);
+	G.ShortPath(graph1, map, source, target, 500);
+	G.MinTree(graph1);
 	//G.CreateFractures(frac_graph, map, faults, rasFile ); 
 	//geo.WriteTxt(frac_graph, "frac_graph.txt");
 	//----------------------------------------------------------------------
