@@ -638,7 +638,6 @@ void GEO::WriteSHP(Graph G, const char* Name)
 	GDALDriver *poDriver;
 	OGRLayer *poLayer;
 	OGRFeature *poFeature;
-	OGRLineString l;
 	const char *pszDriverName = "ESRI Shapefile";
 
 	char * pszWKT;
@@ -756,16 +755,19 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		poFeature->SetField( "CrossGrad", G[Eg].CrossGrad);
 		poFeature->SetField( "Paralgrad", G[Eg].ParalGrad);
 
-		line.append("LINESTRING(");
+		OGRLineString l;
+		l.setNumPoints(fault.size());
+// 		line.append("LINESTRING(");
 		BOOST_FOREACH(point_type P,fault) 
 		{
-			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
-			if (!geometry::equals(P, fault.back()))
-				line.append(", ");
+// 			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+// 			if (!geometry::equals(P, fault.back()))
+// 				line.append(", ");
+			l.addPoint(P.x(), P.y());
 		}
-		line.append( ")");
-		const char* branch = (const char*) line.c_str();
-		l.importFromWkt(&branch);
+// 		line.append( ")");
+// 		const char* branch = (const char*) line.c_str();
+// 		l.importFromWkt(&branch);
 		poFeature->SetGeometry( &l );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{
@@ -855,12 +857,14 @@ void GEO::WriteSHP2(Graph G, const char* Name)
 		poFeature->SetField( "No", NO);
 		poFeature->SetField( "Degree", de);
 		poFeature->SetField( "Component", co);
-		Point.append("POINT(");
-		Point.append(std::to_string(point.x()) + " " + std::to_string(point.y()));
-		Point.append( ")");
-		const char* p = (const char*) Point.c_str();
+// 		Point.append("POINT(");
+// 		Point.append(std::to_string(point.x()) + " " + std::to_string(point.y()));
+// 		Point.append( ")");
+// 		const char* p = (const char*) Point.c_str();
 		
-		PO.importFromWkt(&p);
+// 		PO.importFromWkt(&p);
+		PO.setX(point.x());
+		PO.setY(point.y());
 		poFeature->SetGeometry( &PO );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{

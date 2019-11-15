@@ -75,6 +75,7 @@ double GEOMETRIE::minSpacing(line_type Trace)
 
 //return the segment of a line that is the closest to the given point
 //the returned iterator points to the linsestring point that is *after* the given point
+// will/should return the first linestring point if the given point is before the first linestring point. Might be a floating point precision issue? Need to test this
 line_type::iterator get_closest_segment(line_type &Trace, point_type point)
 {
 	 double best_distance = std::numeric_limits<double>::infinity();
@@ -134,10 +135,12 @@ line_type GEOMETRIE::GetSegment(line_type Trace, point_type Junction, point_type
 	}
 	//the output line segment is the first point -> any and all entire segments that lie between the two points -> from the last whole segment to the end point
 	geometry::append(line_seg, first);
+	point_type previous = first;
 	for (auto it = first_segment; it != last_segment; it++)
 	{
-		if (geometry::distance(*std::next(it, -1), *it) > threshold) 
+		if (geometry::distance(previous, *it) > threshold) 
 			geometry::append(line_seg, *it);
+		previous = *it;
 	}
 	geometry::append(line_seg, last);
 	return line_seg; 
