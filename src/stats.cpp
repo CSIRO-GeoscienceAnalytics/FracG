@@ -1248,10 +1248,10 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		
 		geo.WriteSHP(graph, G_n); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
-		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
-		geo.setup_maximum_flow(flow_graph);
-		double max_flow = geo.maximum_flow(flow_graph, source, target);
-		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
+		//DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
+		//geo.setup_maximum_flow(flow_graph);
+		//double max_flow = geo.maximum_flow(flow_graph, source, target);
+		//cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
 		cout << "  done" << endl;
 	}
  }
@@ -1502,7 +1502,11 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
+<<<<<<< HEAD
 			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
+=======
+			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
+>>>>>>> 05ff832cad46b2f8858bf8629e8e6fc0eee08b00
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 
@@ -1707,7 +1711,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
-			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && //the final element in an array/vector is arr[arr.size()-1]. arr[arr.size()] is an out-of-bounds error
+			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 

@@ -103,6 +103,7 @@ int main(int argc, char *argv[])
 	target.set<1>(-1809965.628127270000);
 	G.ShortPath(graph1, map, source, target, 500);
 	G.MinTree(graph1);
+
 	//G.CreateFractures(frac_graph, map, faults, rasFile ); 
 	//geo.WriteTxt(frac_graph, "frac_graph.txt");
 	//----------------------------------------------------------------------
