@@ -30,9 +30,10 @@ class GRAPH
 	void ReadVEC4MODEL(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults, box bx);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
 	void SplitFaults(Graph& graph, map_vertex_type& map, double minDist );
-	void GraphAnalysis(Graph& G, std::ofstream& txtF);
+	void GraphAnalysis(Graph& G, vector<line_type> faults, std::ofstream& txtF, int nb);
 	void CreateFractures(Graph& G, map_vertex_type& map, vector<line_type> FAULTS, string const& filename);
 	void ShortPath(Graph G, map_vertex_type m, point_type source, point_type target, double radius);
 	void MinTree (Graph G);
+	void ComponentExtract(Graph G, vector <line_type> lineaments);
 };
 #endif

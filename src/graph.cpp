@@ -1,13 +1,13 @@
 #include "graph.h"
 #include "geometrie.h"
 #include "GeoRef.h"
+#include "stats.h"
 
 #include <random>
 
 GRAPH::GRAPH ()
 
 {
-
 }
 
 //take a location, and return the corresponding graph vertex, and the list of possible vertices
@@ -105,16 +105,15 @@ void GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSe
 	//cout << "Assing edge between " << S << " and " << T << " with number of vertices " << num_vertices(G) << endl;
 	edge_type edge;
 	bool success = false;
-	if (!boost::edge(S, T, G).second && !geometry::equals(G[S].location, G[T].location))
-	{
-		std::tie(edge, success) = add_edge(S, T,
-			{geometry::length(FaultSeg)/1000, FaultSeg}, G);
-		G[edge].fault_length = FaultLength;
+		if (!boost::edge(S, T, G).second && !geometry::equals(G[S].location, G[T].location))
+		{
+			std::tie(edge, success) = add_edge(S, T,
+				{geometry::length(FaultSeg)/1000, FaultSeg}, G);
+			G[edge].fault_length = FaultLength;
 	}
-	
 }
  
-//draw graph as png (only for samll graphs)----------------------------
+//draw graph as png (only for small graphs)----------------------------
 void GRAPH::DrawGraph(Graph G)
 {
 	int systemRet;
@@ -141,52 +140,44 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 	{
 		VA = AddNewVertex(map, f.front(), graph);
 		VB = AddNewVertex(map, f.back(), graph);
+
 		AddNewEdge(graph, VA, VB, f);
 		
-		auto e = boost::edge(VA,VB,graph).first;
-		graph[e].FaultNb = nb;
+		if (boost::edge(VA,VB, graph).second)
+		{
+			edge_type e = boost::edge(VA,VB, graph).first;
+				graph[e].FaultNb = nb;
+		}
 		nb++;
 	}
-	cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << endl;
+	cout << "	Converted " << faults.size() << " lineaments into " << num_edges(graph) << " edges." << endl;
 }
 
 void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
 {
+	GEO g;
+	GEOMETRIE geom;
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
 	std::pair <point_type, point_type> NODES;
 	line_type TRACE;
 	long double Xmax, Xmin, Ymax, Ymin;
 	vertex_type VA, VB;
-	box bx;
 	unsigned int type;
-	GEO g;
-	GEOMETRIE geom;
-	
+
 	const unsigned int FRONT_ENODE = 1 << 0;
 	const unsigned int BACK_ENODE  = 1 << 1;
 	const double endpoint_threshold=0.5;
 	
-	const double aoi_buffer = 10; //area of interest buffer: crop this distance (in metres) from the outside of the raster file
-	
-	Xmax = GeoTransform[0] + GeoTransform[1] * GeoTransform[6] - aoi_buffer;    // west
-	Xmin = GeoTransform[0] + aoi_buffer; 									   // east
-	Ymax = GeoTransform[3] - aoi_buffer; 									  // north
-	Ymin = GeoTransform[3] + GeoTransform[5] * GeoTransform[7] + aoi_buffer; // south
-	
-	bx.min_corner().set<0>( Xmin );
-	bx.min_corner().set<1>( Ymin );
-	bx.max_corner().set<0>( Xmax );
-	bx.max_corner().set<1>( Ymax );
-
+	polygon_type pl = g.BoundingBox(GeoTransform, 100);
 
 	//check for edge nodes (crop faults by raster area)--------------------
 
 	BOOST_FOREACH(line_type const& Fault, faults)
 	{
-		if (geometry::disjoint(Fault, bx)) continue;
+		if (geometry::disjoint(Fault, pl)) continue;
 		
-		geometry::intersection(Fault, bx, intersection);
+		geometry::intersection(Fault, pl, intersection);
 		
 		if (intersection.size() <= 0) continue;
 		type = 0;
@@ -244,7 +235,7 @@ void GRAPH::ReadVEC4MODEL(Graph& graph, map_vertex_type& map, std::vector<line_t
 	const double endpoint_threshold=0.5;
 	
 
-	//check for edge nodes (crop faults by raster area)--------------------
+	//check for edge nodes (crop faults by  area)--------------------
 	int nb = 0;
 	BOOST_FOREACH(line_type const& Fault, faults)
 	{
@@ -292,9 +283,6 @@ void GRAPH::ReadVEC4MODEL(Graph& graph, map_vertex_type& map, std::vector<line_t
 	for (auto Eg : make_iterator_range(edges(graph)))
 		faults.push_back(graph[Eg].trace);
 }
-
-
-
 
 //find and remove spurs from the network
 //a "spur" is a fault segment that extends only slightly past a fault intersection
@@ -442,13 +430,13 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 }
 
 //Topolgy analysis of graph---------------------------------------------
-void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
+void GRAPH::GraphAnalysis(Graph& G, vector<line_type> faults, std::ofstream& txtG, int nb)
 {
 	assert (num_vertices(G) != 0 && num_edges(G) != 0);
 	
 	//1D intesnity P10 = (NE/2pi r) * (pi /2)
 	//Dimesnionless intesity P21 * Lb
-
+	STATS stat;
 	vector<int> component(num_vertices(G));
 	int Inodes = 0,  Xnodes = 0, Ynodes = 0, Enodes = 0, NbB = 0; 
 	int Nc, NbN, Nl, numK;
@@ -460,15 +448,18 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 	polygon_type area;
 	map_type COUNT;
 	typename map_type::const_iterator it;
+	vector <int> Fault_in_component;
+	vector < double> Fault_length;
+	vector <line_type> lineaments;
+	vector <line_type> Edges;
 
-	
 	/***********************************************************************
 	* Graph analysis based on:												*
 	* Sanderson, D. J., Peacock, D. C., Nixon, C. W., & Rotevatn, A. (2018)* 
 	* Graph theory and the analysis of fracture networks.					*
 	* Journal of Structural Geology.										*
 	**********************************************************************/
-
+	int II = 0 , IC = 0, CC = 0;
 	//test whether graph is planer
 	if (boyer_myrvold_planarity_test(G))
 	{
@@ -483,14 +474,14 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 					G[i].component = ii;
 			}
 		}
-	
 		//classify edges
 		for (auto Eg : make_iterator_range(edges(G)))
 		{
 			U = source(Eg, G);
 			u = target(Eg, G);
+			Edges.push_back(G[Eg].trace);
 
-			G[Eg].component = std::to_string(G[U].component) + "-" + std::to_string(G[U].component);
+			G[Eg].component = G[U].component;
 
 			it = COUNT.find(G[U].location);
 			if (it == COUNT.end())
@@ -529,27 +520,45 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 			}
 
 			if (degree(U, G) == 1 && degree(u, G) == 1) 
+			{
 				G[Eg].BranchType = "I-I";
+				II++;
+			}
 		
 			if ( degree(U, G) == 3 && degree(u, G) == 3) 
+			{
 				G[Eg].BranchType = "Y-Y";
+				CC++;
+			}
 
 			if ( degree(U, G) == 4 && degree(u, G) == 4) 
+			{
 				G[Eg].BranchType = "X-X";
+				CC++;
+			}
 
 			if ((degree(U, G) == 1 && degree(u, G) == 3) ||
 				(degree(U, G) == 3 && degree(u, G) == 1))
+				{
 					G[Eg].BranchType = "I-Y";
+					IC++;
+				}
 
 			if ((degree(U, G) == 1 && degree(u, G) == 4) ||
 				(degree(U, G) == 4 && degree(u, G) == 1))
+				{
 					G[Eg].BranchType = "I-X";
+					IC++;
+				}
 
 			if ((degree(U, G) == 3 && degree(u, G) == 4) ||
 				(degree(U, G) == 4 && degree(u, G) == 3))
+				{
 					G[Eg].BranchType = "Y-X";
+					CC++;
+				}
 					
-			//deal with edge nodes--------------------------------------------------
+//deal with edge nodes--------------------------------------------------
 			if (G[U].Enode == true || G[u].Enode == true)
 				Enodes++;
 		
@@ -565,7 +574,7 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 				(G[u].Enode == true && degree(U, G) == 4) )
 					G[Eg].BranchType = "E-X";
 
-			//total length of fault traces and area to be analysed
+//total length of fault traces and area to be analysed------------------
 			totalLength += G[Eg].length;
 			geometry::append(area, G[Eg].trace);
 			NbB++;
@@ -585,7 +594,6 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 
 		//Number of lines NL = (I + 2Y) / 2 
 		Nl = (Inodes + 2*Ynodes) / 2;
-
 
 		//Average Length of lines L / NL 
 		if (Nl != 0)
@@ -633,6 +641,7 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 			<< "Branches: " <<NbN << " Lines: "	<< Nl 				<< " Number of Branches: " 	<< NbB << "\n"
 			<< "Number of components (c): " 	<< numK 			<< endl;
 
+		txtG.open ("Graph_Statistics.csv"); 
 		if (txtG.is_open())  
 		{ 
 			txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
@@ -643,25 +652,33 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 				<< "Ynodes: " 			 		 << "\t" << Ynodes <<  "\n" 
 				<< "Xnodes: " 			 		 << "\t" << Xnodes  << "\n" 
 				<< "Enodes: " 			 		 << "\t" << Enodes  << "\n"
+				<< "II-Branches: "				 << "\t" << II << "\n"
+				<< "IC-Branches: "				 << "\t" << IC << "\n"
+				<< "CC-Branches: "				 << "\t" << CC << "\n"
 				<<" Connections (Y +X): "		 << "\t" << (Ynodes + Xnodes) << "\n"
-				<<" Cummulative length: "		 << "\t" << totalLength << "\n"
+				<<" Total length:				" << "\t" << totalLength << "\n"
 				<<" Average length: "			 << "\t" << totalLength / NbB<< "\n" 
 				<< "Connecting node frequency: " << "\t" << NCfreq << "\n"
 				<< "Branch frequency: " << "\t"  << B20 << "\n"
 				<< "Line frequency: " << "\t" 	 << P20 << "\n"
 				<< "2D Intesnsity: " << "\t" 	 << P21 << "\n"
-				<< "Dimesnonless intesity: " 	 << "\t" << B22 << "\n"
+				<< "Dimensionless intesity: " 	 << "\t" << B22 << "\n"
 				<< "Average degree of network: " << "\t" << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
 				<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
 				<< "Number of components (c): "  << "\t" << numK << "\n"
 				<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
 				<< "Density (d): " << num_edges(G)*(totalLength*totalLength) /(4*A) << "\n"
-				<< endl;
-				
-			//Analyse the different component of the network------------------------
+				<< "KDE edge orientation" << "\n";
+				stat.KDE_estimation_strikes(Edges, txtG);
+			txtG<< endl;
+			Edges.clear();
+//Analyse the different component of the network------------------------
+		cout << " Analysing components of graph " << endl;
+		
 			for (int i =0; i < numK; i++)
 			{
 				Inodes = 0, Ynodes = 0, Xnodes = 0, Enodes = 0, NbB = 0, totalLength = 0;
+				II = 0, IC =0, CC = 0;
 				for (auto Eg : make_iterator_range(edges(G)))
 				{
 					U = source(Eg, G);
@@ -669,8 +686,19 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 					
 					if (G[U].component == i && G[u].component == i)
 					{
+						Edges.push_back(G[Eg].trace);
+						Fault_in_component.push_back(G[Eg].FaultNb);
 						if (G[U].Enode == false || G[u].Enode == false)
 						{
+							if (G[Eg].BranchType == "I-I")
+								II++;
+					
+							if (G[Eg].BranchType == "I-Y" || G[Eg].BranchType == "I-X")
+								IC++;
+					
+							if (G[Eg].BranchType == "Y-Y" || G[Eg].BranchType == "X-X")
+								CC++;
+								
 							if (degree(U, G) == 1 && G[U].Enode == false)
 							Inodes++;
 
@@ -697,21 +725,41 @@ void GRAPH::GraphAnalysis(Graph& G, std::ofstream& txtG)
 					}
 					NbN = (Inodes + 3*Ynodes + 4*Xnodes) / 2;
 				}
-				/*
-				if (NbB > 1)
+				if (NbN > nb)
 				{
-					txtG << "COMPONENT NO. "	 << "\t" << i << "\n"
-						<< "Branches: " 		 << "\t" << NbB << "\n" 
-						<< "Branches (calc): "	 << "\t" << NbN << "\n" 
-						<< "Inodes: " 			 << "\t" << Inodes <<  "\n" 
-						<< "Ynodes: " 			 << "\t" << Ynodes <<  "\n" 
-						<< "Xnodes: " 			 << "\t" << Xnodes  << "\n" 
-						<< "Enodes: " 			 << "\t" << Enodes  << "\n"
-						<<" Connections (Y +X): "<< "\t" << (Ynodes + Xnodes) << "\n"
-						<<" Cummulative length: "<< "\t" << totalLength << "\n"
-						<<" Average length: "    << "\t" << totalLength / NbB<< "\n" << endl;
+					sort( Fault_in_component.begin(), Fault_in_component.end() );
+					Fault_in_component.erase( unique( Fault_in_component.begin(), Fault_in_component.end() ), Fault_in_component.end() );
+					
+					for (unsigned ii = 0; ii < Fault_in_component.size(); ii++)
+					{
+						Fault_length.push_back(geometry::length(faults.at(ii)));
+						lineaments.push_back(faults.at(ii));
+					}
+					txtG<< "COMPONENT NO." << "\t" << i << "\n"
+						<< "Branches:" << "\t" << NbB << "\n" 
+						<< "Branches (calc):" << "\t" << NbN << "\n" 
+						<< "Inodes: " << "\t" << Inodes <<  "\n" 
+						<< "Ynodes: " << "\t" << Ynodes <<  "\n" 
+						<< "Xnodes: " << "\t" << Xnodes  << "\n" 
+						<< "Enodes: " << "\t" << Enodes  << "\n"
+						<< "II-Branches: " << "\t" << II << "\n"
+						<< "IC-Branches: " << "\t" << IC << "\n"
+						<< "CC-Branches: " << "\t" << CC << "\n"
+						<< "Connections (Y +X): " << "\t" << (Ynodes + Xnodes) << "\n"	
+						<< " Total length:" << "\t" << totalLength << "\n"
+						<< " Average length:" << "\t" << totalLength / NbB << "\n" 
+						<< " Strike of underlying lineaments" << "\n";
+					//	stat.KDE_estimation_strikes(lineaments, txtG);
+					txtG<< "Length distribution of underlying lineaments" << "\n";
+					//	stat.CompareStatsModels(false, Fault_length, txtG);
+					txtG<< " KDE edge orientation" << "\n";
+					//	stat.KDE_estimation_strikes(Edges, txtG);
+					txtG << endl;
 				}
-				**/
+				Fault_in_component.clear();
+				lineaments.clear();
+				Fault_length.clear();
+				Edges.clear();
 			}
 		}
 		else 
@@ -940,3 +988,63 @@ void  GRAPH::MinTree (Graph G)
 	//Gref.WriteSHP(min_graph, "MinTree.shp");
 	cout <<"minTree Total eges: " << i << endl;
 }
+
+
+
+void GRAPH::ComponentExtract(Graph G, vector <line_type> lineaments)
+{
+	GEO georef;
+	bool prompt = false;
+	char yn;
+	int comp;
+	char * pszWKT;
+	const char *pszDriverName = "ESRI Shapefile";
+	vector <line_type> Extractor;
+	
+	do {
+		cout << "\nEXtract connected component? [y/n] ";
+		std::cin >> yn;
+		if (yn == 'y' || yn == 'n')
+			prompt = true;
+		
+	} while (!prompt);
+	
+	if (yn == 'y')
+	{
+		start_extract:
+		prompt = false;
+		
+		cout << "\nEntrer number of connected component to extract: ";
+		std::cin >> comp;
+
+		const char* Name = (char*)("Component_No._" + std::to_string(comp)).c_str();
+		
+//here we extract the initial lineaments--------------------------------
+		for (auto Eg : make_iterator_range(edges(G)))
+		{
+			if (G[Eg].component == comp)
+				Extractor.push_back(lineaments.at(G[Eg].FaultNb));
+		}
+		cout << " Found " << Extractor.size() << " lineaments for component " << comp << endl;
+		
+//write the shape file--------------------------------------------------
+		georef.WriteSHP_lines(Extractor, Name);
+		
+//maybe another component to extract------------------------------------
+		prompt = false;
+		Extractor.clear();
+		do {
+			cout << "\nEXtract another connected component? [y/n] ";
+			std::cin >> yn;
+			if (yn == 'y' || yn == 'n')
+				prompt = true;
+		} while (!prompt);
+		if (yn == 'y')
+			goto start_extract;
+	}
+}
+
+
+
+
+

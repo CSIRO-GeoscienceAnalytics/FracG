@@ -900,7 +900,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 	//done
 }
 
-StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstream& txtF)
+StatsModelData STATS::CompareStatsModels(bool print, std::vector<double> &values, std::ofstream& txtF)
 {
 	StatsModelData results;
 	std::sort(values.begin(), values.end());
@@ -913,7 +913,8 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 // 	cout << endl;
 	random::random_device rd{};
 	const int NTHREADS = std::max(1, omp_get_max_threads());
-	cout << "Using " << NTHREADS << " threads" << endl;
+	if (print)
+		cout << "Using " << NTHREADS << " threads" << endl;
 	std::vector<random::mt19937> rngs(NTHREADS);
 	for (auto it = rngs.begin(); it < rngs.end(); it++) *it = std::move(random::mt19937{rd}); //make one random number generator per omp thread
 	ModelHolder<PowerLawParams> power_law_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
@@ -929,11 +930,13 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 	ModelHolder<LogNormParams> lognorm_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, true, 2};
 	ModelHolder<LogNormParams> lognorm_all_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, false, 2};
 	
+	/*
 	ModelHolder<WeibullParams> weibull_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
 		[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, true, 1};
 	ModelHolder<WeibullParams> weibull_all_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
 		[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, false, 1};
-
+	*/
+	
 	vector<DistStatsType> &models = results.models; //convenience name
 	
 	models.push_back(DistStats<PowerLawParams>{power_law_model, std::string{"Power Law"}});
@@ -955,6 +958,7 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 	{
 		 boost::apply_visitor(generate_visitor, *it);
 	}
+	
 	cout << endl;
 	
 	PrintCDFs(results, values, "model_cdf"); //print the cdf's for testing purposes
@@ -969,17 +973,20 @@ StatsModelData STATS::CompareStatsModels(std::vector<double> &values, std::ofstr
 		const int best = results.best_match;
 		if (best >= 0)
 		{
-			cout << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
-			txtF << "The best model is " << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl;
+			if (print)
+				cout << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
+			txtF << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl;
 			
 		}
 	} else if (results.best_matches.size() > 1) 
 	{
-		cout << "The " << results.best_matches.size() << " best matches are: ";
-		txtF << "The " << results.best_matches.size() << " best matches are: ";
+		if (print)
+			cout << "The " << results.best_matches.size() << "\t" << " best matches are: ";
+		txtF << "The " << results.best_matches.size() << " best matches are: " << "\t";
 		for (auto it = results.best_matches.begin(); it < results.best_matches.end(); it++)
 		{
-			cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
+			if (print)
+				cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
 			txtF << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
 		}
 		cout << endl;
@@ -1102,7 +1109,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 
 	for(std::vector<READ>::size_type i = 0; i != input.size(); i++) 
 	{ 
-		pl = georef.BoundingBox(input[i].transform, 100);
+		pl = georef.BoundingBox(input[i].transform, 1);
 		cout << "Analyse Raster '"<< input[i].name << "' for entire fault set" << endl;
 // 		double len = (abs(input[i].transform[1]) + abs(input[i].transform[5])) / 2;
 		Result = ResultsF + input[i].name + ".csv";
@@ -1233,14 +1240,17 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		G.SplitFaults(graph, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
 		G.RemoveSpurs(graph, map, Dist); //remove any spurs from the graph network
 		cout << " Assigning weights to vertices and edges" << endl;
-		G.GraphAnalysis(graph, txtF);
+		G.GraphAnalysis(graph, faults, txtF, 10);
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
+		
+		geo.AssignValuesAll(graph, "dem1.tif");
+		
 		geo.WriteSHP(graph, G_n); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
-		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
-		geo.setup_maximum_flow(flow_graph);
-		double max_flow = geo.maximum_flow(flow_graph, source, target);
-		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
+		//DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
+		//geo.setup_maximum_flow(flow_graph);
+		//double max_flow = geo.maximum_flow(flow_graph, source, target);
+		//cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
 		cout << "  done" << endl;
 	}
  }
@@ -1256,19 +1266,20 @@ void STATS::AddData(vector<line_type> faults, point_type source, point_type targ
 	string name, rasFile;
 	double** ADD_RASTER;	
 	vector<READ>  input;
-	std::copy(std::begin(GeoTransform), std::end(GeoTransform), std::begin(old_GeoTransform));
 
 	cout<<"Additional raster files? y/n ";
 	cin>>choice;
 
 	if (choice == 'y')
 	{
+	std::copy(std::begin(GeoTransform), std::end(GeoTransform), std::begin(old_GeoTransform));
 		do{
 			prompt = false;
 			cout <<"raster file ";
 			cin >> name;
 			rasFile = (string) name;
 			georef.GetRasterProperties(rasFile, ADD_RASTER);
+			
 			input.push_back(READ(name, ADD_RASTER, GeoTransform));
 	
 			while (!prompt)
@@ -1281,12 +1292,11 @@ void STATS::AddData(vector<line_type> faults, point_type source, point_type targ
 					prompt = true;
 			}
 		} while(choice == 'y');
-	}
-
+		
 	AnalyseRasterFaults(input, faults);
 	AnalyseRasterGraph(input, faults, source, target);
-
 	std::copy(std::begin(old_GeoTransform), std::end(old_GeoTransform), std::begin(GeoTransform));
+	}
 }
 
 FSTATS STATS::KMCluster(bool input, int No, FSTATS faultStats)
@@ -1414,13 +1424,11 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
  
  void MA_filter(vector< std::pair<double,double>>&KDE, int window)
  {
-
 	unsigned int wn = (int) (window - 1) / 2;
 	vector<float>KDE_filtered(KDE.size());
 
 	for (unsigned int i = 0; i < KDE.size(); i++) 
 	{
-
 		double av = 0;
 		if ((i - wn) < 0)
 		{
@@ -1458,21 +1466,73 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
 	std::map<double, double> r;
 	for (auto e : KDE)
 	{
-		cout << e.first << " " << e.second << endl;
 		r[e.first] = e.second;
 	}
-
 	auto x_range = boost::adaptors::keys(r);
     auto y_range = boost::adaptors::values(r);
     math::barycentric_rational<double> interpolant(x_range.begin(), x_range.end(), y_range.begin());
 
 	KDE.clear();
-     for (int i = 0; i< 180; i++)
+     for (int i = 0; i < 180; i++)
 		KDE.push_back(make_pair(i, interpolant(i)));
 }
- 
- 
- 
+
+void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
+ {
+	int index = 0 ;
+	vec ANGLE(lineaments.size(),fill::zeros);
+	BOOST_FOREACH(line_type F,  lineaments)
+	{ 
+		double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
+							* (180 / math::constants::pi<double>());
+		if (strike  < 0) 
+			strike  += 180;
+		ANGLE(index) = strike;
+		index++;
+	}
+	 
+//KDE estimation of orientation to obtain number of lineament sets------
+ sort(ANGLE.begin(), ANGLE.end());
+ vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 10);
+ vector< std::pair<double, double>> Maximas;
+ MA_filter(GAUSS, 5);
+ interpolate(GAUSS);
+
+	for (unsigned int i = 0; i < GAUSS.size(); i++)
+	{
+		if (i == 0)
+			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
+				GAUSS[i].second > GAUSS[i+1].second)
+					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
+
+		if (i != 0 && i != GAUSS.size())
+			if (GAUSS[i].second > GAUSS[i-1].second &&
+				GAUSS[i].second > GAUSS[i+1].second)
+					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
+		
+		
+		if (i == GAUSS.size())
+			if (GAUSS[i].second > GAUSS[i-1].second && 
+				GAUSS[i].second > GAUSS[0].second)
+					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
+	}
+
+	txtF << "Fault sets:" << "\t" << Maximas.size() << endl;
+	txtF << "Angle \t Density \t Smoothed Density" << endl;
+	for(unsigned int i =0; i < GAUSS.size(); i++)
+		txtF << GAUSS[i].first << "\t " << GAUSS[i].second  <<  endl;   
+	txtF << endl;
+		
+	txtF << "Generation \t Angle \t Probability" << endl;
+	int G = 1;
+	for(auto e : Maximas)
+	{
+		txtF << G << "\t" << e.first << "\t" << e.second << endl;
+		G++;
+	}	
+ }
+
+
 //create statisics from input file--------------------------------------
 void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 {
@@ -1542,7 +1602,6 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 			}
 			i++;
 		}
-
 
 		geometry::centroid(F, centre);
 		
@@ -1647,7 +1706,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
-			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && //the final element in an array/vector is arr[arr.size()-1]. arr[arr.size()] is an out-of-bounds error
+			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 
@@ -1692,7 +1751,6 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 */
 	//ScanLineDensity(faults, Maximas);
 
-
 	txtF << "Fault sets:" << "\t" << Maximas.size() << endl;
 	txtF << "Angle \t Density \t Smoothed Density" << endl;
 	for(unsigned int i =0; i < GAUSS.size(); i++)
@@ -1733,7 +1791,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	DoBoxCount(faults, txtF);
 	txtF << "KS-FITTING (LENGTH DISTRIBUTION) " << endl;
 
-	CompareStatsModels(fault_lengths, txtF);
+	CompareStatsModels(true, fault_lengths, txtF);
 }
 
 void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTER)
