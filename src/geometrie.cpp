@@ -71,6 +71,35 @@ double GEOMETRIE::minSpacing(line_type Trace)
 	}
 	return len;
 }
+
+line_type GEOMETRIE::ShortestLine(vector <line_type> Set)
+{
+	double dist = std::numeric_limits<double>::max();
+	line_type shortest;
+	BOOST_FOREACH(line_type l, Set)
+	{
+		if (geometry::length(l) < dist && geometry::length(l) != 0)
+		{
+			dist = geometry::length(l) ;
+			shortest = l;
+		}
+	}
+	return(shortest);
+}
+
+box GEOMETRIE::ReturnAOI(vector<line_type> lines)
+{
+	box AOI;
+	polygon_type multiL;
+	
+	BOOST_FOREACH(line_type F, lines)
+	{ 
+			geometry::append(multiL, F);
+	}
+	AOI = boost::geometry::return_envelope<box>(multiL);
+	return(AOI);
+}
+
  
 
 //return the segment of a line that is the closest to the given point
@@ -185,5 +214,135 @@ void GEOMETRIE::SortDist(vector <std::tuple<long double, point_type, AttachPoint
 {
 	std::sort(cross.begin(), cross.end(), FaultDistanceCompare());
 }
+
+void GEOMETRIE::CentreDistanceMap(std::string const& filename, int cell_size)
+{
+	GEO georef;
+	vector<line_type> lineString;
+	OGRSpatialReference srs;
+	char *pszWKT = NULL;
+	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
+	vector<p_index> result;
+	
+//obtain shp-file information to work with------------------------------
+	const char * name = filename.c_str();
+	GDALAllRegister();
+	line_type Line;
+	point_type P, centre;
+	string f = filename.substr(filename.find_last_of('/')+1); 
+	string layer_name = f.substr(0, f.find("."));
+
+//open shp file and check whether it contains vector features-----------
+	GDALDataset *poDS = static_cast<GDALDataset*>
+	(
+		GDALOpenEx( name, GDAL_OF_VECTOR, NULL, NULL, NULL )
+	);
+	if( poDS == NULL )
+	{
+		printf( " Opening shapefile \"%s\" failed.\n", name );
+		exit( 1 );
+	}   
+	
+// get the spatial reference system-------------------------------------	
+	OGRSpatialReference * pOrigSrs = poDS->GetLayer( 0 )-> GetSpatialRef();
+	if ( pOrigSrs )
+	{
+		srs = *pOrigSrs;
+	}
+	if ( srs.IsProjected() )
+		srs.exportToWkt( &pszWKT );
+	else
+	{
+		cout << "ERROR: vector data without spatial reference" << endl;
+		 exit(EXIT_FAILURE);
+	}
+	
+	OGRLayer  *poLayer = poDS->GetLayer( 0 );
+	poLayer->ResetReading();
+	
+//now we read the line features and put them in a vector----------------        
+	poLayer->ResetReading();
+	OGRFeature *poFeature;
+	int index = 0;
+	while( (poFeature = poLayer->GetNextFeature()) != NULL )
+	{
+		OGRGeometry *poGeometry = poFeature->GetGeometryRef();
+		if( poGeometry != NULL
+				&& wkbFlatten(poGeometry->getGeometryType()) == wkbLineString)
+		{
+			OGRLineString *poLine = (OGRLineString *) poGeometry;
+			for (int i = 0; i < poLine->getNumPoints(); i++)
+			{
+				P.set<0>(poLine->getX(i));
+				P.set<1>(poLine->getY(i));
+				geometry::append(Line, P);
+			}
+			lineString.push_back(Line);
+
+			Line.clear();
+			index++;
+		}
+		OGRFeature::DestroyFeature( poFeature );
+	}
+	GDALClose( poDS );
+	
+	georef.CorrectNetwork(lineString, 10);
+	BOOST_FOREACH(line_type l, lineString)
+	{
+		geometry::centroid(l, centre);
+		DistTree.insert(make_pair(centre, index));
+	}
+	
+//now we nedd to create a georefernece system based on teh bounding box
+//around the features adn the size of teh smallest feature--------------
+
+	box AOI = ReturnAOI(lineString);
+	double box_size = floor(geometry::length(ShortestLine(lineString)));
+	if (box_size < cell_size)
+		box_size = cell_size;
+	
+	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
+	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
+	double max_x = geometry::get<geometry::max_corner, 0>(AOI);
+	double max_y = geometry::get<geometry::max_corner, 1>(AOI);
+
+	point_type ll(min_x, min_y);
+	point_type ul(min_x, max_y);
+	point_type lr(max_x, min_y);
+	
+	double adfGeoTransform[6] = {min_x, box_size, 0 , max_y, 0, (box_size * (-1))};
+	
+	int x_size = (long int) ceil((geometry::distance(ll, lr) / box_size));
+	int y_size = (long int) ceil((geometry::distance(ll, ul) / box_size));
+
+	vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  
+	
+	double cur_y = max_y;
+	double cur_x = min_x + box_size;
+
+// query for distance to fault centre at every grid cell----------------
+
+	cout << "Calulating distances to lineamnet centres for raster with size \n"
+		 << vec.size()<< " x " << vec[0].size() << endl;
+	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
+	for (int i = 0; i < x_size; i++)
+	{
+		cur_y = max_y - box_size;
+		for (int j = 0; j < y_size; j++)
+		{
+			cur_y-= box_size;
+			point_type cur_pos(cur_x, cur_y);
+			DistTree.query(geometry::index::nearest(cur_pos, 1), back_inserter(result));
+			vec[i][j] = geometry::distance(cur_pos, result[0].first);
+			result.clear();
+			 ++(*show_progress);
+		}
+		cur_x += box_size;
+	}
+	cout << " done "<< endl;
+//write the raster file---------------------------------------------
+	georef.WriteRASTER(vec, pszWKT, adfGeoTransform, "text_c.tif");
+}
+
 
 

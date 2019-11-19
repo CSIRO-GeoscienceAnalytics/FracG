@@ -27,6 +27,7 @@
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/random_device.hpp>
 
+#include <boost/progress.hpp>
 #include "boost/multi_array.hpp"
 
 #include <boost/range/adaptors.hpp>
@@ -68,7 +69,7 @@
 #include "/usr/include/gdal/ogrsf_frmts.h"
 #include "/usr/include/gdal/cpl_conv.h"
 #include "/usr/include/gdal/cpl_port.h"
-#include "/usr/include/gdal/cpl_quad_tree.h"
+#include "/usr/include/gdal/gdalwarper.h"
 
 #pragma once
 using namespace boost;
@@ -129,7 +130,7 @@ namespace FGraph
 		long double length; //length of the fault segment that makes up this edge
 		line_type trace; //the fault segment that makes up this edge
 		std::string BranchType;
-		std::string component;
+		int component;
 		double Centre;
 		double MeanValue;
 		double CentreGrad;
@@ -146,8 +147,7 @@ namespace FGraph
 		int FaultNb;
 	};
 	
-	
-		//now we can define the graph as an adjacency list
+	//now we can define the graph as an adjacency list
 	//we also need a vertex descriptor to add vertices to the graph
 	//and a map that stores the vertices that have already been added (control)
 	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,

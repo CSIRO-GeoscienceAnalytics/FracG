@@ -5,10 +5,10 @@
 GEO::GEO ()
 
 {
-	
 }
 
 double GeoTransform[8];
+OGRSpatialReference* GeoRef_shp;
 OGRSpatialReference GeoRef;
 const char *GeoProj;
 
@@ -55,6 +55,7 @@ void GEO::AssignValues(Graph& G, std::string const& filename)
 //read the entire file at once, rather than one at a time. gives faster IO. This assumes that we can fit the entire file in memory at once.
 void GEO::AssignValuesAll(Graph& G, std::string const& filename)
 {
+
 	int *data = nullptr;
 	readRaster<int>(filename, data);
 	for (auto vd : boost::make_iterator_range(vertices(G))) 
@@ -77,24 +78,39 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 		G[Ve].data = getValue(G[Ve].location, transform, values);
 		if (std::isnan(G[Ve].data)) cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
 	}
-	
+
 	cout << "edge" << endl;
-	
+
 	for (auto Eg : boost::make_iterator_range(edges(G))) 
 	{
 		curEdge = G[Eg].trace;
 		geometry::centroid(G[Eg].trace, centre);
-// 		vertex_type U = source(Eg, G);
-// 		vertex_type u = target(Eg, G);
-		
-		G[Eg].Centre = getValue(centre, transform, values);
-		G[Eg].MeanValue = LineExtractor(G[Eg].trace, transform, values) ;
+
+		G[Eg].Centre     = getValue(centre, transform, values);
+		G[Eg].MeanValue  = LineExtractor(G[Eg].trace, transform, values) ;
 		G[Eg].CentreGrad = CentreGradient(G[Eg].trace, transform, values);
-		G[Eg].CrossGrad = CrossGradient(G[Eg].trace, transform, values);
-		G[Eg].ParalGrad =  ParallelGradient(G[Eg].trace, transform, values) ;
+		G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, transform, values);
+		G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, transform, values) ;
 	}
 	cout <<"done" << endl;
 }
+
+void GEO::ReprojectVECTOR2WGS84(std::string const& filename)
+{
+	
+	
+	
+	
+// Setup target coordinate system that is UTM 11 WGS84.
+OGRSpatialReference oSRS;
+oSRS.SetUTM( 11, TRUE );
+oSRS.SetWellKnownGeogCS( "WGS84" );
+
+	
+	
+
+}
+
 
 //make a directed graph from an undirected graph
 //assumes that AssignValuesGraph() has already been called on the graph, and an appropriate raster file, to initialise the height values (which are stored in FVertex.data, not FVertex.elevation)
@@ -114,7 +130,6 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 		dvertex_type dvd = boost::add_vertex(dv, dg);
 		vertex_map[*v] = dvd;
 	}
-// 	typedef boost::vertex_index_map<DGraph, long long>::type index_map_type;
 	
 	Graph::edge_iterator e, estart, eend;
 	boost::tie(estart, eend) = boost::edges(g);
@@ -125,7 +140,7 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 		dvertex_type ds = vertex_map[s]; //get the corresponding source and target for the new graph
 		dvertex_type dt = vertex_map[t];
 		FEdge fe = g[*e];
-// // 		double capacity = 
+
 		DEdge de(fe.length, fe.fault_length); //currently one set of edge properties. will fill out the other values inside the maximum flow function.
 		dedge_type frwd, back;
 		bool fadded, badded;
@@ -147,7 +162,6 @@ void GEO::setup_maximum_flow(DGraph &dg)
 	{
 		dvertex_type s = source(*e, dg), t = target(*e, dg);
 		double hs = dg[s].elevation, ht = dg[t].elevation;
-		//flow = K(rock property) * area * (pressure(source) - pressure(target)) / (mu(viscocity) * length)
 		DEdge de = dg[*e];
 		const double area = 10*(1 - std::exp(-de.full_length)); //this will become a function later
 		const double flow = area * (std::max<double>(hs - ht, 0)) / de.length;
@@ -228,7 +242,7 @@ polygon_type GEO::BoundingBox(double transform[8], double raster_crop_size)
 double GEO::CrossGradient(line_type F, double transform[8], double** values)
 {
 	GEOMETRIE::Perpencicular <geometry::model::referring_segment<point_type>> functor;
-	polygon_type pl = BoundingBox(transform, 10);
+	polygon_type pl = BoundingBox(transform, 1);
 	vector<double> D;
 
 	functor  = geometry::for_each_segment(F, functor );
@@ -258,7 +272,7 @@ double GEO::CrossGradient(line_type F, double transform[8], double** values)
 double GEO::ParallelGradient(line_type F, double transform[8], double** values)
 {
 	GEOMETRIE::SegPoints	 <geometry::model::referring_segment<point_type>> functor2;
-	polygon_type pl = BoundingBox(transform, 10);
+	polygon_type pl = BoundingBox(transform, 1);
 
 	functor2 = geometry::for_each_segment(F, functor2);
 	vector<double>D;
@@ -282,13 +296,11 @@ double GEO::ParallelGradient(line_type F, double transform[8], double** values)
 }
 double GEO::CentreGradient(line_type F, double transform[8], double** values)
 {
-	const double raster_crop_size = 10;
 	//Convert from map to pixel coordinates and read values at centre of line
 	//Only works for geotransforms with no rotation.
 	line_type cross;
 	point_type point, p1, p2;
-	long double Xmax, Xmin, Ymax, Ymin;
-	polygon_type pl = BoundingBox(transform, raster_crop_size);
+	polygon_type pl = BoundingBox(transform, 1);
 	double len =  ceil((abs(transform[1]) + abs(transform[5])) / 2);
 	
 	geometry::centroid(F, point);
@@ -326,6 +338,8 @@ int GEO::getElevationFromArray(point_type p, const int *data){
 	return data[yind*((int)GeoTransform[6])+xind];
 }
 
+
+
 //read in the contents of a raster file to a user-specified one-dimensional array, for a given datatype
 //Free the data with CPLFree(data)
 template <typename T>
@@ -339,6 +353,7 @@ int GEO::readRaster(std::string const filename, T *&data){
 		std::cout<<"no file"<< std::endl;
 
 	GDALRasterBand *band = poDataset -> GetRasterBand(1);
+	
 	cout << "xSize = " << GeoTransform[6] << ", XSize = " << band->GetXSize() << ", ySize = " << GeoTransform[7] << ", YSize = " << band->GetYSize() << endl;
 	int xSize = GeoTransform[6];
 	int ySize = GeoTransform[7];
@@ -390,7 +405,7 @@ int GEO::getElevation(point_type p, std::string const& filename)
 
 double GEO::getValue(point_type p, double transform[8], double** values)
 {
-	polygon_type pl = BoundingBox(transform, 5);
+	polygon_type pl = BoundingBox(transform, 1);
 	if(geometry::within(p,pl))
 	{
 		int x = (int) (p.x() - transform[0]) / transform[1];
@@ -403,7 +418,7 @@ double GEO::getValue(point_type p, double transform[8], double** values)
 
 double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 {
-	polygon_type pl = BoundingBox(Transform, 10);
+	polygon_type pl = BoundingBox(Transform, 1);
 	polygon_type pl2;
 	GEOMETRIE geom;
 	box AOI;
@@ -411,7 +426,7 @@ double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 	
 	point_type point;
 	int maxX, minX, maxY, minY;
-	double radius;//unused //M = 0, 
+	double radius = 1; 
 	vector<double> D;
 	
     radius = Transform[1] * Transform[5] /2;
@@ -446,8 +461,45 @@ double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 	else
 	return(0);
  }
-
-
+  
+  void GEO::WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], const char* Name)
+{
+ GDALDataset *poDstDS;
+ GDALDriver *poDriver;
+ char *pszSRS_WKT = NULL;
+ char **papszMetadata;
+ int x = data.size();
+ int y = data[0].size();
+ const char *pszFormat = "GTiff";
+ 
+ poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
+ if( poDriver == NULL )
+ {
+	cout << "ERROR: Could not load GDAL driver ( GTiff)" << endl;
+	EXIT_FAILURE;
+ }
+    papszMetadata = poDriver->GetMetadata();
+	poDstDS = poDriver->Create(Name, x,y, 1, GDT_Float32, NULL);
+	GDALRasterBand *poBand;
+	poDstDS->SetGeoTransform( adfGeoTransform );
+	poDstDS->SetProjection( SpatialRef );
+	poBand = poDstDS->GetRasterBand(1);
+	
+	float *rowBuff = (float*) CPLMalloc(sizeof(float)*x);
+	cout << "Writing raster: " << endl;
+	progress_display * show_progress =  new boost::progress_display(y * x);
+	for(int row = 0; row < y; row++) 
+	{
+		for(int col = 0; col < x; col++) 
+		{
+			rowBuff[col] = (float) data[col][row];
+			 ++(*show_progress);
+		}
+		poBand->RasterIO(GF_Write, 0, row, x, 1, rowBuff, x, 1, GDT_Float32, 0, 0);
+	}
+	GDALClose( (GDALDatasetH) poDstDS );
+	cout << " done "<< endl;
+}
 
 //obtain information about raster's projection--------------------------
 void GEO::GetRasterProperties(std::string const& filename, double**& RASTER)
@@ -467,7 +519,7 @@ void GEO::GetRasterProperties(std::string const& filename, double**& RASTER)
 	GDALAllRegister();
 	double adfGeoTransform[6];
 	int data;
-	int value = 0;
+	float value = 0;
 
 	poDataset = (GDALDataset *) GDALOpen( filename.c_str(), GA_ReadOnly );
 	if( poDataset == NULL ){
@@ -507,16 +559,18 @@ void GEO::GetRasterProperties(std::string const& filename, double**& RASTER)
 
 	//create multi-array from data------------------------------------------
 
-	GDALRasterBand *band = poDataset -> GetRasterBand(1);        
-
+	GDALRasterBand *band = poDataset -> GetRasterBand(1);  
 	RASTER = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), RASTER);
+	
 	for (int i = 0; i < poDataset->GetRasterXSize(); i++)
 	{
 		for (int j = 0; j < poDataset->GetRasterYSize(); j++)
 		{
-			data = band->RasterIO(GF_Read,i,j,1,1,&value,1,1,band->GetRasterDataType(),1,1,nullptr);
+			data = band->RasterIO(GF_Read,i,j,1,1,&value,1,1,band->GetRasterDataType(),0,0,nullptr);
+			
 			if (data == 0)
 				RASTER[i][j] = value;
+			
 			if (data != 0)
 				RASTER[i][j] = 0;
 		}
@@ -564,14 +618,10 @@ void GEO::read_wkt(std::string const& filename, std::vector<line_type>& lineStri
 void GEO::read_shp(std::string const& filename, std::vector<line_type>& lineString)
 {
 	const char * name = filename.c_str();
-// 	const char * layer;
 	line_type Line;
 	point_type P;
 	string f = filename.substr(filename.find_last_of('/')+1); 
-// 	cout << "f.find(\".\") = " << f.find(".") << " of " << f.size() << ", f.substr = " << f.substr(0, f.find(".")) << endl;
-// 	layer = ;
-	std::string layer_name = f.substr(0, f.find("."));
-// 	cout << "layer_name = \"" << layer_name << "\"" << endl;;
+	string layer_name = f.substr(0, f.find("."));
 
 	GDALAllRegister();
 	GDALDataset *poDS = static_cast<GDALDataset*>
@@ -582,11 +632,22 @@ void GEO::read_shp(std::string const& filename, std::vector<line_type>& lineStri
 	{
 		printf( " Opening shapefile \"%s\" failed.\n", name );
 		exit( 1 );
-	}   
-
-// 	cout << "f = " << f << ", layer_name = " << layer_name << ", layer_name.c_str = " << layer_name.c_str() <<endl;
-
+	}  
+	
+	OGRSpatialReference * pOrigSrs = poDS->GetLayer( 0 )-> GetSpatialRef();
+	if ( pOrigSrs )
+	{
+		GeoRef_shp = pOrigSrs;
+	}
+	if (!GeoRef_shp->IsProjected() )
+	{
+		cout << "ERROR: vector data without spatial reference" << endl;
+		exit(EXIT_FAILURE);
+	}
+	
 	OGRLayer  *poLayer = poDS->GetLayerByName( layer_name.c_str() );
+	
+	
 	poLayer->ResetReading();
 	OGRFeature *poFeature;
 	while( (poFeature = poLayer->GetNextFeature()) != NULL )
@@ -609,6 +670,7 @@ void GEO::read_shp(std::string const& filename, std::vector<line_type>& lineStri
 	}
 	GDALClose( poDS );
 	cout << "read " << lineString.size() << " faults from shp" << endl;
+
 }
  
  //this creates an output txt-file---------------------------------------
@@ -626,7 +688,80 @@ void GEO::WriteTxt(Graph& g, string const& filename)
 	else cout << "Ne results written" << endl;
 }
  
+ void GEO::WriteSHP_lines(vector<line_type>lineaments, const char* Name)
+ {
+	std::string ext_line;
+	GDALAllRegister();
+	GDALDataset *poDS;
+	GDALDriver *poDriver;
+	OGRLayer *poLayer;
+	OGRFeature *poFeature;
+	OGRLineString l;
+	
+	const char *pszDriverName = "ESRI Shapefile";
+	char * pszWKT;
+	
+	//GeoRef_shp->exportToWkt( &pszWKT );
 
+	poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
+	poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
+	if( poDS == NULL )
+	{
+		printf( "Creation of shp-file failed.\n" );
+		exit( 1 );
+	}
+
+cout << " hh1" << endl;
+
+	poLayer = poDS->CreateLayer("c_comp", NULL, wkbLineString, NULL );
+	if( poLayer == NULL )
+	{
+		printf( "Layer creation failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField( "No", OFTInteger );
+	oField.SetWidth(10);
+	if( poLayer->CreateField( &oField ) != OGRERR_NONE )
+	{
+		printf( "Creating 'No' field failed.\n" );
+		exit( 1 );
+	}
+
+	int NO = 1;
+	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
+	
+	//write a WKT file and shp file-----------------------------------------
+	BOOST_FOREACH(line_type line, lineaments)
+	{
+		float L = (float) geometry::length(line);
+
+		poFeature->SetField( "No", NO  );
+		//poFeature->SetField( "Length", L);
+cout << " hh2" << endl;
+		ext_line.append("LINESTRING(");
+		BOOST_FOREACH(point_type P,line) 
+		{
+			ext_line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+			if (!geometry::equals(P, line.back()))
+				ext_line.append(", ");
+		}
+		ext_line.append( ")");
+		const char* extracted = (const char*) ext_line.c_str();
+		l.importFromWkt(&extracted);
+		poFeature->SetGeometry( &l );
+		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
+		{
+			printf( "Failed to create feature in shapefile.\n" );
+			exit( 1 );
+		}
+		ext_line.clear();
+		NO++;
+	}
+	OGRFeature::DestroyFeature( poFeature );
+	GDALClose( poDS );
+ }
+ 
 //convert graph edges to shp-file---------------------------------------
 void GEO::WriteSHP(Graph G, const char* Name)
 {
@@ -641,9 +776,6 @@ void GEO::WriteSHP(Graph G, const char* Name)
 	OGRLineString l;
 	const char *pszDriverName = "ESRI Shapefile";
 
-	char * pszWKT;
-	GeoRef.exportToWkt( &pszWKT );
-
 	poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
 	poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
 	if( poDS == NULL )
@@ -652,7 +784,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		exit( 1 );
 	}
 
-	poLayer = poDS->CreateLayer(Name, &GeoRef, wkbLineString, NULL );
+	poLayer = poDS->CreateLayer(Name, NULL, wkbLineString, NULL );
 	if( poLayer == NULL )
 	{
 		printf( "Layer creation failed.\n" );
@@ -684,7 +816,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		exit( 1 );
 	}
 
-	OGRFieldDefn oField2( "Component", OFTString );
+	OGRFieldDefn oField2( "Component", OFTReal );
 	oField2.SetWidth(10);
 	if( poLayer->CreateField( &oField2 ) != OGRERR_NONE )
 	{
@@ -744,7 +876,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		fault = G[Eg].trace;
 		float L = (float) G[Eg].length;
 		const char *T = G[Eg].BranchType.c_str();
-		const char *C = G[Eg].component.c_str();
+		int C = G[Eg].component;
 		
 		poFeature->SetField( "No", NO  );
 		poFeature->SetField( "Length", L);
@@ -778,8 +910,6 @@ void GEO::WriteSHP(Graph G, const char* Name)
 	OGRFeature::DestroyFeature( poFeature );
 	GDALClose( poDS );
 }
-
-
 
 //convert graph edges to shp-file---------------------------------------
 void GEO::WriteSHP2(Graph G, const char* Name)
@@ -841,7 +971,6 @@ void GEO::WriteSHP2(Graph G, const char* Name)
 		exit( 1 );
 	}
 	
-
 	int NO = 1;
 	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
 	
@@ -850,7 +979,7 @@ void GEO::WriteSHP2(Graph G, const char* Name)
 	{
 		point = G[Ve].location;
 		int de = degree(Ve, G);
-		int co = connected_components(G, &component[0]);
+		int co = G[Ve].component;
 
 		poFeature->SetField( "No", NO);
 		poFeature->SetField( "Degree", de);
@@ -874,11 +1003,6 @@ void GEO::WriteSHP2(Graph G, const char* Name)
 	GDALClose( poDS );
 }
 
-
-
-
- 
-//
 seg_tree GEO::Seg_Tree(vector<line_type>F)
 {
 	size_t index = 0;
@@ -922,6 +1046,21 @@ void GEO::Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double
 	} 
  }         
 }
+
+void GEO::Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb)
+{
+	p_tree rt(points.begin(), points.end());
+	
+	for (size_t i = 0 ; i < points.size() ; ++i )
+	if (i < nb)
+		continue;
+	else
+	{
+		rt.query(geometry::index::nearest(points[i].first, 1) && geometry::index::satisfies(different_id_p(i)),
+		std::back_inserter(closest) );   
+	}    
+}
+
 
 //calculate the angle (in radians) between the connecting end points of two line_type's that sharea  common point
 //the x_front boolean values are true if the user is checking the front of that line segment, and false if the user wants to know the angle from the end of that line segment
@@ -978,8 +1117,9 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 	//change: the damage zone distance depends on the length of the fault, so we need to ensure that they are all joined properly
 	//therefore, we still want to merge fault segments when there are multiple other intersecting faults
 	//and we choose to merge the segment with the smallest angle difference
-	const double angle_threshold = 25 * math::constants::pi<double>() / 180; //25 degrees, in radians
+	
 	bool changed;
+	const double angle_threshold = 25 * math::constants::pi<double>() / 180; //25 degrees, in radians
 	
 	do {
 		std::list<line_type>::iterator front_match = faults.end(), back_match = faults.end(), candidate;
@@ -1104,5 +1244,10 @@ void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 		merged_faults.push_back(base);
 	}
 	F = merged_faults;
+}
+
+void GEO::Source_Target(const char* Name, point_type &Source, point_type &Target)
+{
+	
 }
  

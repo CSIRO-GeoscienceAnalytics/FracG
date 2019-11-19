@@ -4,7 +4,6 @@
 #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
 #include "main.h"
 
-
 using namespace FGraph;
 
 extern double GeoTransform[8];
@@ -51,6 +50,8 @@ class GEO
 		}
 		double_t len;
 	};
+	
+	void ReprojectVECTOR2WGS84(std::string const& filename);
 
 	template<typename T> T** RasterConvert(int rows, int cols, T **M);
 	
@@ -58,6 +59,7 @@ class GEO
 	
 	void Point_Tree(vector<p_index> pointsF, vector<p_index>& closest);
 	void Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double max_len);
+	void Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb);
 	
 	int getElevation(point_type p, std::string const& filename);
 	int getElevationFromArray(point_type p, const int *data);
@@ -84,6 +86,10 @@ class GEO
 	void WriteSHP(Graph G, const char* Name);
 	void WriteSHP2(Graph G, const char* Name);
 	void CorrectNetwork(vector<line_type>&F, double dist);
+	
+	void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], const char* Name);
+	void WriteSHP_lines(vector<line_type>lineaments, const char* Name);
+	void Source_Target(const char* Name, point_type &Source, point_type &Target);
 
 };
 #endif
