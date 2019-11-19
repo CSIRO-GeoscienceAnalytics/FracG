@@ -97,7 +97,7 @@ class STATS
 
 	void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset);
 	void DoBoxCount(vector<line_type> faults, std::ofstream& txtF);
-	StatsModelData CompareStatsModels(std::vector<double> &values, std::ofstream& txtF);
+	StatsModelData CompareStatsModels(bool print, std::vector<double> &values, std::ofstream& txtF);
 	
 	void AddData(vector<line_type> faults, point_type source, point_type target);
 	void AnalyseRasterFaults(vector<READ> input, vector<line_type> faults);
@@ -108,6 +108,7 @@ class STATS
 	FSTATS KMCluster(bool input, int No, FSTATS faultStats);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
 	double ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, double> >Maximas);
+	void KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF);
 
 	void WriteData(ofstream& txtF);
 };
