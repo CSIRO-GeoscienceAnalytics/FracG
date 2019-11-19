@@ -1226,7 +1226,8 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	{
 		Graph graph;
 		
-		string g_name ="GRAPH_"+input[i].name+".shp";
+		//string g_name ="GRAPH_"+input[i].name+".shp";
+		string g_name ="GRAPH.shp";
 		const char *G_n = g_name.c_str();
 		map.clear();
 		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4; //distance threshold for considering separated objects to be at the same locations
@@ -1243,7 +1244,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		G.GraphAnalysis(graph, faults, txtF, 10);
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
 		
-		geo.AssignValuesAll(graph, "dem1.tif");
+		geo.AssignValuesAll(graph, input[i].name);
 		
 		geo.WriteSHP(graph, G_n); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
@@ -1501,7 +1502,11 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
+<<<<<<< HEAD
+			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
+=======
 			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
+>>>>>>> 05ff832cad46b2f8858bf8629e8e6fc0eee08b00
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 
