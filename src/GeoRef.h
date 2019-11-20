@@ -3,6 +3,7 @@
 
 #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
 #include "main.h"
+#include <boost/algorithm/clamp.hpp>
 
 using namespace FGraph;
 

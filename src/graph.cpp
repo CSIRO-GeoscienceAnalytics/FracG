@@ -342,7 +342,7 @@ AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distan
 }
 
 //take a graph and split the faults up into fault segments, according to where the faults intersect
-void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
+void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist)
 {
 	Graph g;
 	map_vertex_type m; //the map translates physical coordinates and nodes in the graph.
@@ -402,7 +402,6 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 		
 		geom.SortDist(cross); //sort the vertices so that we get them in order of how far along the fault they appear (while taking into account that some intersection points appear off the fault line itself)
 		vertex_type prev_vertex = AddNewVertex(m, std::get<1>(cross.front()), g);
-		
 		for (vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 		{
 			if (I == cross.begin()) continue;
@@ -411,6 +410,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 			//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
 			//if (is_start || is_end) continue;
 			NewV = AddNewVertex(m, intersect, g);
+			if (NewV == prev_vertex) continue;
 			
 			AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location), fault_length);//also remember the length of the original fault
 			
@@ -421,6 +421,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist )
 			}
 			prev_vertex = NewV;
 		}
+
 		cross.clear();
 	}
 	
@@ -934,11 +935,17 @@ void GRAPH::ShortPath(Graph G, map_vertex_type m, point_type source, point_type 
 									.predecessor_map(boost::make_iterator_property_map(predecessors.begin(), boost::get(boost::vertex_index,G)))
 									);
 
-	for(vertex_type u = predecessors[T]; u != T; T = u, u = predecessors[T])
+	cout << "shortest path from " << S << " to " << T << ": ";
+	vertex_type previous = T;
+	bool finished = false;
+	for(vertex_type current = predecessors[T]; !finished; previous = current, current = predecessors[current])
 	{
-		std::pair<edge_type, bool> edge_pair = boost::edge(u,T,G);
+		std::pair<edge_type, bool> edge_pair = boost::edge(current,previous,G);
 		path.push_back( edge_pair.first );
+		cout << edge_pair.first << ", ";
+		finished = (current == S) || (current == predecessors[current]);
 	}
+	cout << endl;
 
 	double distance = 0;
 	for(std::vector<edge_type>::size_type i = 0; i != path.size(); i++) 
@@ -954,8 +961,8 @@ void GRAPH::ShortPath(Graph G, map_vertex_type m, point_type source, point_type 
 	}
 	cout <<"Dijkstra shortest paths: " << distance << " ("<<path.size() << ") \n" << endl;
 
-	//if (distance > 0)
-		//Gref.WriteSHP(shortP, "ShortestPath.shp");
+	if (distance > 0)
+		Gref.WriteSHP(shortP, "ShortestPath.shp");
 }
 
 //create minimum spanning tree (backbone of network)--------------------

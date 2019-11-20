@@ -140,7 +140,7 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 		dvertex_type ds = vertex_map[s]; //get the corresponding source and target for the new graph
 		dvertex_type dt = vertex_map[t];
 		FEdge fe = g[*e];
-
+		
 		DEdge de(fe.length, fe.fault_length); //currently one set of edge properties. will fill out the other values inside the maximum flow function.
 		dedge_type frwd, back;
 		bool fadded, badded;
@@ -149,6 +149,8 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 		if (!fadded || !badded) cout << "Warning: Edge from " << dg[ds].index << " to " << dg[dt].index << " already exists (forward " << !fadded << ", back " << !badded << ")" << endl;
 		dg[frwd].reverse = back;
 		dg[back].reverse = frwd;
+		
+// 		cout << "added edge (" << ds << ", " << dt << ") from " << *e << endl;
 	}
 	return dg;
 }
@@ -160,13 +162,14 @@ void GEO::setup_maximum_flow(DGraph &dg)
 	boost::tie(estart, eend) = boost::edges(dg);
 	for (e = estart; e != eend; e++)
 	{
-		dvertex_type s = source(*e, dg), t = target(*e, dg);
-		double hs = dg[s].elevation, ht = dg[t].elevation;
+// 		dvertex_type s = source(*e, dg), t = target(*e, dg);
+// 		double hs = dg[s].elevation, ht = dg[t].elevation;
 		DEdge de = dg[*e];
-		const double area = 10*(1 - std::exp(-de.full_length)); //this will become a function later
-		const double flow = area * (std::max<double>(hs - ht, 0)) / de.length;
+		const double area = (1 - std::exp(-de.full_length/100000)); //this will become a function later
+		const double flow = area;// * (std::max<double>(hs - ht, 0)) / de.length;
 		dg[*e].capacity = flow;
 		dg[*e].residual_capacity = flow;
+// 		cout << "capacity of edge " << *e << " from " << dg[s].index << " to " << dg[t].index << " is " << dg[*e].capacity << endl;
 	}
 }
 
@@ -196,11 +199,41 @@ double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
 			t = *v;
 		}
 	}
+	if (dg[t].elevation > dg[s].elevation){
+		std::swap(s, t);
+		cout << "Swapping source and target to find maximum flow from higher location to lower location" << endl;
+	}
+	cout << "Calculating maximum flow from vertex " << s << " (" << dg[s].elevation << "m) to vertex " << t << " (" << dg[t].elevation << ")" << endl;
+	
+	//clear capacities for verticies that are above the source
+	const double start_elevation = dg[s].elevation;
+	vector<std::pair<dedge_type, double>> saved_capacities;
+	DGraph::edge_iterator e, estart, eend;
+	boost::tie(estart, eend) = boost::edges(dg);
+	for (e = estart; e != eend; e++)
+	{
+		dvertex_type cs = boost::source(*e, dg); //check source
+		dvertex_type ct = boost::target(*e, dg); //check target
+		if (dg[cs].elevation > start_elevation || dg[ct].elevation > start_elevation)
+		{
+			saved_capacities.push_back(std::make_pair(*e, dg[*e].capacity));
+			dg[*e].capacity = 0;
+			dg[*e].residual_capacity = 0;
+		}
+	}
 // 	s = boost::source(*e, dg); //still testing, so pick two arbitrary locations
 // 	e++;
 // 	eprev = e;
 // 	t = boost::target(*eprev, dg);
-	return maximum_flow(dg, s, t);
+	double max_flow = maximum_flow(dg, s, t);
+	//now restore capacities
+// 	for (auto p = saved_capacities.begin(); p != saved_capacities.end(); p++)
+// 	{
+// 		dedge_type e = p->first;
+// 		double cap = p->second;
+// 		dg[e].capacity = cap;
+// 	}
+	return max_flow;
 }
 
 //calculate the maximum flow from source s to sink/target t
@@ -213,7 +246,7 @@ double GEO::maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t)
 	auto colour_map   = boost::get(&DVertex::colour, dg);
 	auto distance_map = boost::get(&DVertex::distance, dg);//not using a distance map currently. this should be distance to the target vertex, and improves the speed of the algorithm
 	auto index_map    = boost::get(&DVertex::index, dg); //no idea what the type is, but it will do for now
-	//
+                                                                                    
 	const double flow = boost::boykov_kolmogorov_max_flow(dg, capacity_map, res_cap_map, rev_map, pred_map, colour_map, distance_map, index_map, s, t);
 	return flow;//0
 }
@@ -410,6 +443,8 @@ double GEO::getValue(point_type p, double transform[8], double** values)
 	{
 		int x = (int) (p.x() - transform[0]) / transform[1];
 		int y = (int) abs((p.y() - transform[3]) / transform[5]);
+		x = boost::algorithm::clamp(x, 0, (int)transform[6]);
+		y = boost::algorithm::clamp(y, 0, (int)transform[7]);
 		return(values[x][y]);
 	}
 	else 
@@ -566,7 +601,7 @@ void GEO::GetRasterProperties(std::string const& filename, double**& RASTER)
 	{
 		for (int j = 0; j < poDataset->GetRasterYSize(); j++)
 		{
-			data = band->RasterIO(GF_Read,i,j,1,1,&value,1,1,band->GetRasterDataType(),0,0,nullptr);
+			data = band->RasterIO(GF_Read,i,j,1,1,&value,1,1,GDT_Float64,0,0,nullptr);
 			
 			if (data == 0)
 				RASTER[i][j] = value;
@@ -690,13 +725,12 @@ void GEO::WriteTxt(Graph& g, string const& filename)
  
  void GEO::WriteSHP_lines(vector<line_type>lineaments, const char* Name)
  {
-	std::string ext_line;
+// 	std::string ext_line;
 	GDALAllRegister();
 	GDALDataset *poDS;
 	GDALDriver *poDriver;
 	OGRLayer *poLayer;
 	OGRFeature *poFeature;
-	OGRLineString l;
 	
 	const char *pszDriverName = "ESRI Shapefile";
 	char * pszWKT;
@@ -731,6 +765,7 @@ cout << " hh1" << endl;
 	int NO = 1;
 	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
 	
+	
 	//write a WKT file and shp file-----------------------------------------
 	BOOST_FOREACH(line_type line, lineaments)
 	{
@@ -738,24 +773,27 @@ cout << " hh1" << endl;
 
 		poFeature->SetField( "No", NO  );
 		//poFeature->SetField( "Length", L);
-cout << " hh2" << endl;
-		ext_line.append("LINESTRING(");
-		BOOST_FOREACH(point_type P,line) 
+		cout << " hh2" << endl;
+// 		ext_line.append("LINESTRING(");
+		OGRLineString l;
+		l.setNumPoints(line.size());
+		BOOST_FOREACH(point_type P, line) 
 		{
-			ext_line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
-			if (!geometry::equals(P, line.back()))
-				ext_line.append(", ");
+// 			ext_line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+// 			if (!geometry::equals(P, line.back()))
+// 				ext_line.append(", ");
+			l.addPoint(P.x(), P.y());
 		}
-		ext_line.append( ")");
-		const char* extracted = (const char*) ext_line.c_str();
-		l.importFromWkt(&extracted);
+// 		ext_line.append( ")");
+// 		const char* extracted = (const char*) ext_line.c_str();
+// 		l.importFromWkt(&extracted);
 		poFeature->SetGeometry( &l );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{
 			printf( "Failed to create feature in shapefile.\n" );
 			exit( 1 );
 		}
-		ext_line.clear();
+// 		ext_line.clear();
 		NO++;
 	}
 	OGRFeature::DestroyFeature( poFeature );
@@ -766,14 +804,13 @@ cout << " hh2" << endl;
 void GEO::WriteSHP(Graph G, const char* Name)
 {
 	line_type fault;
-	std::string line;
+// 	std::string line;
 
 	GDALAllRegister();
 	GDALDataset *poDS;
 	GDALDriver *poDriver;
 	OGRLayer *poLayer;
 	OGRFeature *poFeature;
-	OGRLineString l;
 	const char *pszDriverName = "ESRI Shapefile";
 
 	poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
@@ -874,6 +911,7 @@ void GEO::WriteSHP(Graph G, const char* Name)
 	for (auto Eg : boost::make_iterator_range(edges(G))) 
 	{
 		fault = G[Eg].trace;
+// 		cout << "Edge " << NO-1 << ": " << Eg << endl;
 		float L = (float) G[Eg].length;
 		const char *T = G[Eg].BranchType.c_str();
 		int C = G[Eg].component;
@@ -888,23 +926,26 @@ void GEO::WriteSHP(Graph G, const char* Name)
 		poFeature->SetField( "CrossGrad", G[Eg].CrossGrad);
 		poFeature->SetField( "Paralgrad", G[Eg].ParalGrad);
 
-		line.append("LINESTRING(");
+		OGRLineString l;
+		l.setNumPoints(fault.size());
+// 		line.append("LINESTRING(");
 		BOOST_FOREACH(point_type P,fault) 
 		{
-			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
-			if (!geometry::equals(P, fault.back()))
-				line.append(", ");
+// 			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+// 			if (!geometry::equals(P, fault.back()))
+// 				line.append(", ");
+			l.addPoint(P.x(), P.y());
 		}
-		line.append( ")");
-		const char* branch = (const char*) line.c_str();
-		l.importFromWkt(&branch);
+// 		line.append( ")");
+// 		const char* branch = (const char*) line.c_str();
+// 		l.importFromWkt(&branch);
 		poFeature->SetGeometry( &l );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{
 			printf( "Failed to create feature in shapefile.\n" );
 			exit( 1 );
 		}
-		line.clear();
+// 		line.clear();
 		NO++;
 	}
 	OGRFeature::DestroyFeature( poFeature );
@@ -925,7 +966,6 @@ void GEO::WriteSHP2(Graph G, const char* Name)
 	GDALDriver *poDriver;
 	OGRLayer *poLayer;
 	OGRFeature *poFeature;
-	OGRPoint PO;
 	
 	const char *pszDriverName = "ESRI Shapefile";
 	char * pszWKT;
@@ -984,12 +1024,20 @@ void GEO::WriteSHP2(Graph G, const char* Name)
 		poFeature->SetField( "No", NO);
 		poFeature->SetField( "Degree", de);
 		poFeature->SetField( "Component", co);
-		Point.append("POINT(");
-		Point.append(std::to_string(point.x()) + " " + std::to_string(point.y()));
-		Point.append( ")");
-		const char* p = (const char*) Point.c_str();
+// 		Point.append("POINT(");
+// 		Point.append(std::to_string(point.x()) + " " + std::to_string(point.y()));
+// 		Point.append( ")");
+// 		const char* p = (const char*) Point.c_str();
 		
-		PO.importFromWkt(&p);
+		// 		Point.append("POINT(");
+// 		Point.append(std::to_string(point.x()) + " " + std::to_string(point.y()));
+// 		Point.append( ")");
+// 		const char* p = (const char*) Point.c_str();
+		
+		OGRPoint PO;
+// 		PO.importFromWkt(&p);
+		PO.setX(point.x());
+		PO.setY(point.y());
 		poFeature->SetGeometry( &PO );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{

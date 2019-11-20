@@ -99,9 +99,9 @@ class STATS
 	void DoBoxCount(vector<line_type> faults, std::ofstream& txtF);
 	StatsModelData CompareStatsModels(bool print, std::vector<double> &values, std::ofstream& txtF);
 	
-	void AddData(vector<line_type> faults, point_type source, point_type target);
+	void AddData(vector<line_type> faults, point_type source, point_type target, double Dist);
 	void AnalyseRasterFaults(vector<READ> input, vector<line_type> faults);
-	void AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target);
+	void AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target, double Dist);
 	
 	void CreateStats(ofstream& txtF, vector<line_type> faults);
 	void DEManalysis(Graph& G, double radius, string filename, double** RASTER);
