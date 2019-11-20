@@ -163,10 +163,12 @@ line_type GEOMETRIE::GetSegment(line_type Trace, point_type Junction, point_type
 	}
 	//the output line segment is the first point -> any and all entire segments that lie between the two points -> from the last whole segment to the end point
 	geometry::append(line_seg, first);
+	point_type previous = first;
 	for (auto it = first_segment; it != last_segment; it++)
 	{
-		if (geometry::distance(*std::next(it, -1), *it) > threshold) 
+		if (geometry::distance(previous, *it) > threshold) 
 			geometry::append(line_seg, *it);
+		previous = *it;
 	}
 	geometry::append(line_seg, last);
 	return line_seg; 

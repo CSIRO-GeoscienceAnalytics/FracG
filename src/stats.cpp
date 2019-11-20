@@ -1215,7 +1215,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	}
  }
  
- void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target)
+ void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target, double Dist)
  {
 	GEO geo;
 	GRAPH G;
@@ -1230,33 +1230,35 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		string g_name ="GRAPH.shp";
 		const char *G_n = g_name.c_str();
 		map.clear();
-		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4; //distance threshold for considering separated objects to be at the same locations
+// 		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4; //distance threshold for considering separated objects to be at the same locations //use the user-given value instead
+		cout << "Using distance threshold of " << Dist << endl;
 		
 		ofstream txtF; 
 		txtF.open ("Graph_"+input[i].name+".csv"); 
 		
 		cout << " Analyse Raster '"<< input[i].name <<"' for Graph" << endl;
 		cout << "  Building new Graph for raster" << endl;
-		G.ReadVEC4raster(graph, map, faults); //convert the faults into a graph
+		G.ReadVEC4raster(graph, map, faults);// //convert the faults into a graph
 		G.SplitFaults(graph, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
 		G.RemoveSpurs(graph, map, Dist); //remove any spurs from the graph network
 		cout << " Assigning weights to vertices and edges" << endl;
 		G.GraphAnalysis(graph, faults, txtF, 10);
+// 		G.ShortPath(graph, map, source, target, 500); //for debug purposes, to see if this gets the same path as using the other graph-reading functions
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
 		
 		geo.AssignValuesAll(graph, input[i].name);
 		
 		geo.WriteSHP(graph, G_n); //write out the graph data as a file
 		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
-		//DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
-		//geo.setup_maximum_flow(flow_graph);
-		//double max_flow = geo.maximum_flow(flow_graph, source, target);
-		//cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
+		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
+		geo.setup_maximum_flow(flow_graph);
+		double max_flow = geo.maximum_flow(flow_graph, source, target);
+		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
 		cout << "  done" << endl;
 	}
  }
  
-void STATS::AddData(vector<line_type> faults, point_type source, point_type target)
+void STATS::AddData(vector<line_type> faults, point_type source, point_type target, double Dist)
 {
 	GEO georef;
 	GEOMETRIE geom;
@@ -1295,7 +1297,7 @@ void STATS::AddData(vector<line_type> faults, point_type source, point_type targ
 		} while(choice == 'y');
 		
 	AnalyseRasterFaults(input, faults);
-	AnalyseRasterGraph(input, faults, source, target);
+	AnalyseRasterGraph(input, faults, source, target, Dist);
 	std::copy(std::begin(old_GeoTransform), std::end(old_GeoTransform), std::begin(GeoTransform));
 	}
 }
@@ -1502,15 +1504,11 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
-<<<<<<< HEAD
 			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
-=======
-			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
->>>>>>> 05ff832cad46b2f8858bf8629e8e6fc0eee08b00
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 
-		if (i != 0 && i != GAUSS.size())
+		if (i > 0 && i+1 < GAUSS.size())
 			if (GAUSS[i].second > GAUSS[i-1].second &&
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
@@ -1711,7 +1709,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
-			if (GAUSS[i].second > GAUSS[GAUSS.size()].second && 
+			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
 				GAUSS[i].second > GAUSS[i+1].second)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 

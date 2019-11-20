@@ -138,6 +138,7 @@ namespace FGraph
 		double ParalGrad;
 		int FaultNb;
 		double fault_length; //the length of the entire fault that the fault segment is taken from
+		friend std::ostream& operator<<(std::ostream &os, const FEdge &de) {return os << "l " << de.length << ", full length = " << de.fault_length;}
 	};
 	
 		struct FEdge2
