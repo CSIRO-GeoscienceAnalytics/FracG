@@ -61,6 +61,7 @@ if `dpkg -s  libarmadillo-dev | grep -q Status;`
       exit
 fi
 
+
 xmkmf -a
 echo "Excuting make file"
 make 

@@ -1,4 +1,9 @@
 //https://map.sarig.sa.gov.au/ 
+#include <iostream>
+#include <iomanip>
+#include <chrono>
+#include <ctime>
+#include <thread>
 
 #include "graph.h"
 #include "GeoRef.h" 
@@ -6,12 +11,7 @@
 #include "main.h"
 #include "stats.h"
 #include "model.h"
-
-#include <iostream>
-#include <iomanip>
-#include <chrono>
-#include <ctime>
-#include <thread>
+#include "main.h"
 
 using namespace std; 
 using namespace FGraph;
@@ -83,11 +83,15 @@ int main(int argc, char *argv[])
 	if (ext == ".txt")
 		geo.read_wkt(vecFile, faults);  
 //----------------------------------------------------------------------
-	geom.CentreDistanceMap(vecFile, 1000);
-
+	geom.CentreDistanceMap(vecFile, 500.0);
+	geom.P21Map(vecFile, 1000.0);
+	
 	geo.CorrectNetwork(faults, Dist);//rejoin faults that are incorrectly split in the data file
-// 	stats.CreateStats(txtF, faults); // statistical analysis of network
+ 	stats.CreateStats(txtF, faults); // statistical analysis of network
+
+ 	
 	G.ReadVEC(graph1, map, faults); //convert the faults into a graph
+	cout << "now splitting" << endl;
 	G.SplitFaults(graph1, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
 	G.RemoveSpurs(graph1, map, Dist); //remove any spurs from the graph network
 	
@@ -96,18 +100,17 @@ int main(int argc, char *argv[])
 	geo.WriteSHP2(graph1, "Vertices.shp");
 	G.ComponentExtract(graph1, faults);
 	//---------------------------------------------------------------------- 
+	//source.set<0>(15130685.7139);
+//	source.set<1>(-3594873.82586);
+	
+	source.set<0>(1496306.0818);
+	source.set<1>(1976279.0273);
+	
+	target.set<0>(1564883.4758);
+	target.set<1>(1976873.5755);
 
-// 	source.set<0>(14301336.315685500000);
-// 	source.set<1>(-1800551.207095710000);
-// 	target.set<0>(14260164.968410300000);
-// 	target.set<1>(-1809965.628127270000);
-	source.set<0>(14684453);
-	source.set<1>(-3077220);
-	target.set<0>(14852333);
-	target.set<1>(-3089031);
-// 	G.ShortPath(graph1, map, source, target, 500);
-	G.MinTree(graph1);
-
+ 	//G.ShortPath(graph1, map, source, target, 500);
+	//G.MinTree(graph1);
 	//G.CreateFractures(frac_graph, map, faults, rasFile ); 
 	//geo.WriteTxt(frac_graph, "frac_graph.txt");
 	//----------------------------------------------------------------------

@@ -670,9 +670,12 @@ void GRAPH::GraphAnalysis(Graph& G, vector<line_type> faults, std::ofstream& txt
 				<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
 				<< "Density (d): " << num_edges(G)*(totalLength*totalLength) /(4*A) << "\n"
 				<< "KDE edge orientation" << "\n";
+				cout << " here" << endl;
 				stat.KDE_estimation_strikes(Edges, txtG);
+				cout << " here!" << endl;
 			txtG<< endl;
 			Edges.clear();
+			
 //Analyse the different component of the network------------------------
 		cout << " Analysing components of graph " << endl;
 		
@@ -773,127 +776,7 @@ void GRAPH::GraphAnalysis(Graph& G, vector<line_type> faults, std::ofstream& txt
 	}
 	txtG.close();
 }
- 
-//populate vicinity of traces with potential fracture centres----------
-void GRAPH::CreateFractures(Graph& G, map_vertex_type& map, vector<line_type> FAULTS, string const& filename)
-{
-	std::clock_t startcputime = std::clock();
-	cout << "Distribute fractures: "<< endl;
-	GEOMETRIE geom;
-	//int Nb;
-	//float frac;
-	GEO geo;
-	//box Box;
-	//line_type Fault;
-
-	//BUFFER buffer;
-	vector<BUFFER> buffer2;	 
-
-	//long double len;
-	long double Xmax, Xmin, Ymax, Ymin;
-	polygon_type pl;
-	box bx;
-
-	Xmax = GeoTransform[0] + GeoTransform[1] * GeoTransform[6] - 1000;    // west
-	Xmin = GeoTransform[0] + 1000; 									  // east
-	Ymax = GeoTransform[3] - 1000; 									 // north
-	Ymin = GeoTransform[3] + GeoTransform[5] * GeoTransform[7] + 1000;	//south
- 
-	bx.min_corner().set<0>( Xmin );
-	bx.min_corner().set<1>( Ymin );
-	bx.max_corner().set<0>( Xmax );
-	bx.max_corner().set<1>( Ymax );
-	geometry::convert(bx, pl);
-
-	BOOST_FOREACH(line_type Fault, FAULTS)
-	{
-		buffer2.push_back( geom.DefineLineBuffer(Fault, 5)); 
-	}
-	int totalF;
-	int F = 0;
-	#pragma omp parallel for
-	for(unsigned int Fau = 0; Fau < FAULTS.size(); Fau++)
-	{
-		line_type Fault = FAULTS.at(Fau);
-
-		long double len = geometry::length(Fault);
-		float frac = len/25;
-		
-		BUFFER buffer = geom.DefineLineBuffer(Fault, frac);
-		box Box = geometry::return_envelope<box>(buffer);
-		
-		int Nb =  10 * sqrt(2*len) ;
-
-		for (int i = 0; i < Nb; i++)
-		{
-			point_type ranP;
-			int ITER = 0;
-			bool found = false, rejec;
-			vertex_type NewV;
-
-			while (!found)
-			{
-				rejec = false;
-
-				double X = (geometry::get<geometry::min_corner, 0>(Box)) + (((long double) rand()) / 
-					(long double) RAND_MAX) * (geometry::get<geometry::max_corner, 0>(Box) - (geometry::get<geometry::min_corner, 0>(Box)));      
-
-				double Y = (geometry::get<geometry::min_corner, 1>(Box)) + (((long double) rand()) / 
-					(long double) RAND_MAX) * (geometry::get<geometry::max_corner, 1>(Box) - (geometry::get<geometry::min_corner, 1>(Box)));  
-
-				geometry::set<0>(ranP, X);
-				geometry::set<1>(ranP, Y); 
-
-				if (geometry::within(ranP, pl))
-				{
-					BOOST_FOREACH(BUFFER B , buffer2)
-					{
-						if (geometry::within(ranP, B))
-						{
-							rejec = true;
-							break;
-						}
-					}
-					if (!rejec)
-					{
-						if(geometry::within(ranP, buffer)) 
-						{
-							#pragma omp critical
-							{
-								NewV = AddNewVertex(map, ranP, G); 
-								//assign elevation for fracture
-								double hmax = geo.getElevation(G[NewV].location, filename);
-								double hmin = -100;
-
-								double h = ((double) rand() / (RAND_MAX)) ;
-								double hc = hmin + (h * hmax);
-								G[NewV].elevation = hc;
-								totalF++;
-							}
-							//release lock
-							if (frac > 100)
-							{
-								frac -=   2 * exp((1 - (i*10 / floor((0.5*Nb)) )));
-								buffer = geom.DefineLineBuffer(Fault, frac);
-								Box = geometry::return_envelope<box>(buffer);
-							}
-							found = true;
-						}
-					}
-				}
-				if (ITER >  100)
-					found = true;
-				ITER ++;
-			}
-		}
-		if(omp_get_thread_num() == 0)
-			cout << "fault: "<< F << "/"<< FAULTS.size() << endl;
-		F++;
-	}
-	cout << "Created "<< totalF << " fractures along " <<FAULTS.size() << " faults" << endl;
-	cout << " in " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n" << endl;
-}
- 
+  
 //find shortest path between source and target--------------------------
 void GRAPH::ShortPath(Graph G, map_vertex_type m, point_type source, point_type target, double radius)
 { 
@@ -992,7 +875,7 @@ void  GRAPH::MinTree (Graph G)
 					min_graph);
 		i++;  
 	}
-	//Gref.WriteSHP(min_graph, "MinTree.shp");
+	Gref.WriteSHP(min_graph, "MinTree.shp");
 	cout <<"minTree Total eges: " << i << endl;
 }
 
@@ -1027,15 +910,29 @@ void GRAPH::ComponentExtract(Graph G, vector <line_type> lineaments)
 		const char* Name = (char*)("Component_No._" + std::to_string(comp)).c_str();
 		
 //here we extract the initial lineaments--------------------------------
+		bool extract;
 		for (auto Eg : make_iterator_range(edges(G)))
 		{
+			extract = true;
 			if (G[Eg].component == comp)
-				Extractor.push_back(lineaments.at(G[Eg].FaultNb));
+			{
+				for (auto ext_line : Extractor)
+				{
+					if (geometry::equals(ext_line, lineaments.at(G[Eg].FaultNb) ))
+					{
+						extract = false;
+						break;
+					}
+				}
+				if (extract)
+					Extractor.push_back(lineaments.at(G[Eg].FaultNb));
+			}
 		}
+	
 		cout << " Found " << Extractor.size() << " lineaments for component " << comp << endl;
 		
 //write the shape file--------------------------------------------------
-		georef.WriteSHP_lines(Extractor, Name);
+		georef.WriteSHP_lines(Extractor, "comp221.shp");
 		
 //maybe another component to extract------------------------------------
 		prompt = false;

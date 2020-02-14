@@ -1244,17 +1244,24 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		cout << " Assigning weights to vertices and edges" << endl;
 		G.GraphAnalysis(graph, faults, txtF, 10);
 // 		G.ShortPath(graph, map, source, target, 500); //for debug purposes, to see if this gets the same path as using the other graph-reading functions
+
+
 		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
 		
-		geo.AssignValuesAll(graph, input[i].name);
+		
+		
+	//	geo.AssignValuesAll(graph, input[i].name);
+		
+		
 		
 		geo.WriteSHP(graph, G_n); //write out the graph data as a file
-		geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
+		//geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
 		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
 		geo.setup_maximum_flow(flow_graph);
 		double max_flow = geo.maximum_flow(flow_graph, source, target);
 		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
 		cout << "  done" << endl;
+		geo.WriteSHP_maxFlow(flow_graph, "Flow_Graph.shp");
 	}
  }
  
@@ -1427,6 +1434,8 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
  
  void MA_filter(vector< std::pair<double,double>>&KDE, int window)
  {
+	 if (KDE.size() > 5 * window)
+	 {
 	unsigned int wn = (int) (window - 1) / 2;
 	vector<float>KDE_filtered(KDE.size());
 
@@ -1460,6 +1469,7 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
 	{
 		KDE[i].second = KDE_filtered[i];
 	}
+	}
  }
  
  
@@ -1471,13 +1481,18 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
 	{
 		r[e.first] = e.second;
 	}
+	
 	auto x_range = boost::adaptors::keys(r);
     auto y_range = boost::adaptors::values(r);
-    math::barycentric_rational<double> interpolant(x_range.begin(), x_range.end(), y_range.begin());
+    
+    if (x_range > y_range){
+		//math::barycentric_rational<double> interpolant(x_range.begin(), x_range.end(), y_range.begin());
 
-	KDE.clear();
-     for (int i = 0; i < 180; i++)
-		KDE.push_back(make_pair(i, interpolant(i)));
+
+		//KDE.clear();
+		// for (int i = 0; i < 180; i++);
+		//	KDE.push_back(make_pair(i, interpolant(i)));
+	}
 }
 
 void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
@@ -1496,11 +1511,13 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	 
 //KDE estimation of orientation to obtain number of lineament sets------
  sort(ANGLE.begin(), ANGLE.end());
+ 
  vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 10);
  vector< std::pair<double, double>> Maximas;
  MA_filter(GAUSS, 5);
+ cout << " here.." << endl;
  interpolate(GAUSS);
-
+ cout << " here..." << endl;
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
@@ -1587,11 +1604,12 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		fault_lengths.push_back(length);
 
 		int i = 0;
-		//string coord = "LINESTRING(";
 		string coord = "";
+		geometry::unique(F);
+		
 		BOOST_FOREACH(point_type p, F)
 		{
-			if (i < F.size())
+			if (i < F.size()-1)
 			{
 				geometry::append(p,multiL);
 				coord += to_string(p.x()) + " ";
@@ -1607,13 +1625,14 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		}
 
 		geometry::centroid(F, centre);
-		
+
 		points.push_back(std::make_pair(centre, index));
 		points2.push_back(std::make_tuple(centre, index, geometry::length(F)));
 		
 		faultInfo.push_back(make_tuple(index, coord, strike, length, sinuosity, 0, 0, 0, 0, 0, 0, 0));
 		index++;
 	}
+
 
 	//Orientation-----------------------------------------------------------
 	mean_angle    = mean(ANGLE);
@@ -1697,14 +1716,13 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		<< "Range:    "<< "\t" << " " << "\t" << range_angle<< "\t"<< range_length<< "\t" << range_sin<< "\t" << "\t" << "\t" << "\t" << "\t" << arma::range(distance)<< "\t" << "\t" <<arma::range(distance2)<< "\n"
 		<< endl;;
 		
-		
+		cout << "stats.." <<endl;
 //KDE estimation of orientation to obtain number of lineament sets------
  sort(ANGLE.begin(), ANGLE.end());
- vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 10);
+ vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 15);
  vector< std::pair<double, double>> Maximas;
-	
- MA_filter(GAUSS, 5);
- //interpolate(GAUSS);
+
+ interpolate(GAUSS);
 
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
