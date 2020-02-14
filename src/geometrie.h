@@ -103,7 +103,11 @@ class GEOMETRIE
 	double minSpacing(line_type Trace);
 	line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
 	void SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross);
-	void CentreDistanceMap (std::string const& filename, int cell_size);
+	
+	void CentreDistanceMap (std::string const& filename, float cell_size);
+	void P21Map(std::string const& filename, float cell_size);
+	
+	
 	box ReturnAOI(vector<line_type> lines);
 	line_type ShortestLine(vector <line_type> Set);
 

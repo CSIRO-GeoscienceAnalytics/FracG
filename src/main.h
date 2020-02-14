@@ -196,12 +196,13 @@ namespace FGraph
 	{
 		double length; //the length of this fault/fracture segment
 		double full_length; //the full length of the fault/fracture that this segment belongs to (used to determine the width of the damage zone)
+		line_type trace;
 		double capacity; //the capacity for this edge
 		double residual_capacity; //the unused capacity for this edge
 		dedge_type reverse; //holds a link/pointer/whatever to the edge that links the same two vertices, but in the opposite direction
 		DEdge(){};
-		DEdge(double len, double full_len, double cap) : length(len), full_length(full_len), capacity(cap), residual_capacity(cap) {};
-		DEdge(double len, double full_len) : length(len), full_length(full_len), capacity(0), residual_capacity(0) {};
+		DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra),capacity(cap), residual_capacity(cap) {};
+		DEdge(double len, double full_len,line_type tra) : length(len), full_length(full_len), trace(tra), capacity(0), residual_capacity(0) {};
 		friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
 	};
 	//<edge list for each vertex, vectex list, un/directed, vertex properties, edge properties, graph properties, (all?) edges list>

@@ -76,6 +76,7 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 	for (auto Ve : boost::make_iterator_range(vertices(G)))
 	{
 		G[Ve].data = getValue(G[Ve].location, transform, values);
+		G[Ve].elevation = getValue(G[Ve].location, transform, values);
 		if (std::isnan(G[Ve].data)) cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
 	}
 
@@ -86,11 +87,12 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 		curEdge = G[Eg].trace;
 		geometry::centroid(G[Eg].trace, centre);
 
-		G[Eg].Centre     = getValue(centre, transform, values);
-		G[Eg].MeanValue  = LineExtractor(G[Eg].trace, transform, values) ;
+		//G[Eg].Centre     = getValue(centre, transform, values);
+	//	G[Eg].MeanValue  = LineExtractor(G[Eg].trace, transform, values) ;
 		G[Eg].CentreGrad = CentreGradient(G[Eg].trace, transform, values);
-		G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, transform, values);
-		G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, transform, values) ;
+		cout << G[Eg].CentreGrad << endl;
+	//	G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, transform, values);
+	//	G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, transform, values) ;
 	}
 	cout <<"done" << endl;
 }
@@ -141,7 +143,7 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 		dvertex_type dt = vertex_map[t];
 		FEdge fe = g[*e];
 		
-		DEdge de(fe.length, fe.fault_length); //currently one set of edge properties. will fill out the other values inside the maximum flow function.
+		DEdge de(fe.length, fe.fault_length, fe.trace); //currently one set of edge properties. will fill out the other values inside the maximum flow function.
 		dedge_type frwd, back;
 		bool fadded, badded;
 		boost::tie(frwd, fadded) = boost::add_edge(ds, dt, de, dg);
@@ -164,11 +166,14 @@ void GEO::setup_maximum_flow(DGraph &dg)
 	{
 // 		dvertex_type s = source(*e, dg), t = target(*e, dg);
 // 		double hs = dg[s].elevation, ht = dg[t].elevation;
+
 		DEdge de = dg[*e];
-		const double area = (1 - std::exp(-de.full_length/100000)); //this will become a function later
+		const double area = (1 - std::exp(-de.full_length/100)); //this will become a function later
+		//const double area = (1 - std::exp(-de.full_length));
 		const double flow = area;// * (std::max<double>(hs - ht, 0)) / de.length;
 		dg[*e].capacity = flow;
 		dg[*e].residual_capacity = flow;
+		
 // 		cout << "capacity of edge " << *e << " from " << dg[s].index << " to " << dg[t].index << " is " << dg[*e].capacity << endl;
 	}
 }
@@ -354,18 +359,21 @@ double GEO::CentreGradient(line_type F, double transform[8], double** values)
 	geometry::append(cross, p2);
 
 	if (geometry::within(p1, pl) && geometry::within(p2, pl))
-	{		
+	{	
+		/*
 		if (getValue(p1, transform, values) > getValue(p2, transform, values))
 			return( (getValue(p1, transform, values) - getValue(p2,transform, values)) / geometry::length(cross) );
 		else
 			return( (getValue(p2, transform, values) - getValue(p1,transform, values)) / geometry::length(cross));
+			*/
+		return (abs(getValue(p1, transform, values) - getValue(p2,transform, values))) / geometry::length(cross);
 	}
 	else
 		return(0);
 }
 
 //convenience function to read a value from a 2D array, using a point as an index
-int GEO::getElevationFromArray(point_type p, const int *data){
+float GEO::getElevationFromArray(point_type p, const int *data){
 	int xind = (p.x() - GeoTransform[0]) / GeoTransform[1];
 	int yind = abs((p.y() - GeoTransform[3]) / GeoTransform[5]);
 	return data[yind*((int)GeoTransform[6])+xind];
@@ -554,7 +562,7 @@ void GEO::GetRasterProperties(std::string const& filename, double**& RASTER)
 	GDALAllRegister();
 	double adfGeoTransform[6];
 	int data;
-	float value = 0;
+	double value = 0;
 
 	poDataset = (GDALDataset *) GDALOpen( filename.c_str(), GA_ReadOnly );
 	if( poDataset == NULL ){
@@ -723,88 +731,81 @@ void GEO::WriteTxt(Graph& g, string const& filename)
 	else cout << "Ne results written" << endl;
 }
  
+ 
+ 
+ 
  void GEO::WriteSHP_lines(vector<line_type>lineaments, const char* Name)
  {
-// 	std::string ext_line;
-	GDALAllRegister();
-	GDALDataset *poDS;
-	GDALDriver *poDriver;
-	OGRLayer *poLayer;
-	OGRFeature *poFeature;
-	
-	const char *pszDriverName = "ESRI Shapefile";
-	char * pszWKT;
-	
-	//GeoRef_shp->exportToWkt( &pszWKT );
+ 	const char *pszDriverName = "ESRI Shapefile";
+    GDALDriver *poDriver;
+    GDALAllRegister();
+    
+    GDALDataset *poDS;
+    OGRLayer *poLayer;
 
-	poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
-	poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
+    poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
+    if( poDriver == NULL )
+    {
+        printf( "%s driver not available.\n", pszDriverName );
+        exit( 1 );
+    }
+    
+	poDS = poDriver->Create( "component.shp", 0, 0, 0, GDT_Unknown, NULL );
 	if( poDS == NULL )
 	{
-		printf( "Creation of shp-file failed.\n" );
+		printf( "Creation of output file failed.\n" );
 		exit( 1 );
 	}
-
-cout << " hh1" << endl;
-
-	poLayer = poDS->CreateLayer("c_comp", NULL, wkbLineString, NULL );
+	
+	poLayer = poDS->CreateLayer( "point_out", NULL, wkbLineString, NULL );
 	if( poLayer == NULL )
 	{
 		printf( "Layer creation failed.\n" );
 		exit( 1 );
 	}
 	
-	OGRFieldDefn oField( "No", OFTInteger );
-	oField.SetWidth(10);
+	OGRFieldDefn oField( "ID", OFTString );
+
+	oField.SetWidth(32);
+
 	if( poLayer->CreateField( &oField ) != OGRERR_NONE )
 	{
-		printf( "Creating 'No' field failed.\n" );
+		printf( "Creating ID field failed.\n" );
 		exit( 1 );
 	}
-
-	int NO = 1;
-	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
 	
-	
-	//write a WKT file and shp file-----------------------------------------
+	int id = 0;
 	BOOST_FOREACH(line_type line, lineaments)
 	{
-		float L = (float) geometry::length(line);
+		geometry::unique(line);
+		OGRFeature *poFeature;
+        poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
+        poFeature->SetField( "ID", id );
 
-		poFeature->SetField( "No", NO  );
-		//poFeature->SetField( "Length", L);
-		cout << " hh2" << endl;
-// 		ext_line.append("LINESTRING(");
+		
 		OGRLineString l;
-		l.setNumPoints(line.size());
 		BOOST_FOREACH(point_type P, line) 
-		{
-// 			ext_line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
-// 			if (!geometry::equals(P, line.back()))
-// 				ext_line.append(", ");
 			l.addPoint(P.x(), P.y());
-		}
-// 		ext_line.append( ")");
-// 		const char* extracted = (const char*) ext_line.c_str();
-// 		l.importFromWkt(&extracted);
+		
 		poFeature->SetGeometry( &l );
+
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{
 			printf( "Failed to create feature in shapefile.\n" );
 			exit( 1 );
 		}
-// 		ext_line.clear();
-		NO++;
+
+		OGRFeature::DestroyFeature( poFeature );
+		id++;
 	}
-	OGRFeature::DestroyFeature( poFeature );
-	GDALClose( poDS );
+    GDALClose( poDS );
  }
  
 //convert graph edges to shp-file---------------------------------------
 void GEO::WriteSHP(Graph G, const char* Name)
 {
 	line_type fault;
-// 	std::string line;
+ 	std::string line;
 
 	GDALAllRegister();
 	GDALDataset *poDS;
@@ -928,29 +929,151 @@ void GEO::WriteSHP(Graph G, const char* Name)
 
 		OGRLineString l;
 		l.setNumPoints(fault.size());
-// 		line.append("LINESTRING(");
+ 		//line.append("LINESTRING(");
+ 		int idx = 0;
 		BOOST_FOREACH(point_type P,fault) 
 		{
-// 			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
-// 			if (!geometry::equals(P, fault.back()))
-// 				line.append(", ");
-			l.addPoint(P.x(), P.y());
+			//line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+ 			//if (!geometry::equals(P, fault.back()))
+ 			//	line.append(", ");
+			l.setPoint(idx++, P.x(), P.y());
 		}
-// 		line.append( ")");
-// 		const char* branch = (const char*) line.c_str();
-// 		l.importFromWkt(&branch);
+		//line.append( ")");
+ 		//const char* branch = (const char*) line.c_str();
+ 		//l.importFromWkt(&branch);
 		poFeature->SetGeometry( &l );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{
 			printf( "Failed to create feature in shapefile.\n" );
 			exit( 1 );
 		}
-// 		line.clear();
+ 		//line.clear();
 		NO++;
 	}
 	OGRFeature::DestroyFeature( poFeature );
 	GDALClose( poDS );
 }
+
+
+void GEO::WriteSHP_maxFlow(DGraph G, const char* Name)
+{
+	
+	line_type fault;
+ 	std::string line;
+
+	GDALAllRegister();
+	GDALDataset *poDS;
+	GDALDriver *poDriver;
+	OGRLayer *poLayer;
+	OGRFeature *poFeature;
+	const char *pszDriverName = "ESRI Shapefile";
+
+	poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
+	poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
+	if( poDS == NULL )
+	{
+		printf( "Creation of shp-file failed.\n" );
+		exit( 1 );
+	}
+
+	poLayer = poDS->CreateLayer(Name, NULL, wkbLineString, NULL );
+	if( poLayer == NULL )
+	{
+		printf( "Layer creation failed.\n" );
+		exit( 1 );
+	}
+
+	OGRFieldDefn oField( "No", OFTInteger );
+	oField.SetWidth(10);
+	if( poLayer->CreateField( &oField ) != OGRERR_NONE )
+	{
+		printf( "Creating 'No' field failed.\n" );
+		exit( 1 );
+	}
+
+
+	OGRFieldDefn oField1( "Capacity", OFTReal );
+	oField1.SetWidth(10);
+	oField1.SetPrecision(5);
+	if( poLayer->CreateField( &oField1 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Capacity' field failed.\n" );
+		exit( 1 );
+	}
+
+	OGRFieldDefn oField2( "Residual", OFTReal );
+	oField2.SetWidth(10);
+	oField2.SetPrecision(5);
+	if( poLayer->CreateField( &oField2 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Data' field failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField3( "Fill", OFTReal );
+	oField3.SetWidth(10);
+	oField3.SetPrecision(5);
+	if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Data' field failed.\n" );
+		exit( 1 );
+	}
+	
+		
+	OGRFieldDefn oField4( "CapUsed", OFTReal );
+	oField4.SetWidth(10);
+	oField4.SetPrecision(5);
+	if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Data' field failed.\n" );
+		exit( 1 );
+	}
+
+	int NO = 1;
+	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
+	//write a WKT file and shp file-----------------------------------------
+	for (auto Eg : boost::make_iterator_range(edges(G))) 
+	{
+		fault = G[Eg].trace;
+
+		poFeature->SetField( "No", NO  );
+		poFeature->SetField( "Capacity", G[Eg].capacity);
+		poFeature->SetField( "Residual", G[Eg].residual_capacity);
+		
+		cout << G[Eg].residual_capacity << endl;
+		
+		poFeature->SetField( "Fill", (G[Eg].residual_capacity/G[Eg].capacity));
+		
+		poFeature->SetField( "CapUsed", (G[Eg].capacity-G[Eg].residual_capacity));
+
+		OGRLineString l;
+ 		line.append("LINESTRING(");
+		BOOST_FOREACH(point_type P,fault) 
+		{
+			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+ 			if (!geometry::equals(P, fault.back()))
+ 				line.append(", ");
+
+		}
+		line.append( ")");
+ 		const char* branch = (const char*) line.c_str();
+ 		l.importFromWkt(&branch);
+		poFeature->SetGeometry( &l );
+		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
+		{
+			printf( "Failed to create feature in shapefile.\n" );
+			exit( 1 );
+		}
+ 		line.clear();
+		NO++;
+	}
+	OGRFeature::DestroyFeature( poFeature );
+	GDALClose( poDS );
+}
+
+
+
+
 
 //convert graph edges to shp-file---------------------------------------
 void GEO::WriteSHP2(Graph G, const char* Name)
@@ -1280,9 +1403,12 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 //this function checks the vector of input line_types for faults that were split, and merges them back together
 void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 {
+	cout <<"corr" <<endl;
 	vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
 	list<line_type> unmerged_faults; //a list of faults that have not been merged yet. thye get removed from this list once they've been added to merged_faults, either by being merged with another fault segment, or on its own
 	unmerged_faults.insert(std::end(unmerged_faults), std::begin(F), std::end(F));
+	
+	cout <<"corr." <<endl;
 	
 	while (!unmerged_faults.empty())
 	{

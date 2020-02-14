@@ -63,7 +63,7 @@ class GEO
 	void Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb);
 	
 	int getElevation(point_type p, std::string const& filename);
-	int getElevationFromArray(point_type p, const int *data);
+	float getElevationFromArray(point_type p, const int *data);
 	void AssignValues(Graph& G, std::string const& filename);
 	void AssignValuesAll(Graph& G, std::string const& filename);
 	
@@ -90,6 +90,8 @@ class GEO
 	
 	void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], const char* Name);
 	void WriteSHP_lines(vector<line_type>lineaments, const char* Name);
+	void WriteSHP_maxFlow(DGraph G,  const char* Name);
+
 	void Source_Target(const char* Name, point_type &Source, point_type &Target);
 
 };

@@ -1,0 +1,34 @@
+Nodes: 	5
+EDGES: 	4
+Components: 	1
+Edgenodes: 	0
+Inodes: 	4
+Ynodes: 	0
+Xnodes: 	1
+Enodes: 	0
+II-Branches: 	0
+IC-Branches: 	4
+CC-Branches: 	0
+ Connections (Y +X): 	1
+ Total length:					101.455
+ Average length: 	25.3636
+Connecting node frequency: 	0.000426587
+Branch frequency: 	0.00170635
+Line frequency: 	0.000853173
+2D Intesnsity: 	0.0432791
+Dimensionless intesity: 	1.09772
+Average degree of network: 	1.6
+Average connections: 	0.4
+Number of components (c): 	1
+Number of faces (f): 	1
+Density (d): 4.39086
+KDE edge orientation
+Fault sets:	0
+Angle 	 Density 	 Smoothed Density
+45.279	 0.0199471
+45.279	 0.0199471
+139.416	 0.0199466
+139.519	 0.0199466
+
+Generation 	 Angle 	 Probability
+
