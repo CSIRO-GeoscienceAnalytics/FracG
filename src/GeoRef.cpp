@@ -433,12 +433,13 @@ int GEO::readRaster(std::string const filename, T *&data){
 }
 
  //read pixel value of DEM at coodinate
-int GEO::getElevation(point_type p, std::string const& filename)
+double GEO::getElevation(point_type p, std::string const& filename)
 {
 	const char * name = filename.c_str();
 	GDALDataset  *poDataset;
 	GDALAllRegister();
-	int value = 0, X, Y, Data ;
+	int X, Y, Data ;
+	double value = 0;
 
 	poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
 	if( poDataset == NULL ){
