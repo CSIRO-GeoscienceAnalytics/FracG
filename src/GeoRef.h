@@ -62,7 +62,7 @@ class GEO
 	void Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double max_len);
 	void Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb);
 	
-	int getElevation(point_type p, std::string const& filename);
+	double getElevation(point_type p, std::string const& filename);
 	template<typename T> T getElevationFromArray(point_type p, const T *data);
 	void AssignValues(Graph& G, std::string const& filename);
 	void AssignValuesAll(Graph& G, std::string const& filename);
