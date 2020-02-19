@@ -347,7 +347,7 @@ void CalculateBestDistParams(vector<double> &values, const ModelHolder<T> &model
 	for (auto it = values.begin(); it <= xmax; it++)
 	{
 		//first check to see if we have any values that are strictly larger than our proposed minimum
-		if (*it >= values.back()) continue; //they're sorted, so if this one doesn't have enything higher than it, none of the others will either
+		if (*it >= values.back()) continue; //they're sorted, so if this one doesn't have anything higher than it, none of the others will either
 		T this_params = model.calculate_params_func(values, it);
 		const double this_ks = KSTest(values, model, this_params, it);
 		#pragma omp critical
@@ -574,7 +574,7 @@ vector<double> GetSampleSingles(const ModelHolder<T> &model, const T &params, co
 	vector<double> samples;
 	samples.reserve(n_samples);
 	const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
-	const double p_lower = (xmin - values.begin())/values.size(); //probability with which to use the below-xmin portion of the samples 
+	const double p_lower = (xmin - values.begin())/(double)values.size(); //probability with which to use the below-xmin portion of the samples 
 	std::uniform_real_distribution<double> uniform01(0.0, 1.0);
 	std::uniform_int_distribution<int> lower_selector(0, max_low);
 	for (int i = 0; i < n_samples; i++)
