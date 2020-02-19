@@ -441,8 +441,19 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 
 	vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  
 	
+
 	double cur_y = max_y;
 	double cur_x = min_x;
+	
+	//put the segments into an rtree, so we don't need to check each one
+	typedef std::pair<box, decltype(lineString)::iterator> box_line; //a bounding box arund the linestring, and the linestring
+	geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
+	for (auto it = lineString.begin(); it < lineString.end(); it++)
+	{
+		box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
+		line_tree.insert(std::make_pair(fault_bounding_box, it));
+	}
+	
 	
 	cout << setprecision(10) << cur_x << " " << cur_y << endl;
 
@@ -473,17 +484,20 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 
 			double intersec = 0;
 		
-			std::list<line_type> output;
-			BOOST_FOREACH(line_type l, lineString)
+// 			std::list<line_type> output;
+			//get the lines that have intersecting bounding boxes
+			std::vector<box_line> candidates;
+			line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));
+			for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
 			{
-				if (!geometry::disjoint(l, pixel))
+				//then check the full linestring to see if they intersect with this pixel
+				if (!geometry::disjoint(*candidate->second, pixel))
 				{
 					intersec++;
 				}
-					
 			}
-// 			vec[i][j] = intersec;
-			vec[i][j] = grad;;
+			vec[i][j] = intersec;
+// 			vec[i][j] = grad;;
 
 			cur_y-= box_size;
 			++(*show_progress);
@@ -494,7 +508,7 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	}
 	cout << " done "<< endl;
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec, pszWKT, adfGeoTransform, "P20.tif");
+	georef.WriteRASTER(vec, pszWKT, adfGeoTransform, "P21.tif");
 }
 
 
