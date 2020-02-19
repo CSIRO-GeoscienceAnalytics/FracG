@@ -439,10 +439,22 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	int x_size = (long int) ceil((geometry::distance(ll, lr) / box_size));
 	int y_size = (long int) ceil((geometry::distance(ll, ul) / box_size));
 
-	vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  
+	vector<vector<double> > vec_count (x_size , vector<double> (y_size, 0));  
+	vector<vector<double> > vec_length(x_size , vector<double> (y_size, 0));  
 	
+
 	double cur_y = max_y;
 	double cur_x = min_x;
+	
+	//put the segments into an rtree, so we don't need to check each one
+	typedef std::pair<box, decltype(lineString)::iterator> box_line; //a bounding box arund the linestring, and the linestring
+	geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
+	for (auto it = lineString.begin(); it < lineString.end(); it++)
+	{
+		box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
+		line_tree.insert(std::make_pair(fault_bounding_box, it));
+	}
+	
 	
 	cout << setprecision(10) << cur_x << " " << cur_y << endl;
 
@@ -450,7 +462,7 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 // query for distance to fault centre at every grid cell----------------
 
 	cout << "Calulating P21 map for raster with size \n"
-		 << vec.size()<< " x " << vec[0].size() << endl;
+		 << vec_count.size()<< " x " << vec_count[0].size() << endl;
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
 	const double grad_start = 1000;
 	double grad = grad_start;
@@ -472,18 +484,31 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 			box pixel(minBox, maxBox);
 
 			double intersec = 0;
+			double intersection_length = 0;
 		
-			std::list<line_type> output;
-			BOOST_FOREACH(line_type l, lineString)
+// 			std::list<line_type> output;
+			//get the lines that have intersecting bounding boxes
+			std::vector<box_line> candidates;
+			line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));
+			for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
 			{
-				if (!geometry::disjoint(l, pixel))
+				//then check the full linestring to see if they intersect with this pixel
+				if (!geometry::disjoint(*candidate->second, pixel))
 				{
-					intersec++;
-				}
+					intersec++; //intersection count for the P20 map
+					//and sum the length of the intersection(s) for the P21 map
+					geometry::model::multi_linestring<line_type> intersecting;
+					geometry::intersection(pixel, *candidate->second, intersecting);
+					for (auto intersec_it = intersecting.begin(); intersec_it < intersecting.end(); intersec_it++)
+					{
+						intersection_length += geometry::length(*intersec_it);
+					}
 					
+				}
 			}
-// 			vec[i][j] = intersec;
-			vec[i][j] = grad;;
+			vec_count[i][j] = intersec;
+			vec_length[i][j] = intersection_length;
+// 			vec[i][j] = grad;;
 
 			cur_y-= box_size;
 			++(*show_progress);
@@ -494,7 +519,8 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	}
 	cout << " done "<< endl;
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec, pszWKT, adfGeoTransform, "P20.tif");
+	georef.WriteRASTER(vec_count, pszWKT, adfGeoTransform, "P20.tif");
+	georef.WriteRASTER(vec_length, pszWKT, adfGeoTransform, "P21.tif");
 }
 
 
