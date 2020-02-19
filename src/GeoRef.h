@@ -63,19 +63,19 @@ class GEO
 	void Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb);
 	
 	int getElevation(point_type p, std::string const& filename);
-	float getElevationFromArray(point_type p, const int *data);
+	template<typename T> T getElevationFromArray(point_type p, const T *data);
 	void AssignValues(Graph& G, std::string const& filename);
 	void AssignValuesAll(Graph& G, std::string const& filename);
 	
-	void AssignValuesGraph(Graph& G, double transform[8], double** values);
+	template<typename T>void AssignValuesGraph(Graph& G, double transform[8], T** values);
 	DGraph MakeDirectedGraph(Graph &g);
 	void setup_maximum_flow(DGraph &dg);
 	double maximum_flow(DGraph &dg, point_type source, point_type target);
 	double maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t);
 	polygon_type BoundingBox(double transform[8], double raster_crop_size);
-	double getValue(point_type p, double transform[8], double** values);
+	template<typename T> T getValue(point_type p, double transform[8], T** values);
 	double LineExtractor(line_type L, double Transform[8], double** raster);
-	double CentreGradient(line_type F, double transform[8], double** values);
+	template<typename T>double CentreGradient(line_type F, double transform[8], T** values);
 	double CrossGradient(line_type F, double transform[8], double** values);
 	double ParallelGradient(line_type F, double transform[8], double** values);
 	

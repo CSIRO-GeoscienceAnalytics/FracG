@@ -55,9 +55,9 @@ void GEO::AssignValues(Graph& G, std::string const& filename)
 //read the entire file at once, rather than one at a time. gives faster IO. This assumes that we can fit the entire file in memory at once.
 void GEO::AssignValuesAll(Graph& G, std::string const& filename)
 {
-
-	int *data = nullptr;
-	readRaster<int>(filename, data);
+	//read the same datatype as the type of elevation in our vertex class
+	decltype(Graph::vertex_descriptor.elevation) *data = nullptr;
+	readRaster(filename, data);
 	for (auto vd : boost::make_iterator_range(vertices(G))) 
 	{       
 		point_type p = G[vd].location;
@@ -67,7 +67,8 @@ void GEO::AssignValuesAll(Graph& G, std::string const& filename)
 	CPLFree(data);
 }
 
-void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
+template <typename T>
+void GEO::AssignValuesGraph(Graph& G, double transform[8], T** values)
 {
 	STATS stats;
 	line_type curEdge;
@@ -96,6 +97,10 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 	}
 	cout <<"done" << endl;
 }
+//make these instatiations so that other cpp files can find them
+template void GEO::AssignValuesGraph<double>(Graph& G, double transform[8], double** values);
+template void GEO::AssignValuesGraph<float>(Graph& G, double transform[8], float** values);
+template void GEO::AssignValuesGraph<int>(Graph& G, double transform[8], int** values);
 
 void GEO::ReprojectVECTOR2WGS84(std::string const& filename)
 {
@@ -152,7 +157,7 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 		dg[frwd].reverse = back;
 		dg[back].reverse = frwd;
 		
-// 		cout << "added edge (" << ds << ", " << dt << ") from " << *e << endl;
+// 		cout << "added edge (" << ds f<< ", " << dt << ") from " << *e << endl;
 	}
 	return dg;
 }
@@ -340,7 +345,9 @@ double GEO::ParallelGradient(line_type F, double transform[8], double** values)
 	else
 		return(0);
 }
-double GEO::CentreGradient(line_type F, double transform[8], double** values)
+
+template <typename T>
+double GEO::CentreGradient(line_type F, double transform[8], T** values)
 {
 	//Convert from map to pixel coordinates and read values at centre of line
 	//Only works for geotransforms with no rotation.
@@ -381,7 +388,8 @@ double GEO::CentreGradient(line_type F, double transform[8], double** values)
 }
 
 //convenience function to read a value from a 2D array, using a point as an index
-float GEO::getElevationFromArray(point_type p, const int *data){
+template <typename T>
+T GEO::getElevationFromArray(point_type p, const T *data){
 	int xind = (p.x() - GeoTransform[0]) / GeoTransform[1];
 	int yind = abs((p.y() - GeoTransform[3]) / GeoTransform[5]);
 	return data[yind*((int)GeoTransform[6])+xind];
@@ -452,7 +460,8 @@ int GEO::getElevation(point_type p, std::string const& filename)
 	return (value);
 }
 
-double GEO::getValue(point_type p, double transform[8], double** values)
+template <typename T>
+T GEO::getValue(point_type p, double transform[8], T** values)
 {
 	polygon_type pl = BoundingBox(transform, 1);
 	if(geometry::within(p,pl))
