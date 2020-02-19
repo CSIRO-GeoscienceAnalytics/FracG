@@ -90,7 +90,7 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], double** values)
 		//G[Eg].Centre     = getValue(centre, transform, values);
 	//	G[Eg].MeanValue  = LineExtractor(G[Eg].trace, transform, values) ;
 		G[Eg].CentreGrad = CentreGradient(G[Eg].trace, transform, values);
-		cout << G[Eg].CentreGrad << endl;
+// 		cout << G[Eg].CentreGrad << endl;
 	//	G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, transform, values);
 	//	G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, transform, values) ;
 	}
@@ -208,6 +208,13 @@ double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
 		std::swap(s, t);
 		cout << "Swapping source and target to find maximum flow from higher location to lower location" << endl;
 	}
+	
+	//sanity check, make sure we're not calculating the max flow from a vertex to itself
+	if (s == t){
+		cout << "Warning: The source and target points for the maximum flow (" << s << ") are the same" << endl;
+		return std::numeric_limits<double>::infinity();
+	}
+	
 	cout << "Calculating maximum flow from vertex " << s << " (" << dg[s].elevation << "m) to vertex " << t << " (" << dg[t].elevation << ")" << endl;
 	
 	//clear capacities for verticies that are above the source
@@ -232,6 +239,7 @@ double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
 // 	t = boost::target(*eprev, dg);
 	double max_flow = maximum_flow(dg, s, t);
 	//now restore capacities
+	//or don't restore capacities, and instead use them to mark the faults as unusuable
 // 	for (auto p = saved_capacities.begin(); p != saved_capacities.end(); p++)
 // 	{
 // 		dedge_type e = p->first;
@@ -1025,7 +1033,25 @@ void GEO::WriteSHP_maxFlow(DGraph G, const char* Name)
 	oField4.SetPrecision(5);
 	if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
 	{
-		printf( "Creating 'Data' field failed.\n" );
+		printf( "Creating 'Capacity Used' field failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField5( "RelCapUsed", OFTReal );
+	oField5.SetWidth(10);
+	oField5.SetPrecision(5);
+	if( poLayer->CreateField( &oField5 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Relative Capacity Used' field failed.\n" );
+		exit( 1 );
+	}
+	
+	OGRFieldDefn oField6( "AbsCapUsed", OFTReal );
+	oField6.SetWidth(10);
+	oField6.SetPrecision(5);
+	if( poLayer->CreateField( &oField6 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Absolute Capacity Used' field failed.\n" );
 		exit( 1 );
 	}
 
@@ -1040,24 +1066,32 @@ void GEO::WriteSHP_maxFlow(DGraph G, const char* Name)
 		poFeature->SetField( "Capacity", G[Eg].capacity);
 		poFeature->SetField( "Residual", G[Eg].residual_capacity);
 		
-		cout << G[Eg].residual_capacity << endl;
+		//cout << G[Eg].residual_capacity << endl;
 		
-		poFeature->SetField( "Fill", (G[Eg].residual_capacity/G[Eg].capacity));
+		//convenience names
+		const double  cap = G[Eg].capacity;
+		const double rcap = G[Eg].residual_capacity;
 		
-		poFeature->SetField( "CapUsed", (G[Eg].capacity-G[Eg].residual_capacity));
+		poFeature->SetField( "Fill", (rcap/cap));
+		
+		poFeature->SetField( "CapUsed", (cap-rcap));
+		
+		poFeature->SetField("RelCapUsed", (0 < cap) && (rcap <= cap) ? 1 - rcap/cap : 0); //relative amount of capacity used
+		
+		poFeature->SetField("AbsCapUsed", (0 < cap) && (rcap <= cap) ? cap - rcap : 0); //absolute amount of capacity used
 
 		OGRLineString l;
- 		line.append("LINESTRING(");
+//  		line.append("LINESTRING(");
 		BOOST_FOREACH(point_type P,fault) 
 		{
-			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
- 			if (!geometry::equals(P, fault.back()))
- 				line.append(", ");
-
+// 			line.append(std::to_string(P.x()) + " " + std::to_string(P.y()));
+//  			if (!geometry::equals(P, fault.back()))
+//  				line.append(", ");
+			l.addPoint(P.x(), P.y());
 		}
-		line.append( ")");
- 		const char* branch = (const char*) line.c_str();
- 		l.importFromWkt(&branch);
+// 		line.append( ")");
+//  		const char* branch = (const char*) line.c_str();
+//  		l.importFromWkt(&branch);
 		poFeature->SetGeometry( &l );
 		if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
 		{
@@ -1292,7 +1326,11 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 	bool changed;
 	const double angle_threshold = 25 * math::constants::pi<double>() / 180; //25 degrees, in radians
 	
+	//need to put these in an rtree or something
+	
 	do {
+		//a front match is one that matches to the front of the base fault/line segment, a back match is one that matches to the back of the base fault/line segment
+		//use faults.end() as a sentinel value to mark that a match hasn't been found
 		std::list<line_type>::iterator front_match = faults.end(), back_match = faults.end(), candidate;
 		bool front_match_loc = false, back_match_loc = false; //true iff we're matching to the front of the other linestring
 		std::vector<std::tuple<std::list<line_type>::iterator, bool>> front_matches, back_matches;
@@ -1342,15 +1380,6 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 				if (front_match == faults.end()) break;
 			}
 		}
-		if (front_match != faults.end())
-		{
-			line_type prepend = *front_match;
-			if (front_match_loc) geometry::reverse(prepend);
-			geometry::append(prepend, base);
-			base = prepend;
-			faults.erase(front_match);
-			changed = true;
-		}
 		//check for matches to the back of base
 		best_angle = std::numeric_limits<double>::infinity(); //reset the best angle varaible
 		for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
@@ -1365,6 +1394,7 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 				back_match_loc = match_loc;
 			}
 		}
+		
 		//if there is more than one candidate, check to see if they should be merged into each other instead
 		if (back_match != faults.end() && back_matches.size() >= 2)
 		{
@@ -1387,6 +1417,32 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 				if (back_match == faults.end()) break;
 			}
 		}
+		
+		
+		
+// 		this is clunky, but we need to wait to erase the front match, because we need the iterator to be valid long enough to compare it to the back match
+		if ( (front_match != faults.end()) && (front_match == back_match) ) 
+		{
+			//in this case, the same other fault is considered a match for either end of the fault segment currently being considered
+			//so figure out which end it other fault should be matched to
+
+			double front_angle = abs(CalculateAngleDifference(base, true, *front_match, front_match_loc));
+			double back_angle  = abs(CalculateAngleDifference(base, false, *back_match,  back_match_loc));
+			//mark the one with a worse angle as the one that doesn't match
+			if (front_angle <= back_angle) back_match = faults.end();
+			else front_match = faults.end();
+		}
+		
+		if (front_match != faults.end())
+		{
+			line_type prepend = *front_match;
+			if (front_match_loc) geometry::reverse(prepend);
+			geometry::append(prepend, base);
+			base = prepend;
+			faults.erase(front_match);
+			changed = true;
+		}
+		
 		if (back_match != faults.end()){
 			line_type append = *back_match;
 			if (!back_match_loc) geometry::reverse(append);
@@ -1403,20 +1459,20 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 //this function checks the vector of input line_types for faults that were split, and merges them back together
 void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 {
-	cout <<"corr" <<endl;
 	vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
 	list<line_type> unmerged_faults; //a list of faults that have not been merged yet. thye get removed from this list once they've been added to merged_faults, either by being merged with another fault segment, or on its own
 	unmerged_faults.insert(std::end(unmerged_faults), std::begin(F), std::end(F));
 	
-	cout <<"corr." <<endl;
 	
+	cout <<"merging split faults - starting" <<endl;
 	while (!unmerged_faults.empty())
 	{
 		line_type base = unmerged_faults.front();
-		unmerged_faults.pop_front();
+		unmerged_faults.pop_front(); //I don't know why this doesn't also return the value being pop'd
 		MergeConnections(unmerged_faults, base, dist);
 		merged_faults.push_back(base);
 	}
+	cout <<"merging split faults - finished" <<endl;
 	F = merged_faults;
 }
 

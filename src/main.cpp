@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 		geo.read_wkt(vecFile, faults);  
 //----------------------------------------------------------------------
 	geom.CentreDistanceMap(vecFile, 500.0);
-	geom.P21Map(vecFile, 1000.0);
+	geom.P21Map(vecFile, 10.0);
 	
 	geo.CorrectNetwork(faults, Dist);//rejoin faults that are incorrectly split in the data file
  	stats.CreateStats(txtF, faults); // statistical analysis of network
@@ -95,9 +95,9 @@ int main(int argc, char *argv[])
 	G.SplitFaults(graph1, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
 	G.RemoveSpurs(graph1, map, Dist); //remove any spurs from the graph network
 	
-	G.GraphAnalysis(graph1, faults, txtF2, 10); 
 	geo.WriteSHP(graph1,  "Branches.shp");
 	geo.WriteSHP2(graph1, "Vertices.shp");
+	G.GraphAnalysis(graph1, faults, txtF2, 10); 
 	G.ComponentExtract(graph1, faults);
 	//---------------------------------------------------------------------- 
 	//source.set<0>(15130685.7139);
@@ -105,10 +105,21 @@ int main(int argc, char *argv[])
 	
 	source.set<0>(1496306.0818);
 	source.set<1>(1976279.0273);
+// 	source.set<0>(15127221);
+// 	source.set<1>(-3611090);
 	
 	target.set<0>(1564883.4758);
 	target.set<1>(1976873.5755);
+// 	target.set<0>(15143090);
+// 	target.set<1>(-3605330);
 
+	//poster graph
+// 	source.set<0>(15130987.84); source.set<1>(-3595062.64);
+// 	target.set<0>(15130755.4); target.set<1>(-3596830.4);
+	
+	source.set<0>(15130987.84); source.set<1>(-3595062.64);
+	target.set<0>(15130680.155); target.set<1>(-3596666.026);
+	
  	//G.ShortPath(graph1, map, source, target, 500);
 	//G.MinTree(graph1);
 	//G.CreateFractures(frac_graph, map, faults, rasFile ); 

@@ -391,7 +391,7 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	poLayer->ResetReading();
 	
 //now we read the line features and put them in a vector----------------        
-	poLayer->ResetReading();
+	poLayer->ResetReading(); //you do this twice
 	OGRFeature *poFeature;
 	int index = 0;
 	while( (poFeature = poLayer->GetNextFeature()) != NULL )
@@ -416,7 +416,7 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	}
 	GDALClose( poDS );
 	
-	georef.CorrectNetwork(lineString, 10);
+	georef.CorrectNetwork(lineString, 10); //Don't use magic numbers
 //======================================================================
 
 	
@@ -446,48 +446,50 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	
 	cout << setprecision(10) << cur_x << " " << cur_y << endl;
 
-cout << " ----- " << endl;
+	cout << " ----- " << endl;
 // query for distance to fault centre at every grid cell----------------
 
 	cout << "Calulating P21 map for raster with size \n"
 		 << vec.size()<< " x " << vec[0].size() << endl;
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
-	double grad = 1000;
+	const double grad_start = 1000;
+	double grad = grad_start;
 	for (int i = 0; i < x_size; i++)
 	{
-	cur_y = max_y;
-	
+		cur_y = max_y;
+		grad = grad_start;
+		
 		for (int j = 0; j < y_size; j++)
 		{
 
-		point_type cur_pos(cur_x, cur_y);
-		
-		//cout << setprecision(10) << cur_x << " " << cur_y << endl;
-		
-		point_type minBox(cur_x, (cur_y - box_size));
-		point_type maxBox((cur_x + box_size), cur_y );
+			point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
+			
+			//cout << setprecision(10) << cur_x << " " << cur_y << endl;
+			
+			point_type minBox(cur_x, (cur_y - box_size));
+			point_type maxBox((cur_x + box_size), cur_y );
 
-		box pixel(minBox, maxBox);
+			box pixel(minBox, maxBox);
 
-		double intersec = 0;
-	
-		std::list<line_type> output;
+			double intersec = 0;
+		
+			std::list<line_type> output;
 			BOOST_FOREACH(line_type l, lineString)
 			{
 				if (!geometry::disjoint(l, pixel))
 				{
-				intersec++;
+					intersec++;
 				}
 					
 			}
-			vec[i][j] = intersec;
-		//vec[i][j] = grad;;
+// 			vec[i][j] = intersec;
+			vec[i][j] = grad;;
 
-		cur_y-= box_size;
-		 ++(*show_progress);
+			cur_y-= box_size;
+			++(*show_progress);
 		
+			grad -= 10;
 		}
-		grad -= 10;
 		cur_x += box_size;
 	}
 	cout << " done "<< endl;
