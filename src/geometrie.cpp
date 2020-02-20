@@ -439,15 +439,15 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	int x_size = (long int) ceil((geometry::distance(ll, lr) / box_size));
 	int y_size = (long int) ceil((geometry::distance(ll, ul) / box_size));
 
-	vector<vector<double> > vec_count (x_size , vector<double> (y_size, 0));  
-	vector<vector<double> > vec_length(x_size , vector<double> (y_size, 0));  
+	vector<vector<double> > vec_count (x_size , vector<double> (y_size, 0));
+	vector<vector<double> > vec_length(x_size , vector<double> (y_size, 0));
 	
 
 	double cur_y = max_y;
 	double cur_x = min_x;
 	
 	//put the segments into an rtree, so we don't need to check each one
-	typedef std::pair<box, decltype(lineString)::iterator> box_line; //a bounding box arund the linestring, and the linestring
+	typedef std::pair<box, decltype(lineString)::iterator> box_line; //a bounding box around the linestring, and the linestring
 	geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
 	for (auto it = lineString.begin(); it < lineString.end(); it++)
 	{
