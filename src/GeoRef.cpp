@@ -1282,7 +1282,7 @@ void GEO::Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb)
 //returns close to 0 if the lines are close to having the same angle, or larger angles if the line_types are not in line with each other
 double CalculateAngleDifference(line_type &a, bool a_front, line_type &b, bool b_front)
 {
-	//get the two relevant end points of the oine segments, as it is the first/last two points that define the ending segment of the line_type
+	//get the two relevant end points of the line segments, as it is the first/last two points that define the ending segment of the line_type
 	point_type a1, a2, b1, b2;
 	//normalise the points so that they are in the order (b2 -> b1) <-> (a1 -> a2)
 	//(matching to the "front" of a and the "back" of b, relative to this diagram)
@@ -1319,10 +1319,22 @@ double CalculateAngleDifference(line_type &a, bool a_front, line_type &b, bool b
 	return theta;
 }
 
+//   typedef the rtree here so both functions can see the same type. not putting it in the header because no other function uses it
+typedef list<line_type> unmerged_type; //might want to change this to a set or map
+typedef std::tuple<point_type, unmerged_type::iterator, bool> endpoint_value_type;
+typedef geometry::index::rtree<endpoint_value_type, geometry::index::rstar<16>> endpoint_rtree_type;
+
+//convenience function to remove enfpoints from the endpoint rtree, given an iterator
+void remove_endpoints(endpoint_rtree_type &rtree, list<line_type>::iterator it)
+{
+	rtree.remove(std::make_tuple(it->front(), it, true ));
+	rtree.remove(std::make_tuple(it->back (), it, false));
+}
+
 //sometimes the data has faults that are split into different entries in the shapefile
 //this function checks the vector of input line_types for faults that were split, and merges them back together
 //this checks for any and all fault segments that should be merged back with base
-bool MergeConnections(std::list<line_type> &faults, line_type &base, double distance_threshold)
+bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, line_type &base, double distance_threshold)
 {
 	//our thresholds for merging fault segments together are:
 	//1) Their endpoints are within threshold distance of each other
@@ -1336,23 +1348,38 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 	bool changed;
 	const double angle_threshold = 25 * math::constants::pi<double>() / 180; //25 degrees, in radians
 	
-	//need to put these in an rtree or something
+	const double dt = distance_threshold; //convenience name
 	
 	do {
 		//a front match is one that matches to the front of the base fault/line segment, a back match is one that matches to the back of the base fault/line segment
 		//use faults.end() as a sentinel value to mark that a match hasn't been found
-		std::list<line_type>::iterator front_match = faults.end(), back_match = faults.end(), candidate;
+		unmerged_type::iterator front_match = faults.end(), back_match = faults.end(), candidate;
 		bool front_match_loc = false, back_match_loc = false; //true iff we're matching to the front of the other linestring
-		std::vector<std::tuple<std::list<line_type>::iterator, bool>> front_matches, back_matches;
+		std::vector<std::tuple<unmerged_type::iterator, bool>> front_matches, back_matches;
 		bool match_loc;
-		for (auto comp_it = faults.begin(); comp_it != faults.end(); comp_it++)
+		//use boxes, because boost doesn't have a circle geometry object (just a polygon/linestring that approximates a circle)
+		box front_box(point_type(base.front().x() - dt, base.front().y() - ht), point_type(base.front().x() + dt, base.front().y() + ht));
+		box  back_box(point_type(base.back ().x() - dt, base.back ().y() - ht), point_type(base.back ().x() + dt, base. back().y() + ht));
+		vector<endpoint_value_type> candidates;
+		endpoints.query(geometry::index::intersects(front_box), back_inserter(candidates));
+		for (auto cand_it = candidates.begin(); cand_it != candidates.end(); cand_it++)
 		{
+			unmerged_type::iterator comp_it = std::get<1>(*cand_it);
 			//the line segments could be in any order, so we need to check all four pairs of endpoints
 			if (geometry::distance(base.front(), comp_it->front()) <= distance_threshold) front_matches.push_back(make_tuple(comp_it,  true));
 			if (geometry::distance(base.front(), comp_it-> back()) <= distance_threshold) front_matches.push_back(make_tuple(comp_it, false));
+		}
+		
+		//now check for possible matches against the back of this (base) fault
+		candidates.clear();
+		endpoints.query(geometry::index::intersects(back_box), back_inserter(candidates));
+		for (auto cand_it = candidates.begin(); cand_it != candidates.end(); cand_it++)
+		{
+			unmerged_type::iterator comp_it = std::get<1>(*cand_it);
 			if (geometry::distance(base.back() , comp_it->front()) <= distance_threshold)  back_matches.push_back(make_tuple(comp_it,  true));
 			if (geometry::distance(base.back() , comp_it-> back()) <= distance_threshold)  back_matches.push_back(make_tuple(comp_it, false));
 		}
+			
 		changed = false;
 		//check for matches to the front of base
 		double best_angle = std::numeric_limits<double>::infinity();
@@ -1373,12 +1400,12 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 		{
 			for (auto it1 = front_matches.begin(); it1 != front_matches.end(); it1++)
 			{
-				std::list<line_type>::iterator f1 = std::get<0>(*it1);
+				unmerged_type::iterator f1 = std::get<0>(*it1);
 				bool front1 = std::get<1>(*it1);
 				for (auto it2 = it1; it2 != front_matches.end(); it2++)
 				{
 					if (it1 == it2) continue;
-					std::list<line_type>::iterator f2 = std::get<0>(*it2);
+					unmerged_type::iterator f2 = std::get<0>(*it2);
 					bool front2 = std::get<1>(*it2);
 					double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
 					if (angle_diff < best_angle)
@@ -1410,12 +1437,12 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 		{
 			for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
 			{
-				std::list<line_type>::iterator f1 = std::get<0>(*it1);
+				unmerged_type::iterator f1 = std::get<0>(*it1);
 				bool front1 = std::get<1>(*it1);
 				for (auto it2 = it1; it2 != back_matches.end(); it2++)
 				{
 					if (it1 == it2) continue;
-					std::list<line_type>::iterator f2 = std::get<0>(*it2);
+					unmerged_type::iterator f2 = std::get<0>(*it2);
 					bool front2 = std::get<1>(*it2);
 					double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
 					if (angle_diff < best_angle)
@@ -1449,6 +1476,7 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 			if (front_match_loc) geometry::reverse(prepend);
 			geometry::append(prepend, base);
 			base = prepend;
+			remove_endpoints(endpoints, front_match);
 			faults.erase(front_match);
 			changed = true;
 		}
@@ -1457,6 +1485,7 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 			line_type append = *back_match;
 			if (!back_match_loc) geometry::reverse(append);
 			geometry::append(base, append);
+			remove_endpoints(endpoints, back_match);
 			faults.erase(back_match);
 			changed = true;
 		}
@@ -1470,16 +1499,24 @@ bool MergeConnections(std::list<line_type> &faults, line_type &base, double dist
 void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 {
 	vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
-	list<line_type> unmerged_faults; //a list of faults that have not been merged yet. thye get removed from this list once they've been added to merged_faults, either by being merged with another fault segment, or on its own
+	unmerged_type unmerged_faults; //a list of faults that have not been merged yet. thye get removed from this list once they've been added to merged_faults, either by being merged with another fault segment, or on its own
 	unmerged_faults.insert(std::end(unmerged_faults), std::begin(F), std::end(F));
+	
+	endpoint_rtree_type endpoint_tree;
+	for (auto it = unmerged_faults.begin(); it != unmerged_faults.end(); it++)
+	{
+		endpoint_tree.insert(std::make_tuple(it->front(), it, true ));
+		endpoint_tree.insert(std::make_tuple(it->back (), it, false));
+	}
 	
 	
 	cout <<"merging split faults - starting" <<endl;
 	while (!unmerged_faults.empty())
 	{
 		line_type base = unmerged_faults.front();
+		remove_endpoints(endpoint_tree, unmerged_faults.begin());
 		unmerged_faults.pop_front(); //I don't know why this doesn't also return the value being pop'd
-		MergeConnections(unmerged_faults, base, dist);
+		MergeConnections(unmerged_faults, endpoint_tree, base, dist);
 		merged_faults.push_back(base);
 	}
 	cout <<"merging split faults - finished" <<endl;
