@@ -1396,29 +1396,58 @@ FSTATS STATS::KMCluster(bool input, int No, FSTATS faultStats)
 	return result;
 }
 
+//evaluate the kernel density esimation, with an gaussian kernel, at an arbitrary point
+//angles is the array of angles in degrees, smooth is a smoothing factor (>0), and x is the point to be evaluated at
+double evaluate_angle_kde(arma::vec &angles, const double smooth, double x)
+{
+	x = std::fmod(x, MAX_ANGLE);
+	double sum = 0;
+	const double s2 = smooth*smooth;
+	for (auto it = angles.begin(); it < angles.end(); it++)
+	{
+		//because the kde wraps around, exavluate it on either side of the gaussian
+		const double x0 = *it;
+		double xd1 = x - x0;
+		double xd2 = MAX_ANGLE - std::abs(xd1);
+		sum += std::exp(-0.5 * xd1 * xd2 / s2);
+		sum += std::exp(-0.5 * xd2 * xd2 / s2);
+	}
+	return sum/(sqrt(2*M_PI) * angles.size() * smooth);
+}
+
+//return an evenly-sampled array of the kde that represents the given values and smoothing factor
+arma::vec angle_kde_fill_array(int nsamples, arma::vec &angles, const double smooth)
+{
+	arma::vec sampled(nsamples);
+	for (unsigned int i = 0; i < nsamples; i++){
+		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / (double) nsamples);
+	}
+	return sampled;
+}
+
 //gaussion kernel for kde
 float k_gauss( double val)
 {
- const double p = 1.0 / sqrt( 2.0 * M_PI);
- float result = 0.5 * (val*val);
- result = p * std::exp(- result);
- return result;
+	const double p = 1.0 / sqrt( 2.0 * M_PI);
+	float result = 0.5 * (val*val);
+	result = p * std::exp(- result);
+	return result;
 }
 
 //simple KDE
 vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
- {
- vector< std::pair<double, double> > density( len );
- 
- arma::vec val2(len,fill::zeros);
- int i = 0;
- for (auto& v : val)
-	 val2[i] = v + 180;
-	 
- vec val3 = join_cols<vec>(val, val2);
- len = val.size();
- 
- const double p = 1.0 / (b * len );
+{
+	vector< std::pair<double, double> > density( len );
+
+	arma::vec val2(len,fill::zeros);
+	int i = 0;
+	for (auto& v : val)
+		val2[i] = v + 180;
+		
+	vec val3 = join_cols<vec>(val, val2);
+	len = val.size();
+
+	const double p = 1.0 / (b * len );
 	for(int r = 0; r < len; r++)
 	{
 		double sum = 0;
@@ -1427,50 +1456,50 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
 			double dist = abs(val[r] - val[i]);
 			sum +=  k_gauss( dist / b );
 		}
-	density[r] = std::make_pair( val[r], p*sum );
+		density[r] = std::make_pair( val[r], p*sum );
 	}
-  return density;
- }
+	return density;
+}
  
- void MA_filter(vector< std::pair<double,double>>&KDE, int window)
- {
-	 if (KDE.size() > 5 * window)
-	 {
-	unsigned int wn = (int) (window - 1) / 2;
-	vector<float>KDE_filtered(KDE.size());
-
-	for (unsigned int i = 0; i < KDE.size(); i++) 
+void MA_filter(vector< std::pair<double,double>> &KDE, int window)
+{
+	if (KDE.size() > 5 * window)
 	{
-		double av = 0;
-		if ((i - wn) < 0)
-		{
-			for (unsigned int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
-				av += KDE[ii].second;
-		}
-		else
-		{
-			for (unsigned int ii = i; ii > (i-wn); ii--)
-				av += KDE[ii].second;
-		}
+		unsigned int wn = (int) (window - 1) / 2;
+		vector<float>KDE_filtered(KDE.size());
 
-		if (i + wn > KDE.size())
+		for (unsigned int i = 0; i < KDE.size(); i++) 
 		{
-			for (unsigned int ii = 0; ii < wn; ii++)
-				av += KDE[ii].second;
+			double av = 0;
+			if ((i - wn) < 0)
+			{
+				for (unsigned int ii = KDE.size(); ii > (KDE.size() - wn); ii--)
+					av += KDE[ii].second;
+			}
+			else
+			{
+				for (unsigned int ii = i; ii > (i-wn); ii--)
+					av += KDE[ii].second;
+			}
+
+			if (i + wn > KDE.size())
+			{
+				for (unsigned int ii = 0; ii < wn; ii++)
+					av += KDE[ii].second;
+			}
+			else
+			{
+				for (unsigned int iii = i; iii < (i+wn); iii++)
+					av += KDE[iii].second;
+			}
+			KDE_filtered[i] = av / wn;
 		}
-		else
+		for (int i =0; i < KDE.size();i++)
 		{
-			for (unsigned int iii = i; iii < (i+wn); iii++)
-				av += KDE[iii].second;
+			KDE[i].second = KDE_filtered[i];
 		}
-		KDE_filtered[i] = av / wn;
 	}
-	for (int i =0; i < KDE.size();i++)
-	{
-		KDE[i].second = KDE_filtered[i];
-	}
-	}
- }
+}
  
  
  void interpolate(vector< std::pair<double, double>>&KDE)
@@ -1496,7 +1525,7 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
 }
 
 void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
- {
+{
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
 	BOOST_FOREACH(line_type F,  lineaments)
@@ -1508,16 +1537,21 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 		ANGLE(index) = strike;
 		index++;
 	}
-	 
-//KDE estimation of orientation to obtain number of lineament sets------
- sort(ANGLE.begin(), ANGLE.end());
- 
- vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 10);
- vector< std::pair<double, double>> Maximas;
- MA_filter(GAUSS, 5);
- cout << " here.." << endl;
- interpolate(GAUSS);
- cout << " here..." << endl;
+		
+	//KDE estimation of orientation to obtain number of lineament sets------
+	sort(ANGLE.begin(), ANGLE.end());
+
+	vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10);
+	arma::vec est_pdf = angle_kde_fill_array(MAX_ANGLE * 10, ANGLE, 10);
+	for (unsigned int i = 0; i < est_pdf.size(); i++)
+	{
+		GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
+	}
+	vector< std::pair<double, double>> Maximas;
+	MA_filter(GAUSS, 5);
+	cout << " here.." << endl;
+// 	interpolate(GAUSS);
+	cout << " here..." << endl;
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
@@ -1549,8 +1583,8 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	{
 		txtF << G << "\t" << e.first << "\t" << e.second << endl;
 		G++;
-	}	
- }
+	}
+}
 
 
 //create statisics from input file--------------------------------------

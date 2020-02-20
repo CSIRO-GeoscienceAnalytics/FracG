@@ -12,6 +12,8 @@ using namespace boost;
 using namespace std;
 using namespace arma;
 
+#define MAX_ANGLE 180
+
 enum class ModelMatch {Exponential, PowerLaw, LogNorm};
 
 //holds the different functions that define different statistics models
