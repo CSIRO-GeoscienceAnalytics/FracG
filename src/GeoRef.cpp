@@ -1358,8 +1358,8 @@ bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, lin
 		std::vector<std::tuple<unmerged_type::iterator, bool>> front_matches, back_matches;
 		bool match_loc;
 		//use boxes, because boost doesn't have a circle geometry object (just a polygon/linestring that approximates a circle)
-		box front_box(point_type(base.front().x() - dt, base.front().y() - ht), point_type(base.front().x() + dt, base.front().y() + ht));
-		box  back_box(point_type(base.back ().x() - dt, base.back ().y() - ht), point_type(base.back ().x() + dt, base. back().y() + ht));
+		box front_box(point_type(base.front().x() - dt, base.front().y() - dt), point_type(base.front().x() + dt, base.front().y() + dt));
+		box  back_box(point_type(base.back ().x() - dt, base.back ().y() - dt), point_type(base.back ().x() + dt, base. back().y() + dt));
 		vector<endpoint_value_type> candidates;
 		endpoints.query(geometry::index::intersects(front_box), back_inserter(candidates));
 		for (auto cand_it = candidates.begin(); cand_it != candidates.end(); cand_it++)
