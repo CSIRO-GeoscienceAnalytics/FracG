@@ -1409,18 +1409,20 @@ double evaluate_angle_kde(arma::vec &angles, const double smooth, double x)
 		const double x0 = *it;
 		double xd1 = x - x0;
 		double xd2 = MAX_ANGLE - std::abs(xd1);
-		sum += std::exp(-0.5 * xd1 * xd2 / s2);
+		sum += std::exp(-0.5 * xd1 * xd1 / s2);
 		sum += std::exp(-0.5 * xd2 * xd2 / s2);
 	}
 	return sum/(sqrt(2*M_PI) * angles.size() * smooth);
 }
 
 //return an evenly-sampled array of the kde that represents the given values and smoothing factor
+//and scale them to sum to 1, to be a probability distribution function
 arma::vec angle_kde_fill_array(int nsamples, arma::vec &angles, const double smooth)
 {
+	const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
 	arma::vec sampled(nsamples);
-	for (unsigned int i = 0; i < nsamples; i++){
-		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / (double) nsamples);
+	for (int i = 0; i < nsamples; i++){
+		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / dn) * MAX_ANGLE / dn;
 	}
 	return sampled;
 }
@@ -1463,7 +1465,7 @@ vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
  
 void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 {
-	if (KDE.size() > 5 * window)
+	if (KDE.size() > 5 * (unsigned int) window)
 	{
 		unsigned int wn = (int) (window - 1) / 2;
 		vector<float>KDE_filtered(KDE.size());
@@ -1494,7 +1496,7 @@ void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 			}
 			KDE_filtered[i] = av / wn;
 		}
-		for (int i =0; i < KDE.size();i++)
+		for (unsigned int i =0; i < KDE.size();i++)
 		{
 			KDE[i].second = KDE_filtered[i];
 		}
@@ -1637,7 +1639,7 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		
 		fault_lengths.push_back(length);
 
-		int i = 0;
+		unsigned int i = 0;
 		string coord = "";
 		geometry::unique(F);
 		
@@ -1752,11 +1754,16 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 		
 		cout << "stats.." <<endl;
 //KDE estimation of orientation to obtain number of lineament sets------
- sort(ANGLE.begin(), ANGLE.end());
- vector< std::pair<double, double>> GAUSS =  kde( ANGLE, ANGLE.size(), 15);
- vector< std::pair<double, double>> Maximas;
+	sort(ANGLE.begin(), ANGLE.end());
+	vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 15);
+	arma::vec est_pdf = angle_kde_fill_array(MAX_ANGLE * 10, ANGLE, 15); //
+	for (unsigned int i = 0; i < est_pdf.size(); i++)
+	{
+		GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
+	}
+	vector< std::pair<double, double>> Maximas;
 
- interpolate(GAUSS);
+// 	interpolate(GAUSS);
 
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{

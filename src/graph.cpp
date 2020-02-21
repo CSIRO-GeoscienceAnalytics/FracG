@@ -668,7 +668,7 @@ void GRAPH::GraphAnalysis(Graph& G, vector<line_type> faults, std::ofstream& txt
 				<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
 				<< "Number of components (c): "  << "\t" << numK << "\n"
 				<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
-				<< "Density (d): " << num_edges(G)*(totalLength*totalLength) /(4*A) << "\n"
+				<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*A) << "\n"
 				<< "KDE edge orientation" << "\n";
 				cout << " here" << endl;
 				stat.KDE_estimation_strikes(Edges, txtG);
