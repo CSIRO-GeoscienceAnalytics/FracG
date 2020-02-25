@@ -5,6 +5,7 @@
 #include <boost/variant/static_visitor.hpp>
 #include <boost/variant/apply_visitor.hpp>
 #include <boost/math/tools/roots.hpp>
+#include <boost/math/special_functions/sign.hpp>
 #include <armadillo>
 
 using namespace FGraph;

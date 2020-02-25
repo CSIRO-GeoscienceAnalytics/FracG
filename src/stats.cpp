@@ -1502,6 +1502,43 @@ void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 		}
 	}
 }
+
+//perform a moving average of the KDE, that wraps around
+void moving_average_filter_wraparound(vector< std::pair<double,double>> &KDE, int window_size)
+{
+	window_size |= 1; //make the window_size odd-sized
+	const unsigned int hw = window_size / 2;
+	vector<double> saved(window_size); //saved values of the moving sum, so we know which value to remove for the next index
+	vector<double> copy(window_size); //a copy to hold the values that get overwritten in the first pass
+	//initialise values
+	double sum = 0;
+	for (int i = 0; i < window_size; i++)
+	{
+		sum += KDE[i].second;
+		saved[i] = KDE[i].second;
+		copy[i] = KDE[i].second;
+	}
+	int saved_index = 0;
+	const unsigned int last_index = KDE.size() - hw - 1;
+	//do the regular part of the moving average
+	for (unsigned int i = hw; i < last_index; i++){
+		KDE[i].second = sum / window_size;
+		const int next_index = i + hw + 1;
+		sum += KDE[next_index].second - saved[saved_index];
+		saved[saved_index] = KDE[next_index].second;
+		saved_index = (saved_index + 1) % window_size;
+	}
+	//now do the wrap-around part
+	for (unsigned int i = last_index; (i >= last_index) || (i < hw); i = (i + 1) % KDE.size())
+	{
+		KDE[i].second = sum / window_size;
+		const int next_index = (i + hw + 1) % KDE.size(); //the next value will wrap around
+		const double next_value = next_index < window_size ? copy[next_index] : KDE[next_index].second; //either get the enxt index as normal, or get it from the saved copy if it coems from the part that is overwritten
+		sum += next_value - saved[saved_index];
+		saved[saved_index] = next_value;
+		saved_index = (saved_index + 1) % window_size;
+	}
+}
  
  
  void interpolate(vector< std::pair<double, double>>&KDE)
@@ -1524,6 +1561,169 @@ void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 		// for (int i = 0; i < 180; i++);
 		//	KDE.push_back(make_pair(i, interpolant(i)));
 	}
+}
+
+typedef std::pair<unsigned int, bool> crossing_type; //crossing position, whether the crossing is rising or falling
+typedef std::pair<int, int> crossing_location_type; //the falling and rising edges of a gaussian candidate location
+//find zero-crossings, from a fourier-domain representation of the data
+vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
+{
+	arma::cx_vec d2(fd.size());
+	for (unsigned int i = 0; i < fd.size(); i++) d2[i] = -freqs[i]*freqs[i]*fd[i];
+	arma::cx_vec angle = arma::ifft(d2); //arma doesn't have a real-valued fft/ifft
+	
+	vector<std::pair<unsigned int, bool>> crossings;
+	for (unsigned int i = 0; i < fd.size(); i++)
+	{
+		bool sign_this = !std::signbit(std::real(angle[i])); //use not, so that sign being true <-> the value is positive
+		bool sign_prev = !std::signbit(std::real(angle[(i - 1 + fd.size()) % fd.size()]));
+		if (sign_this != sign_prev)
+		{
+			const bool rising = sign_this;
+			crossings.push_back(std::make_pair(i, rising));
+		}
+	}
+	return crossings;
+}
+
+void follow_scale_image_trace(vector<crossing_location_type> &current_positions, vector<crossing_type> &next_scale, crossing_location_type &new_crossing, const int max_index)
+{
+	cout << "The crossings currently being examined are at: ";
+	for (auto it = next_scale.begin(); it < next_scale.end(); it++) cout << "(" << it->first << ", " << it->second << "), ";
+	cout << endl;
+	new_crossing = std::make_pair(-1, -1);
+	vector<bool> used(current_positions.size(), false);
+	for (auto it = current_positions.begin(); it < current_positions.end(); it++)
+	{
+		int best_dist_fall = max_index + 1;
+		int best_loc_fall = -1;
+		int cross_idx_fall = -1;
+		int best_dist_rise = max_index + 1;
+		int best_loc_rise = -1;
+		int cross_idx_rise = -1;
+		for (auto cross_it = next_scale.begin(); cross_it < next_scale.end(); cross_it++)
+		{
+			const int cross_idx = cross_it - next_scale.begin();
+			if (used[cross_idx]) continue;
+			if (cross_it->second)
+			{
+				//rising
+				//*it is (falling, rising), *cross_it is (location, rising (true)/falling (false))
+				const int dist = std::min(std::abs(it->second - cross_it->first), max_index - 1 - std::abs(it->second - cross_it->first));
+				if (dist < best_dist_rise){
+					best_dist_rise = dist;
+					best_loc_rise = cross_it->first;
+					cross_idx_rise = cross_idx;
+				}
+			} else {
+				//falling
+				const int dist = std::min(std::abs(it->first - cross_it->first), max_index - 1 - std::abs(it->first - cross_it->first));
+				if (dist < best_dist_fall){
+					best_dist_fall = dist;
+					best_loc_fall = cross_it->first;
+					cross_idx_fall = cross_idx;
+				}
+			}
+		}
+		it->first = best_loc_fall;
+		it->second = best_loc_rise;
+		used[cross_idx_fall] = true;
+		used[cross_idx_rise] = true;
+	}
+	//potentially check for the initial positions of the next crossing pair to add
+	cout << "scale size / 2 = " << next_scale.size() / 2 << ", current pos size = " << current_positions.size() << ", diff = " << next_scale.size() / 2 - current_positions.size() << endl;
+	if (next_scale.size() / 2 == current_positions.size() + 1)
+	{
+		int fall_pos = -1;
+		int rise_pos = -1;
+		for (auto cross_it = next_scale.begin(); cross_it < next_scale.end(); cross_it++)
+		{
+			int idx = cross_it - next_scale.begin();
+			if (used[idx]) continue;
+			if (cross_it->second) rise_pos = cross_it->first;
+			else fall_pos = cross_it->first;
+		}
+		new_crossing = std::make_pair(fall_pos, rise_pos);
+		cout << "found new crossing at " << new_crossing.first << ", " <<new_crossing.second << endl;
+	}
+}
+
+vector<crossing_location_type> follow_scale_image(vector<vector<crossing_type>> &scale_image, const int max_index)
+{
+// 	vector<crossing_type> last_crossing = scale_image.back();
+	vector<crossing_location_type> locations;
+	crossing_location_type next;
+	cout << "the scale image has " << scale_image.size() << " scales" << endl;
+	for (auto it = scale_image.rbegin(); it != scale_image.rend(); it++)
+	{
+		cout << "in fsi, scale posn's has size " << it->size() << endl;
+		follow_scale_image_trace(locations, *it, next, max_index);
+		if (next.first >= 0) locations.push_back(next); //use negative values in next to mark it as there being no new crossing
+	}
+	return locations; 
+}
+
+//fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
+vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE)
+{
+	cout << "starting gaussian fit" << endl;
+	arma::vec pdf(KDE.size());
+	for (unsigned int i = 0; i < KDE.size(); i++) pdf[i] = KDE[i].second;
+	arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
+	
+	
+	//the frequency order isn't specified in the arma documentation, assuming that it's 0-freq -> +ve freqs -> most negative freqs -> -1/N
+	arma::vec freqs(ft.size());
+	for (unsigned int i = 0; i < freqs.size(); i++)
+	{
+		freqs[i] = i + (i <= freqs.size() / 2 ? 0 : -freqs.size()) / (double) freqs.size();
+	}
+	
+	vector<crossing_type> base_crossings = find_zero_crossings(ft, freqs);
+	
+	//now make scale image
+	const int max_peaks = base_crossings.size() / 2;
+	int peak_count = max_peaks;
+	vector<vector<crossing_type>> scale_image = {base_crossings};
+	
+	double scale = 0;
+	
+	while (peak_count > 1)
+	{
+		double next_scale = scale + 1;
+		while (true)
+		{
+			arma::cx_vec scaled_ft(ft.size());
+			for (unsigned int i = 0; i < scaled_ft.size(); i++) scaled_ft[i] = ft[i] * std::exp(-M_PI * M_PI * freqs[i] * freqs[i] / next_scale);
+			vector<crossing_type> next_crossings = find_zero_crossings(scaled_ft, freqs);
+			int this_peaks = next_crossings.size() / 2;
+			cout << "Trying scale " << next_scale << ", found " << this_peaks << " peaks, changed from " << peak_count << endl;
+			if (peak_count - this_peaks <= 1){
+				scale = next_scale;
+				scale_image.push_back(next_crossings);
+				peak_count = this_peaks;
+				break;
+			}
+			next_scale = (next_scale + scale) / 2;
+		}
+	}
+	
+	cout << "finished scale image" << endl;
+	
+	//now follow scale image back to original scale
+	vector<crossing_location_type> positions = follow_scale_image(scale_image, KDE.size());
+	
+	//now use the initial values to fit the (sum of) gaussians properly
+	int idx = 0;
+	for (auto it = positions.begin(); it < positions.end(); it++)
+	{
+		cout << "Gaussian " << idx << " is at " << it->first << ", " << it->second << "; ";
+		idx++;
+	}
+	cout << endl;
+	
+	vector<std::tuple<double, double, double>> results;
+	return results;
 }
 
 void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
@@ -1550,7 +1750,8 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 		GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
 	}
 	vector< std::pair<double, double>> Maximas;
-	MA_filter(GAUSS, 5);
+// 	MA_filter(GAUSS, 5);
+	moving_average_filter_wraparound(GAUSS, 5);
 	cout << " here.." << endl;
 // 	interpolate(GAUSS);
 	cout << " here..." << endl;
@@ -1586,6 +1787,8 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 		txtF << G << "\t" << e.first << "\t" << e.second << endl;
 		G++;
 	}
+	
+	fit_gaussians_wraparound(GAUSS);
 }
 
 
