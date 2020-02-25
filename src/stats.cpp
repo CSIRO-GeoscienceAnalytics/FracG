@@ -1563,7 +1563,7 @@ void moving_average_filter_wraparound(vector< std::pair<double,double>> &KDE, in
 	}
 }
 
-typedef std::pair<unsigned int, bool> crossing_type; //crossing position, whether the crossing is rising or falling
+typedef std::pair<int, bool> crossing_type; //crossing position, whether the crossing is rising or falling
 typedef std::pair<int, int> crossing_location_type; //the falling and rising edges of a gaussian candidate location
 //find zero-crossings, from a fourier-domain representation of the data
 vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
@@ -1572,7 +1572,7 @@ vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
 	for (unsigned int i = 0; i < fd.size(); i++) d2[i] = -freqs[i]*freqs[i]*fd[i];
 	arma::cx_vec angle = arma::ifft(d2); //arma doesn't have a real-valued fft/ifft
 	
-	vector<std::pair<unsigned int, bool>> crossings;
+	vector<crossing_type> crossings;
 	for (unsigned int i = 0; i < fd.size(); i++)
 	{
 		bool sign_this = !std::signbit(std::real(angle[i])); //use not, so that sign being true <-> the value is positive
