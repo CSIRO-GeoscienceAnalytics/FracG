@@ -6,6 +6,10 @@
 #include <boost/variant/apply_visitor.hpp>
 #include <boost/math/tools/roots.hpp>
 #include <boost/math/special_functions/sign.hpp>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_blas.h>
+#include <gsl/gsl_multifit_nlinear.h>
 #include <armadillo>
 
 using namespace FGraph;
