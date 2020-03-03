@@ -1581,8 +1581,10 @@ vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
 		{
 			const bool rising = sign_this;
 			crossings.push_back(std::make_pair(i, rising));
+// 			cout << " found crossing at " << i << ": " << rising << endl;
 		}
 	}
+// 	cout << endl;
 	return crossings;
 }
 
@@ -1617,7 +1619,7 @@ vector<crossing_location_type> simple_location_detection(vector<crossing_type> &
 void follow_scale_image_trace(vector<crossing_location_type> &current_positions, vector<crossing_type> &next_scale, crossing_location_type &new_crossing, const int max_index)
 {
 // 	cout << "The crossings currently being examined are at: ";
-	for (auto it = next_scale.begin(); it < next_scale.end(); it++) cout << "(" << it->first << ", " << it->second << "), ";
+// 	for (auto it = next_scale.begin(); it < next_scale.end(); it++) cout << "(" << it->first << ", " << it->second << "), ";
 // 	cout << endl;
 	new_crossing = std::make_pair(-1, -1);
 	vector<bool> used(current_positions.size(), false);
@@ -1653,10 +1655,14 @@ void follow_scale_image_trace(vector<crossing_location_type> &current_positions,
 				}
 			}
 		}
-		it->first = best_loc_fall;
-		it->second = best_loc_rise;
-		used[cross_idx_fall] = true;
-		used[cross_idx_rise] = true;
+		if (best_loc_fall >= 0){
+			it->first = best_loc_fall;
+			used[cross_idx_fall] = true;
+		}
+		if (best_loc_rise >= 0){
+			it->second = best_loc_rise;
+			used[cross_idx_rise] = true;
+		}
 	}
 	//potentially check for the initial positions of the next crossing pair to add
 // 	cout << "scale size / 2 = " << next_scale.size() / 2 << ", current pos size = " << current_positions.size() << ", diff = " << next_scale.size() / 2 - current_positions.size() << endl;
@@ -1677,7 +1683,7 @@ void follow_scale_image_trace(vector<crossing_location_type> &current_positions,
 }
 
 //follow the arches/gaussians through the scale image, matching their locations are larger scales to their positions at smaller scales
-vector<crossing_location_type> follow_scale_image(vector<vector<crossing_type>> &scale_image, const int max_index)
+vector<crossing_location_type> follow_scale_image(vector<vector<crossing_type>> &scale_image, const int max_index, const int nGaussians)
 {
 // 	vector<crossing_type> last_crossing = scale_image.back();
 	vector<crossing_location_type> locations;
@@ -1688,6 +1694,7 @@ vector<crossing_location_type> follow_scale_image(vector<vector<crossing_type>> 
 // 		cout << "in fsi, scale posn's has size " << it->size() << endl;
 		follow_scale_image_trace(locations, *it, next, max_index);
 		if (next.first >= 0) locations.push_back(next); //use negative values in next to mark it as there being no new crossing
+		if ( (nGaussians > 0) && ((int) (locations.size()) >= nGaussians) ) return locations; //if a maximum number of gaussians is specified, return the largest nGaussians components
 	}
 	return locations; 
 }
@@ -1695,6 +1702,7 @@ vector<crossing_location_type> follow_scale_image(vector<vector<crossing_type>> 
 //params per gaussian. amplitude, sigma, position
 #define PPG  3
 
+//data structured used for nonlinear function fitting with the Gnu Scientific Library
 struct gauss_data{
 	int nData;
 	int nGauss;
@@ -1722,7 +1730,8 @@ int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 			      double pos = gsl_vector_get(params, PPG*g + 2); //position
 			pos = fmod(fmod(pos, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
 			const double d1 = data->angle[i] - pos;
-			const double d2 = MAX_ANGLE - d1;
+			//this does: d2 = d1 + 180, or d1 - 180, whichever results in a value that is in the range (-180, 180) and has teh opposite sign of d1
+			const double d2 = d1 - std::copysign(180, d1); //make sure that if d1 is positive, then d2 is negative, and vice versa
 			const double z1 = d1/sig;
 			const double z2 = d2/sig;
 			sum += amp * exp(-0.5 * z1 * z1);
@@ -1748,7 +1757,7 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 			      double pos = gsl_vector_get(params, PPG*j + 2);
 			pos = fmod(fmod(pos, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
 			const double d1 = data->angle[i] - pos;
-			const double d2 = MAX_ANGLE - d1;
+			const double d2 = d1 - std::copysign(180, d1);
 			const double z1 = d1/sig;
 			const double z2 = d2/sig;
 			const double exp1 = std::exp(-0.5 * z1 * z1);
@@ -1809,7 +1818,7 @@ vector<std::tuple<double, double, double>> fit_gaussians(vector<crossing_locatio
 	gsl_multifit_nlinear_workspace *w = gsl_multifit_nlinear_alloc(type, &fdf_params, nData, nParams);
 	gsl_multifit_nlinear_init(initial_guess, &fdf, w);
 	
-	const int max_iterations = 100;
+	const int max_iterations = 1000;
 	const double xtol = std::pow(10, -4); //tolerance by change in independent variables. should be 10^-d for d digits of precision
 	const double gtol = std::pow(GSL_DBL_EPSILON, 1/3.0); //tolerance by norm of gradient
 	const double ftol = 0.0; // tolerance by change in cost function
@@ -1820,14 +1829,14 @@ vector<std::tuple<double, double, double>> fit_gaussians(vector<crossing_locatio
 	
 	if (status != GSL_SUCCESS)
 	{
-		cerr << "Warning: gaussian fitting failed, status = " << status << ", info = " << info << endl;
+		cerr << "Warning: gaussian fitting failed, status = " << status << " -> " << gsl_strerror(status) << ", info = " << info << endl;
 	}
 	
 	vector<std::tuple<double, double, double>> out_params(nGaussians);
 	for (int i = 0; i < nGaussians; i++)
 	{
-		const double amp = gsl_vector_get(w->x, PPG*i);
-		const double size = std::abs(gsl_vector_get(w->x, PPG*i + 1));
+		const double amp =            gsl_vector_get(w->x, PPG*i    );
+		const double size =  std::abs(gsl_vector_get(w->x, PPG*i + 1));
 		const double pos  = fmod(fmod(gsl_vector_get(w->x, PPG*i + 2), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
 		out_params[i] = std::make_tuple(amp, size, pos);
 	}
@@ -1836,6 +1845,25 @@ vector<std::tuple<double, double, double>> fit_gaussians(vector<crossing_locatio
 	gsl_multifit_nlinear_free(w);
 	
 	return out_params;
+}
+
+//evaluate the sum of gaussians model at a particular angle
+double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gaussians, double x)
+{
+	double sum = 0;
+	for (auto it = gaussians.begin(); it < gaussians.end(); it++)
+	{
+		const double amp   = std::get<0>(*it);
+		const double size  = std::get<1>(*it);
+		const double pos   = fmod(fmod(std::get<2>(*it), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
+		const double dist1 = x - pos;
+		const double dist2 = dist1 - std::copysign(180, dist1);
+		const double z1    = dist1 / size;
+		const double z2    = dist2 / size;
+		sum += amp * std::exp(-0.5 * z1 * z1);
+		sum += amp * std::exp(-0.5 * z2 * z2);
+	}
+	return sum;
 }
 
 //fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
@@ -1849,9 +1877,10 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		angle[i] = KDE[i].first;
 		pdf[i] = KDE[i].second;
 	}
+	
+	const double err_thresh = 1e-3;
+	
 	arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
-	
-	
 	//the frequency order isn't specified in the arma documentation, assuming that it's 0-freq -> +ve freqs -> most negative freqs -> -1/N
 	arma::vec freqs(ft.size());
 	for (unsigned int i = 0; i < freqs.size(); i++)
@@ -1859,70 +1888,67 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		freqs[i] = i + (i <= freqs.size() / 2 ? 0 : -freqs.size()) / (double) freqs.size();
 	}
 	
-	vector<crossing_type> base_crossings = find_zero_crossings(ft, freqs);
+	int nGaussians = 0;
 	
-	//now make scale image
-	const int max_peaks = base_crossings.size() / 2;
-	int peak_count = max_peaks;
-	vector<vector<crossing_type>> scale_image = {base_crossings};
+	arma::vec residual(KDE.size()); //residuals, used to calculate the error
 	
-	double scale = 0;
+	double err = std::numeric_limits<double>::infinity();
+	vector<std::tuple<double, double, double>> results;
 	
-	while (peak_count > 1)
+	do
 	{
-		double next_scale = scale + 1;
-		while (true)
+		nGaussians += 1;
+		
+		vector<crossing_type> base_crossings = find_zero_crossings(ft, freqs);
+		
+		//now make scale image
+		const int max_peaks = base_crossings.size() / 2;
+		if (max_peaks < nGaussians) break; //we don't have enough peaks to get the required amount, so use the best result before this
+		int peak_count = max_peaks;
+		vector<vector<crossing_type>> scale_image = {base_crossings};
+		
+		double scale = 0;
+		while (peak_count > nGaussians)
 		{
-			arma::cx_vec scaled_ft(ft.size());
-			for (unsigned int i = 0; i < scaled_ft.size(); i++) scaled_ft[i] = ft[i] * std::exp(-M_PI * M_PI * freqs[i] * freqs[i] / next_scale);
-			vector<crossing_type> next_crossings = find_zero_crossings(scaled_ft, freqs);
-			int this_peaks = next_crossings.size() / 2;
-			if (peak_count - this_peaks <= 1){
-				scale = next_scale;
-				scale_image.push_back(next_crossings);
-				peak_count = this_peaks;
-				break;
+			double next_scale = scale + 1;
+			while (true)
+			{
+				arma::cx_vec scaled_ft(ft.size());
+				for (unsigned int i = 0; i < scaled_ft.size(); i++) scaled_ft[i] = ft[i] * std::sqrt(M_PI * next_scale) * std::exp(-M_PI * M_PI * freqs[i] * freqs[i] * next_scale);
+				vector<crossing_type> next_crossings = find_zero_crossings(scaled_ft, freqs);
+				int this_peaks = next_crossings.size() / 2;
+// 				cout << "At scale " << next_scale << " there are " << this_peaks << " peaks, diff = " << peak_count - this_peaks << endl;
+				if (peak_count - this_peaks <= 1){
+					scale = next_scale;
+					scale_image.push_back(next_crossings);
+					peak_count = this_peaks;
+					break;
+				}
+				next_scale = (next_scale + scale) / 2;
 			}
-			next_scale = (next_scale + scale) / 2;
 		}
-	}
-	
-	//now follow scale image back to original scale
-	vector<crossing_location_type> positions;
-//	positions = follow_scale_image(scale_image, KDE.size());
- 	positions = simple_location_detection(base_crossings);
-	
-	//now use the initial values to fit the (sum of) gaussians properly
-	//debug output
-// 	int idx = 0;
-// 	for (auto it = positions.begin(); it < positions.end(); it++)
-// 	{
-// 		cout << "Gaussian " << idx << " is at " << it->first << ", " << it->second << "; ";
-// 		idx++;
-// 	}
-// 	cout << endl;
-	
-	vector<std::tuple<double, double, double>> results = fit_gaussians(positions, pdf, angle);
+		
+		//now follow scale image back to original scale
+		vector<crossing_location_type> positions;
+	//	positions = follow_scale_image(scale_image, KDE.size(), nGaussians);
+	 	positions = simple_location_detection(scale_image.back());//base_crossings
+		
+		//now use the initial values to fit the (sum of) gaussians properly
+		//debug output
+// 		for (auto it = positions.begin(); it < positions.end(); it++)
+// 		{
+// 			cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
+// 		}
+// 		cout << endl;
+		
+		results = fit_gaussians(positions, pdf, angle);
+		
+		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - evaluate_gaussian_sum(results, angle[i]);
+		err = arma::norm(residual, 2);
+		if (nGaussians >= max_peaks) ft = arma::fft(residual); //If there aren't any more peaks to find, use the residuals of the fit with the current data
+// 		cout << "At ng " << nGaussians << " the error is " << err << " with " << results.size() << " gaussians in the results" << endl;
+	} while (err > err_thresh);
 	return results;
-}
-
-//evaluate the sum of gaussians model at a particular angle
-double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gauss, double x)
-{
-	double sum = 0;
-	for (auto it = gauss.begin(); it < gauss.end(); it++)
-	{
-		const double amp   = std::get<0>(*it);
-		const double size  = std::get<1>(*it);
-		const double pos   = fmod(fmod(std::get<2>(*it), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
-		const double dist1 = x - pos;
-		const double dist2 = MAX_ANGLE - dist1;
-		const double z1    = dist1 / size;
-		const double z2    = dist2 / size;
-		sum += amp * std::exp(-0.5 * z1 * z1);
-		sum += amp * std::exp(-0.5 * z2 * z2);
-	}
-	return sum;
 }
 
 void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
@@ -1975,7 +2001,7 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	
 	vector<std::tuple<double, double, double>> gauss_params = fit_gaussians_wraparound(GAUSS);
 	txtF << "Amplitude\tSigma\tAngle" << endl;
-	cout << "Amplitude\tSigma\tAngle" << endl;
+	cout << "We fit " << gauss_params.size() << " gaussians to the data, with parameters:" << endl << "Amplitude\tSigma\tAngle" << endl;
 	for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
 	{
 		txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
