@@ -1422,7 +1422,7 @@ arma::vec angle_kde_fill_array(int nsamples, arma::vec &angles, const double smo
 	const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
 	arma::vec sampled(nsamples);
 	for (int i = 0; i < nsamples; i++){
-		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / dn) * MAX_ANGLE / dn;
+		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
 	}
 	return sampled;
 }
@@ -1838,7 +1838,8 @@ vector<std::tuple<double, double, double>> fit_gaussians(vector<crossing_locatio
 		const double amp =            gsl_vector_get(w->x, PPG*i    );
 		const double size =  std::abs(gsl_vector_get(w->x, PPG*i + 1));
 		const double pos  = fmod(fmod(gsl_vector_get(w->x, PPG*i + 2), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
-		out_params[i] = std::make_tuple(amp, size, pos);
+		const double p = amp * std::sqrt(2*M_PI) * size;
+		out_params[i] = std::make_tuple(p, size, pos);
 	}
 	
 	gsl_vector_free(initial_guess);
@@ -1860,14 +1861,15 @@ double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gaussia
 		const double dist2 = dist1 - std::copysign(180, dist1);
 		const double z1    = dist1 / size;
 		const double z2    = dist2 / size;
-		sum += amp * std::exp(-0.5 * z1 * z1);
-		sum += amp * std::exp(-0.5 * z2 * z2);
+		const double amp_eff = amp / (std::sqrt(2*M_PI) * size);
+		sum += amp_eff * std::exp(-0.5 * z1 * z1);
+		sum += amp_eff * std::exp(-0.5 * z2 * z2);
 	}
 	return sum;
 }
 
 //fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE)
+vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const int max_gaussians = 10)
 {
 // 	cout << "starting gaussian fit" << endl;
 	arma::vec pdf(KDE.size());
@@ -1878,7 +1880,7 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		pdf[i] = KDE[i].second;
 	}
 	
-	const double err_thresh = 1e-3;
+// 	const double err_thresh = 1e-6;//1e-3;
 	
 	arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
 	//the frequency order isn't specified in the arma documentation, assuming that it's 0-freq -> +ve freqs -> most negative freqs -> -1/N
@@ -1892,10 +1894,11 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 	
 	arma::vec residual(KDE.size()); //residuals, used to calculate the error
 	
-	double err = std::numeric_limits<double>::infinity();
-	vector<std::tuple<double, double, double>> results;
+	vector<std::tuple<double, double, double>> results, previous_results;
 	
-	do
+	vector<std::pair<double, decltype(results)>> ic; //information criteria - used to chosse the number of gaussians
+	
+	while (nGaussians < max_gaussians)
 	{
 		nGaussians += 1;
 		
@@ -1944,11 +1947,30 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		results = fit_gaussians(positions, pdf, angle);
 		
 		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - evaluate_gaussian_sum(results, angle[i]);
-		err = arma::norm(residual, 2);
+		double rss = 0;
+		for (int i = 0; i < (int)residual.size(); i++) rss += residual[i]*residual[i];
+// 		double err = arma::norm(residual, 2);
 		if (nGaussians >= max_peaks) ft = arma::fft(residual); //If there aren't any more peaks to find, use the residuals of the fit with the current data
-// 		cout << "At ng " << nGaussians << " the error is " << err << " with " << results.size() << " gaussians in the results" << endl;
-	} while (err > err_thresh);
-	return results;
+		
+		double llikelihood = 1; //calculate the log likelihood
+		for (auto it = fault_angles.begin(); it < fault_angles.end(); it++)
+		{
+			double likelihood = evaluate_gaussian_sum(results, *it);
+			llikelihood += likelihood > 0 ? std::log(likelihood) : 0;
+		}
+		int nParams = PPG * nGaussians; //number of free parameters
+		//2*nParams + 2 * std::log(err);// - 2 * llikelihood;
+		//(corrected) akaike information criterion
+		double aicc = 2*nParams + (2*nParams*(nParams + 1)) / (double)(fault_angles.size() - nParams - 1) - 2*llikelihood;
+// 		
+// 		cout << "At ng " << nGaussians << " the error is " << err << " with AICC = " << aicc << endl;
+		bool has_negative = false;
+		for (auto it = results.begin(); it < results.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
+		if (!std::isnan(aicc) && !has_negative) ic.push_back(std::make_pair(aicc, results));
+		
+	}
+	decltype(ic)::iterator result_it = std::min_element(ic.begin(), ic.end()); //get the set of Gaussians with the minimum aicc value
+	return result_it->second; //previous_results
 }
 
 void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
@@ -1999,9 +2021,10 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
 	}
 	
-	vector<std::tuple<double, double, double>> gauss_params = fit_gaussians_wraparound(GAUSS);
+	vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
+	vector<std::tuple<double, double, double>> gauss_params = fit_gaussians_wraparound(GAUSS, angles_vector);
 	txtF << "Amplitude\tSigma\tAngle" << endl;
-	cout << "We fit " << gauss_params.size() << " gaussians to the data, with parameters:" << endl << "Amplitude\tSigma\tAngle" << endl;
+	cout << "We fit " << gauss_params.size() << " gaussians to the angle data, with parameters:" << endl << "Amplitude\tSigma\tAngle" << endl;
 	for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
 	{
 		txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
