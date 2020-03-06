@@ -19,7 +19,7 @@ ofstream CreateFileStream(string subdir_name, string name)
 	mkdir(stats_dir, 0777);
 	string csv_file = stats_dir + name;
 	ofstream txtF; 
-	txtF.open (csv_file, ios::out | ios::app); 
+	txtF.open (csv_file, ios::out); 
 	return(txtF);
 }
 
@@ -1635,18 +1635,18 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		
 		//now use the initial values to fit the (sum of) gaussians properly
 		//debug output
- 		for (auto it = positions.begin(); it < positions.end(); it++)
- 		{
- 			cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
- 		}
- 		cout << endl;
+//  		for (auto it = positions.begin(); it < positions.end(); it++)
+//  		{
+//  			cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
+//  		}
+//  		cout << endl;
 		
 		results = fit_gaussians(positions, pdf, angle);
 		
 		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - evaluate_gaussian_sum(results, angle[i]);
 		double rss = 0;
 		for (int i = 0; i < (int)residual.size(); i++) rss += residual[i]*residual[i];
- 		double err = arma::norm(residual, 2);
+//  		double err = arma::norm(residual, 2);
 		if (nGaussians >= max_peaks) ft = arma::fft(residual); //If there aren't any more peaks to find, use the residuals of the fit with the current data
 		
 		double llikelihood = 1; //calculate the log likelihood
@@ -1658,9 +1658,9 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		int nParams = PPG * nGaussians; //number of free parameters
 		//2*nParams + 2 * std::log(err);// - 2 * llikelihood;
 		//(corrected) akaike information criterion
-		double aicc = 2*nParams + (2*nParams*(nParams + 1)) / (double)(fault_angles.size() - nParams - 1) - 2*llikelihood;
+		double aicc = 2*nParams /*+ (2*nParams*(nParams + 1)) / (double)(PPG*fault_angles.size() - nParams - 1)*/ - 2*llikelihood;
 // 		
- 		cout << "At ng " << nGaussians << " the error is " << err << " with AICC = " << aicc << endl;
+//  		cout << "At ng " << nGaussians << " the error is " << err << " with AICC = " << aicc << endl;
 		bool has_negative = false;
 		for (auto it = results.begin(); it < results.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
 		if (!std::isnan(aicc) && !has_negative) ic.push_back(std::make_pair(aicc, results));

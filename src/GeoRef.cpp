@@ -15,9 +15,6 @@ string CreateDir(VECTOR &input_file, std::initializer_list<string> folders)
 	string folder_name(input_file.folder);
 	if (folder_name.size() <= 0) folder_name = ".";
 	for (auto it = folders.begin(); it != folders.end(); it++) folder_name += "/"+*it;
-	cout << "making folder " << input_file.folder << ", name = " << input_file.name << " -> ";
-	for (auto it = folders.begin(); it != folders.end(); it++) cout << "/" << *it;
-	cout << endl << folder_name << endl;
 	const char* folder_cstr = folder_name.c_str();
 	if(!opendir(folder_cstr))
 		mkdir(folder_cstr, 0777);
