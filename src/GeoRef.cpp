@@ -152,6 +152,7 @@ T** GEO::RasterConvert(int rows, int cols, T **M)
 //assign raster values (primarily elevation, from a digital elevation map (DEM)) to the elements of a graph
 //same effect as AssignValues() above, but more efficient
 //read the entire file at once, rather than one at a time. gives faster IO. This assumes that we can fit the entire file in memory at once.
+
 template <typename T>
 void GEO::AssignValuesGraph(Graph& G, double transform[8], T** values)
 {
@@ -455,7 +456,6 @@ double GEO::CentreGradient(line_type F, double transform[8], T** values)
 		return(0);
 }
 
-
 VECTOR GEO::ReadVector(int argc, char* f)
 {
 	VECTOR lineaments;
@@ -661,8 +661,6 @@ void GEO::RasterAnalysis(string filename)
 
 
 }
-
-
 
 void GEO::ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_type, point_type> &source_target)
 {

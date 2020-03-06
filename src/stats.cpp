@@ -822,7 +822,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 		//	cout << "Model " << boost::apply_visitor([](auto &x){return x.name;}, *it) << " has not been rejected" << endl;
 		}
 	}
-	cout << endl;
+// 	cout << endl;
 	
 	//if none are acceptable, stop now. there is no point in comparing them
 	if (!have_model)
@@ -1369,6 +1369,7 @@ vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
 	return crossings;
 }
 
+
 //a simpler matching algorithm, that finds gaussian locations by matching leading edges to the next falling edge
 vector<crossing_location_type> simple_location_detection(vector<crossing_type> &crossings)
 {
@@ -1395,8 +1396,6 @@ vector<crossing_location_type> simple_location_detection(vector<crossing_type> &
 	return found;
 }
 		
-
-
 
 //data structured used for nonlinear function fitting with the Gnu Scientific Library
 struct gauss_data{
@@ -1575,7 +1574,7 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		pdf[i] = KDE[i].second;
 	}
 	
-	cout << "fitting a kde for " << fault_angles.size() << " faults" << endl;
+	//cout << "fitting a kde for " << fault_angles.size() << " faults" << endl;
 	
 // 	const double err_thresh = 1e-6;//1e-3;
 	
@@ -1671,10 +1670,10 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 }
 
 
-void STATS::KDE_estimation_strikes(VECTOR lines)
+void STATS::KDE_estimation_strikes(VECTOR &lines, string name)
 {
 	vector<line_type> &lineaments = lines.data;
-	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_KDE.tsv"));
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + "_"+name+"_KDE.tsv");
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
 	BOOST_FOREACH(line_type F,  lineaments)
@@ -1699,7 +1698,6 @@ void STATS::KDE_estimation_strikes(VECTOR lines)
 	vector< std::pair<double, double>> Maximas;
 
 	moving_average_filter_wraparound(GAUSS, 5);
-
 
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
@@ -1909,12 +1907,6 @@ txtF << "\n Linear correlations "
 
 //testing fro clustering depending on orientation-----------------------
 }
-
-
-
-
-
-
 
 
 template <typename T>

@@ -283,6 +283,7 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
 	vector<p_index> result;
 
+
 //now we nedd to create a georefernece system based on the bounding box
 
 	box AOI = ReturnAOI(lines.data);
@@ -304,9 +305,11 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 	vector<vector<double> > vec_count (x_size , vector<double> (y_size, 0));
 	vector<vector<double> > vec_length(x_size , vector<double> (y_size, 0));
 	
+
 	double cur_y = max_y;
 	double cur_x = min_x;
 	
+
 //put the segments into an rtree, so we don't need to check each one----
 	typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring, and the linestring
 	geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
@@ -315,6 +318,7 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 		box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
 		line_tree.insert(std::make_pair(fault_bounding_box, it));
 	}
+
 
 // query intesity and density for every grid cell-----------------------
 	cout << "Calulating P20 and P21 maps for raster with size \n"
@@ -345,6 +349,7 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 				{
 					intersec++; //intersection count for the P20 map
 //and sum the length of the intersection(s) for the P21 map-------------
+
 					geometry::model::multi_linestring<line_type> intersecting;
 					geometry::intersection(pixel, *candidate->second, intersecting);
 					for (auto intersec_it = intersecting.begin(); intersec_it < intersecting.end(); intersec_it++)
@@ -364,8 +369,10 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 	
 	cout << box_size << endl;
 //write the raster file---------------------------------------------
+
 	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, "_P20.tif");
 	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, "_P21.tif");
+
 }
 
 

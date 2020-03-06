@@ -5,12 +5,11 @@
 #define MAX_ANGLE 180
 #define PPG  3 //params per gaussian. amplitude, sigma, position
 
+
 using namespace FGraph;
 using namespace boost;
 using namespace std;
 using namespace arma;
-
-
 
 enum class ModelMatch {Exponential, PowerLaw, LogNorm};
 
@@ -108,7 +107,7 @@ class STATS
 
 
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	void KDE_estimation_strikes(VECTOR lines);
+	void KDE_estimation_strikes(VECTOR &lines, string name);
 	
 	
 	
