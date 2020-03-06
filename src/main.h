@@ -16,9 +16,20 @@
 #include <list>
 #include <assert.h> 
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <unistd.h>
+
 #include <limits>
 #include <thread>
- 
+
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_statistics.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_blas.h>
+#include <gsl/gsl_multifit_nlinear.h>
+
 #include <boost/shared_ptr.hpp>
 #include <boost/config.hpp>
 #include <boost/foreach.hpp>
@@ -49,6 +60,9 @@
 #include <boost/graph/kruskal_min_spanning_tree.hpp>
 #include <boost/graph/prim_minimum_spanning_tree.hpp>
 
+#include <boost/graph/boykov_kolmogorov_max_flow.hpp>
+#include <boost/algorithm/clamp.hpp>
+
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/algorithms/buffer.hpp> 
 #include <boost/geometry/algorithms/equals.hpp>
@@ -71,6 +85,13 @@
 #include "/usr/include/gdal/cpl_port.h"
 #include "/usr/include/gdal/gdalwarper.h"
 
+#include <boost/variant.hpp>
+#include <boost/variant/static_visitor.hpp>
+#include <boost/variant/apply_visitor.hpp>
+#include <boost/math/tools/roots.hpp>
+#include <boost/math/special_functions/sign.hpp>
+#include <armadillo>
+
 #pragma once
 using namespace boost;
 using namespace std;
@@ -90,18 +111,23 @@ namespace FGraph
 	typedef geometry::model::multi_polygon<polygon_type> BUFFER;
 	typedef geometry::model::box<point_type> box;
 	
-	struct READ
+	struct VECTOR
 	{
 		string name;
-		double** values;
-		double transform[8];
-		READ(string n, double** v, double t[8])
-		{
-			name	= n;
-			values	= v;
-			memcpy(transform, t, 8*sizeof(double));
-		}
+		char *refWKT;
+		vector<line_type> data;
+	};
+	
+
+	struct RASTER
+	{
+		string name;
+		const char *refWKT;
+		double transform[6];
+		float values;
 	}; 
+	
+
 	
 	//=======================GRAPH==========================================
 	// Fault Vetex Properties
@@ -147,6 +173,8 @@ namespace FGraph
 		line_type trace;
 		int FaultNb;
 	};
+	
+	typedef std::pair<point_type, point_type> s_t; //source and target for graph
 	
 	//now we can define the graph as an adjacency list
 	//we also need a vertex descriptor to add vertices to the graph
@@ -200,16 +228,14 @@ namespace FGraph
 		double capacity; //the capacity for this edge
 		double residual_capacity; //the unused capacity for this edge
 		dedge_type reverse; //holds a link/pointer/whatever to the edge that links the same two vertices, but in the opposite direction
-		DEdge(){};
-		DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra),capacity(cap), residual_capacity(cap) {};
-		DEdge(double len, double full_len,line_type tra) : length(len), full_length(full_len), trace(tra), capacity(0), residual_capacity(0) {};
+		DEdge() : length(0), full_length(0), capacity(0), residual_capacity(0) {};
+		DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra), capacity(cap), residual_capacity(cap) {};
+		DEdge(double len, double full_len, line_type tra)             : length(len), full_length(full_len), trace(tra), capacity(  0), residual_capacity(  0) {};
 		friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
 	};
 	//<edge list for each vertex, vectex list, un/directed, vertex properties, edge properties, graph properties, (all?) edges list>
 	typedef adjacency_list<boost::vecS, boost::vecS, boost::directedS, DVertex, DEdge> DGraph;
 	
-	typedef std::vector<std::pair<double, double>> FSTATS;
-	typedef std::vector<std::tuple<double, double, double>> FSTATS2; 
 
 	typedef boost::multi_array<double, 2> Raster_type;
 	
@@ -218,5 +244,5 @@ namespace FGraph
 	typedef std::tuple<point_type,size_t, double_t> pl_index;
 	typedef geometry::index::rtree<p_index, geometry::index::rstar<16> > p_tree;
 	typedef geometry::index::rtree<pl_index, geometry::index::rstar<16> > pl_tree;
-	typedef geometry::index::rtree<seg_index, geometry::index::linear<8>> seg_tree;
+
 }

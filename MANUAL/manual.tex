@@ -7,6 +7,7 @@
  top=20mm,
  }
 \setlength{\parindent}{0pt}
+\setcounter{secnumdepth}{0} % sections are level 1
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{amsfonts}
@@ -36,35 +37,52 @@ Graph based Fault and Fracture Analysis}
 \tableofcontents
 \vspace*{\fill}
 FracG is free software: you can redistribute it and/or modify
-
 it under the terms of the GNU General Public License as published by
-
 the Free Software Foundation, either version 3 of the License, or
-
 (at your option) any later version.
-
-
 FracG is distributed in the hope that it will be useful,
-
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
-
 See the GNU General Public License for more details.
-
-
 You should have received a copy of the GNU General Public License along with FracG.  
-
 If not, see \url{https://www.gnu.org/licenses/}.
+
 \newpage
 \section{Installation}
 \textit{FracG} is designed for Debian GNU/Linux and depend on three main libraries: GDAL~\cite{gdal18}, ARMADILLO~\cite{san16} and BOOST~\cite{sie02, geh16}.
-Prior to compiling the program these need to be installed:
+
+First, get the latest GDAL/OGR version, add the PPA to your sources:
 \begin{verbatim}
 	sudo add-apt-repository ppa:ubuntugis/ppa && sudo apt-get update
-	sudo apt-get install build-essential xutils-dev libboost-all-dev liblapack-dev 
-	libblas-dev libboost-dev gdal-bin libarmadillo-dev 
 \end{verbatim}
+
+Now the necessary libraries can be installed from the terminal:
+\begin{verbatim}	
+	sudo apt-get install build-essential \
+	libboost-all-dev \
+	liblapack-dev \
+	libblas-dev \ 
+	libboost-dev \
+	libgsl-dev \
+	libarmadillo-dev 
+\end{verbatim}
+
+Export the environmental variables for gdal 
+\begin{verbatim}	
+	export CPLUS_INCLUDE_PATH=/usr/include/gdal
+	export C_INCLUDE_PATH=/usr/include/gdal
+\end{verbatim}
+
+To obtain \textit{gmsh} visit \url{http://gmsh.info/}. Note that open cascade is used for creating the mesh's and obtaining the pre-compiled version is recommended.
+
+Two options are available for automatic compilation:
+
+\subsection{xutils}
+This options uses a shell script and and Imake file.
+\begin{verbatim}
+	sudo apt-get install xutils-dev 
+\end{verbatim}
+
 If the libraries are all installed correctly the permission for the file ``\textit{install.sh}'' need to be changed.
 \begin{verbatim}
 	cd ...FracG
@@ -74,97 +92,95 @@ Now the installation script can be executed:
 \begin{verbatim}
 	sudo ./install.sh
 \end{verbatim}
-\textit{FracG} can now be executed from the command line with the following syntax:
-\begin{verbatim}
-	FracG [vector_data] [Digital Elevation Data]
-\end{verbatim}
-It is recommend to create a folder containing the data that should be analysed and executing \textit{FracG} from within this directory.
+\textit{FracG} can now be executed from the command line.
 
+\subsection{cmake}
+This option is recommended and used CmakeList.txt.
+\begin{verbatim}
+	sudo apt-get install cmake
+\end{verbatim}
+
+In the \textit{FracG} directory, type;
+\begin{verbatim}
+	mkdir build \
+	cd build \
+	cmake .. \
+	sudo make install
+\end{verbatim}
+\textit{FracG} can now be executed from the command line.
+
+\subsection{manual compilation}
 You can also compile \textit{FracG} from a terminal without the install script. Please note that this will make \textit{FracG} only executable from within the directory you compiled it in.
 
 \begin{verbatim}
 	cd ...FracG/src
 	g++ -o FracG main.cpp graph.cpp GeoRef.cpp geometrie.cpp stats.cpp 
-	-larmadillo -lgdal
+	-larmadillo -lgsl -lgdal -lgmsh 
 \end{verbatim}
 
-In some cases it might be necessary to install Aramdillo manually. In that case please follow the instruction on the web page:
-~\href{http://arma.sourceforge.net/download.html}{ARMADILLO}
-
-If you should encounter any difficulties with compiling \textit{FracG} please~\href{mailto:uli.kelka@csiro.au}{email} us a description of the problem.
 \newpage
-\section{Testing FracG}
-After successful  installation \textit{FracG} can be tested with the sample data provided.
+
+
+\section{Setting up the analysis}
+
+
+\section{Example: Test1}
+
+
+\section{Classes and functions}
+
+\subsection{Typedefinitions FGraph}
+
 \begin{verbatim}
-	cd ..FracG/TEST
-	FracG 10faults.shp DEM.tif
+point_type;
 \end{verbatim}
-The input for this test is a vector file containing 10 synthetic fault traces and a digital elevation model. The out put should look similar to this:
-\begin{small}
+
 \begin{verbatim}
-******************************************** 
-* Boost version: 1_65_1                    *
-* Armadillo version: 9.200.7 (Carpe Noctem)*
-******************************************** 
-Fault  data from .shp-file.
-Raster data from .tif-file.
-
-Enter minimum distance in m: 
+RASTER;
 \end{verbatim}
-\end{small}
-The user is asked to define the minimum distance in m. This value represents the shortest possible branch length of the Graph. Every branch with a length below this value will be removed from the Graph. This is useful for ``poorly'' digitised networks where Y-insertions are falsely classified as X-intersection.
 
-The network analysis extracts the data of the entire network and for the elements of the graph creating an on-screen output like this:
-\begin{small}
 \begin{verbatim}
-read 10 faults from shp
-Driver: GTiff/GeoTIFF
-Size is 1854x1708x1
-Origin = (14255867.750754,-1784374.132214)
-Pixel Size = (30.922081,-30.922081)
-Converted input raster to array. 
-
-Average scan line density [nb/km]: 0.00804058 (stddev: 0.0359586) 
-
-Box Counting
- D migth be 1
-Boxcounting: 0.01965 seconds [CPU Clock] 
-
-Converted 10 faults into 10 edges
-Area: 1.49572e+06
-
-GRAPH'S ANALYSIS OF NETWORK 
-Nodes: 22 EDGES: 14
-Edgenodes: 2
-Number of connected Nodes: 2 (Xnodes + Ynodes)
-Branches: 13 Lines: 9 Number of Branches: 14
-Number of components (c): 8
-DEM ANALYSIS 
- analysed vertices 
- analysed edges 
-DEM Analysis: 0.003365 seconds [CPU Clock] 
-
-Dijkstra shortest paths: 0 (0) 
-
-minTree Total eges: 14
-Distribute fractures: 
-fault: 3/10
-fault: 9/10
-Created 15573 fractures along 10 faults
-in 34.953 seconds [CPU Clock] 
-
-Finished in 35.3374 seconds [CPU Clock]
-
-Additional raster files?
+typedef geometry::model::linestring<point_type> line_type;
 \end{verbatim}
-\end{small}
-The user is asked whether additional raster data should be analysed. The amount of raster data that can be provided is only limited by the system memory available. The prompt will appear after the first additional data was loaded and will reappear until the user decided that no additional data is needed. Data for every fault trace as well as for every branch and vertex of the Graph will be extracted.
 
-\section{Output}
-The network is analyses as a set of line traces and as a Graph. The  analysis is based on~\cite{san18}. 
-Beside the useful characterization of the network in line with~\cite{san18} \textit{FracG} takes advantage of the BOOST Graph's library~\cite{sie02}. The consistency of the Graph is tested with ``\textit{boyer\_myrvold\_planarity\_test}'' prior to the analysis and Minumum spanning tree and shortest path are determined.
-The output files contain the data that can then be analysed in GIS and any data processing software.
-The created files are:
+
+
+
+
+\subsection{CLASS GeoRef}
+
+\subsection{CLASS GEOMETRIE}
+
+\subsection{CLASS GRAPH}
+
+\subsection{CLASS STATS}
+\subsubsection{AnalyseRaster}
+This function calculates the statistics of the network within the are of a specified raster file.
+The raster data at lineaments centres adn th gradient across the centres are obtained.
+Graph's algorithms shortest path and maximum flow are performed utilizing the data of the raster file.
+The outputs two CSV files containing the geometrical statistics fro the initial lineament set that is contained in the raster file, the geometrical statistics fro the graph and two ESRi shapefiles, one fro the vertices and one for the edges of the graph. 
+\begin{verbatim}
+void AddData(string name, vector<line_type> lines, point_type source, 
+point_type target, double Dist)
+\end{verbatim}
+-\textbf{name:} name of or path to the raster-file \\
+-\textbf{lines:} vector containing the line-strings of the lineaments \\
+-\textbf{source:} coordinates of the point used as source for the shortest path and the maximum flow algorithm \\
+-\textbf{target:} coordinates of the point used as target for the shortest path and maximum flow algorithm \\
+-\textbf{return type}: void \\
+-outputs: 
+
+\subsubsection{AnalyseRasterLines}
+\begin{verbatim}
+ void AnalyseRasterFaults(vector<READ> input, vector<line_type> faults)
+\end{verbatim}
+
+
+
+
+\section{CLASS MODEL}
+
+
 \begin{table}[h!]
   \begin{center}
     \caption{Output files.}
@@ -185,6 +201,14 @@ The created files are:
     \end{tabular}
   \end{center}
 \end{table}
+
+
+
+\section{Trouble shooting}
+In some cases it might be necessary to install Aramdillo manually. In that case please follow the instruction on the web page:
+~\href{http://arma.sourceforge.net/download.html}{ARMADILLO}
+
+If you should encounter any difficulties with compiling \textit{FracG} please~\href{mailto:uli.kelka@csiro.au}{email} us a description of the problem.
 
 \vspace*{\fill}
 \bibliography{manual_bib} 

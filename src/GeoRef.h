@@ -1,14 +1,12 @@
 #ifndef _geo_h
 #define _geo_h
-
-#include <boost/graph/boykov_kolmogorov_max_flow.hpp>
 #include "main.h"
-#include <boost/algorithm/clamp.hpp>
 
 using namespace FGraph;
 
-extern double GeoTransform[8];
+
 extern OGRSpatialReference GeoRef;
+extern double GeoTransform[8];
 extern const char *GeoProj;
 
 class GEO
@@ -52,45 +50,50 @@ class GEO
 		double_t len;
 	};
 	
-	void ReprojectVECTOR2WGS84(std::string const& filename);
-
-	template<typename T> T** RasterConvert(int rows, int cols, T **M);
+	void WriteGraph(Graph g, VECTOR lines, string subF, bool raster);
 	
-	seg_tree Seg_Tree(vector<line_type>F);
+	VECTOR ReadVector(int argc, char* file);
+	void read_wkt(std::string const& filename, std::vector<line_type>& lineString);
+	void ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_type, point_type> &source_target);
+	
+	template<typename T> T** RasterConvert(int rows, int cols, T **M);
+
 	
 	void Point_Tree(vector<p_index> pointsF, vector<p_index>& closest);
 	void Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double max_len);
 	void Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb);
 	
-	int getElevation(point_type p, std::string const& filename);
-	float getElevationFromArray(point_type p, const int *data);
-	void AssignValues(Graph& G, std::string const& filename);
-	void AssignValuesAll(Graph& G, std::string const& filename);
+	template<typename T> T getElevationFromArray(point_type p, const T *data);
+
+
+	void RasterAnalysis(string name);
+
+	template <typename T>
+	RASTER ReadRaster(const string name);
 	
-	void AssignValuesGraph(Graph& G, double transform[8], double** values);
+	void GetRasterProperties(std::string const& filename);
+	
+	template<typename T>void AssignValuesGraph(Graph& G, double transform[8], T** values);
 	DGraph MakeDirectedGraph(Graph &g);
 	void setup_maximum_flow(DGraph &dg);
 	double maximum_flow(DGraph &dg, point_type source, point_type target);
 	double maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t);
 	polygon_type BoundingBox(double transform[8], double raster_crop_size);
-	double getValue(point_type p, double transform[8], double** values);
+	template<typename T> T getValue(point_type p, double transform[8], T** values);
 	double LineExtractor(line_type L, double Transform[8], double** raster);
-	double CentreGradient(line_type F, double transform[8], double** values);
+	template<typename T>double CentreGradient(line_type F, double transform[8], T** values);
 	double CrossGradient(line_type F, double transform[8], double** values);
 	double ParallelGradient(line_type F, double transform[8], double** values);
 	
-	template<typename T> int readRaster(std::string const filename, T *&data);
-	void GetRasterProperties(std::string const& filename, double**& RASTER);
-	void read_wkt(std::string const& filename, std::vector<line_type>& lineString);
-	void read_shp(std::string const& filename, std::vector<line_type>& lineString);
-	void WriteTxt(Graph& g, string const& filename);
-	void WriteSHP(Graph G, const char* Name);
-	void WriteSHP2(Graph G, const char* Name);
-	void CorrectNetwork(vector<line_type>&F, double dist);
 	
+	template<typename T> int readRaster(std::string const filename, T *&data);
+	
+
+	void CorrectNetwork(vector<line_type>&F, double dist);
 	void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], const char* Name);
 	void WriteSHP_lines(vector<line_type>lineaments, const char* Name);
 	void WriteSHP_maxFlow(DGraph G,  const char* Name);
+	void WriteSHP(Graph G, const char* Name);
 
 	void Source_Target(const char* Name, point_type &Source, point_type &Target);
 
