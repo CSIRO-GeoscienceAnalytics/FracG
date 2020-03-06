@@ -467,10 +467,11 @@ void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes,
 		if (comp_it != components.end())
 		{
 			if(components.find(U) == components.find(u))
-			cout << "hmm" << endl;
-			G[U].component  = comp_it->second;
-			G[u].component  = comp_it->second;
-			G[Eg].component = comp_it->second;
+			{
+				G[U].component  = comp_it->second;
+				G[u].component  = comp_it->second;
+				G[Eg].component = comp_it->second;
+			}
 		}
 
 		if (G[U].Enode == false || G[u].Enode == false)

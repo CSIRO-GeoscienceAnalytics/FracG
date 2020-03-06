@@ -745,6 +745,9 @@ T GEO::getValue(point_type p, double transform[8], T** values)
 		int y = (int) abs((p.y() - transform[3]) / transform[5]);
 		x = boost::algorithm::clamp(x, 0, (int)transform[6]);
 		y = boost::algorithm::clamp(y, 0, (int)transform[7]);
+		
+		cout << values[x][y] << endl;
+		
 		return(values[x][y]);
 	}
 	else 
@@ -1278,6 +1281,15 @@ void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
 		exit( 1 );
 	}
 	
+	OGRFieldDefn oField3( "Data", OFTReal );
+	oField3.SetWidth(10);
+	oField3.SetPrecision(5);
+	if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
+	{
+		printf( "Creating 'Data' field failed.\n" );
+		exit( 1 );
+	}
+	
 	cout << "here" << endl;
 	int NO = 0;
 	poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
@@ -1287,10 +1299,12 @@ void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
 		point = G[Ve].location;
 		int de = degree(Ve, G);
 		int co = G[Ve].component;
+		float da = G[Ve].data;
 
 		poFeature->SetField( "No", NO);
 		poFeature->SetField( "Degree", de);
 		poFeature->SetField( "Component", co);
+		poFeature->SetField( "Data", da);
 		OGRPoint PO;
 		PO.setX(point.x());
 		PO.setY(point.y());
