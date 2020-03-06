@@ -36,25 +36,26 @@ int main(int argc, char *argv[])
 	geom.CentreDistanceMap(lines, 2500.0);
 	geom.P_Maps(lines, 5000.0);
 
- 	//stats.CreateStats(lines); // statistical analysis of network
- 	//stats.GetLengthDist(lines); // test for three distributions of length 
- 	//stats.DoBoxCount(lines); // Boxcounting algorithm (NEED to run for several staring points)
+ 	stats.CreateStats(lines); // statistical analysis of network
+ 	stats.GetLengthDist(lines); // test for three distributions of length 
+ 	stats.DoBoxCount(lines); // Boxcounting algorithm (NEED to run for several staring points)
  	
- 	//stats.KDE_estimation_strikes(lines, "blub");
+ 	stats.KDE_estimation_strikes(lines, "full_faults");
 
 	G.ReadVEC(graph, map, lines.data); //convert the faults into a graph
 	G.SplitFaults(graph, map, 5); //split the faults in the graph into fault segments, according to the intersections of the faults
 	G.RemoveSpurs(graph, map, 10); //remove any spurs from the graph network
 	
 	G.GraphAnalysis(graph, lines, 10); //graph, vector data, minimum number of branches per component to analyse
-	geo.WriteGraph(graph, lines, "a", false);
+	geo.WriteGraph(graph, lines, "without_raster", false);
 	
 	VECTOR exComp = G.ComponentExtract(graph, lines, 0); //graph, vector data, of component to extract
 	geo.ReadPoints(lines.folder+"/points.shp", lines, source_target);
 
 	r_graph = geo.RasterGraph(lines, 5, 10, lines.folder+"/dem.tif");
+	G.GraphAnalysis(r_graph, lines, 10); //graph, vector data, minimum number of branches per component to analyse
 	
-	geo.WriteGraph(r_graph, lines, "b", true);
+	geo.WriteGraph(r_graph, lines, "with_raster", true);
 	
 
 	//m.WriteGmsh_2D(true, r_graph, 10, "bla.msh");
