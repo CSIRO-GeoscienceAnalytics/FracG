@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 	G.RemoveSpurs(graph, map, 10); //remove any spurs from the graph network
 	
 	G.GraphAnalysis(graph, lines, 10); //graph, vector data, minimum number of branches per component to analyse
-	geo.WriteGraph(graph, lines, "a", false);
+	geo.WriteGraph(graph, lines, "without_raster", false);
 	
 	VECTOR exComp = G.ComponentExtract(graph, lines, 0); //graph, vector data, of component to extract
 	geo.ReadPoints(lines.folder+"/points.shp", lines, source_target);
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 	r_graph = geo.RasterGraph(lines, 5, 10, lines.folder+"/dem.tif");
 	G.GraphAnalysis(r_graph, lines, 10); //graph, vector data, minimum number of branches per component to analyse
 	
-	geo.WriteGraph(r_graph, lines, "b", true);
+	geo.WriteGraph(r_graph, lines, "with_raster", true);
 	
 
 	//m.WriteGmsh_2D(true, r_graph, 10, "bla.msh");
