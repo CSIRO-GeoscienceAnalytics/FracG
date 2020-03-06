@@ -2,6 +2,8 @@
 #define _geo_h
 #include "main.h"
 
+#include <boost/filesystem.hpp>
+
 using namespace FGraph;
 
 
@@ -53,7 +55,9 @@ class GEO
 	void WriteGraph(Graph g, VECTOR lines, string subF, bool raster);
 	
 	VECTOR ReadVector(int argc, char* file);
-	void read_wkt(std::string const& filename, std::vector<line_type>& lineString);
+	
+	
+	
 	void ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_type, point_type> &source_target);
 	
 	template<typename T> T** RasterConvert(int rows, int cols, T **M);
@@ -66,35 +70,39 @@ class GEO
 	template<typename T> T getElevationFromArray(point_type p, const T *data);
 
 
-	void RasterAnalysis(string name);
+	Graph RasterGraph(VECTOR lines, int split, int spur, string name);
 
-	template <typename T>
-	RASTER ReadRaster(const string name);
 	
-	void GetRasterProperties(std::string const& filename);
+	template<typename T>void AssignValuesGraph(Graph& G, RASTER raster);
 	
-	template<typename T>void AssignValuesGraph(Graph& G, double transform[8], T** values);
+	
 	DGraph MakeDirectedGraph(Graph &g);
 	void setup_maximum_flow(DGraph &dg);
 	double maximum_flow(DGraph &dg, point_type source, point_type target);
 	double maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t);
-	polygon_type BoundingBox(double transform[8], double raster_crop_size);
+	
+	
+	
+	polygon_type BoundingBox(double transform[8]);
+	
+	
+	
 	template<typename T> T getValue(point_type p, double transform[8], T** values);
+	
+	
+	
 	double LineExtractor(line_type L, double Transform[8], double** raster);
 	template<typename T>double CentreGradient(line_type F, double transform[8], T** values);
 	double CrossGradient(line_type F, double transform[8], double** values);
 	double ParallelGradient(line_type F, double transform[8], double** values);
 	
-	
-	template<typename T> int readRaster(std::string const filename, T *&data);
-	
 
+	
 	void CorrectNetwork(vector<line_type>&F, double dist);
 	void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, string suffix = "");
 	void WriteSHP_lines(vector<line_type>lineaments, const char* Name);
 	void WriteSHP_maxFlow(DGraph G,  const char* Name);
 	void WriteSHP(Graph G, const char* Name);
-
 	void Source_Target(const char* Name, point_type &Source, point_type &Target);
 
 };

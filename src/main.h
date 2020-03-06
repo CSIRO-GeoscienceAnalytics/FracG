@@ -124,8 +124,8 @@ namespace FGraph
 	{
 		string name;
 		const char *refWKT;
-		double transform[6];
-		float values;
+		double transform[8];
+		float** values;
 	}; 
 	
 
@@ -144,8 +144,6 @@ namespace FGraph
 		{
 		}
 		Point location;
-		double elevation;
-		double Pressure;
 		bool Enode = false;
 		int component;
 		double data;
