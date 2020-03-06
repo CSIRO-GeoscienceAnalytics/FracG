@@ -25,7 +25,7 @@ class GRAPH
 	void AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg);
 	void AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg, double FaultLength);
 	void ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
-	void ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
+	void ReadVEC4raster(Graph& graph, RASTER raster, map_vertex_type& map, std::vector<line_type> &faults);
 	Graph ReadVEC4MODEL(std::vector<line_type> faults, box bx);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
 	void SplitFaults(Graph& graph, map_vertex_type& map, double minDist );

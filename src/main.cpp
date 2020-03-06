@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
 	GEOMETRIE geom;
  	MODEL m;
 	
-	Graph graph;
+	Graph graph, r_graph;
 	s_t source_target;
 	map_vertex_type map; //a map of the vertices in graph G, for quick retrieval of vertices by their location
 	point_type source, target; //source and target for shortest path calculation
@@ -47,12 +47,17 @@ int main(int argc, char *argv[])
 	G.RemoveSpurs(graph, map, 10); //remove any spurs from the graph network
 	
 	G.GraphAnalysis(graph, lines, 10); //graph, vector data, minimum number of branches per component to analyse
-	geo.WriteGraph(graph, lines, "", false);
+	geo.WriteGraph(graph, lines, "a", false);
 	
 	VECTOR exComp = G.ComponentExtract(graph, lines, 0); //graph, vector data, of component to extract
 	geo.ReadPoints(lines.folder+"/points.shp", lines, source_target);
 
-	//m.WriteGmsh_2D(lines.data, graph);
+	r_graph = geo.RasterGraph(lines, 5, 10, lines.folder+"/dem.tif");
+	
+	geo.WriteGraph(r_graph, lines, "b", true);
+	
+
+	m.WriteGmsh_2D(true, r_graph, 10, "bla.msh");
 	cout << "Finished in " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n" << endl;
 	return EXIT_SUCCESS; 
 } 

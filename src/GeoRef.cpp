@@ -1,4 +1,5 @@
 #include "GeoRef.h"
+#include "graph.h"
 #include "geometrie.h"
 #include "stats.h"
 
@@ -12,12 +13,17 @@ double GeoTransform[8];
 // create and open filestream in folder "statistics"
 string CreateDir(VECTOR &input_file, std::initializer_list<string> folders)
 {
+	
 	string folder_name(input_file.folder);
+	while (folder_name.back() == '/' ) folder_name.pop_back(); //gdal/ESRI shapefiles don't like double slashes at the start
+	while (folder_name.back() == '\\') folder_name.pop_back();
 	if (folder_name.size() <= 0) folder_name = ".";
 	for (auto it = folders.begin(); it != folders.end(); it++) folder_name += "/"+*it;
 	const char* folder_cstr = folder_name.c_str();
-	if(!opendir(folder_cstr))
-		mkdir(folder_cstr, 0777);
+	//if(!opendir(folder_cstr))
+		//mkdir(folder_cstr, 0777);
+	boost::filesystem::create_directories(folder_name);
+	
 	return folder_name;
 }
 
@@ -103,44 +109,9 @@ template <typename T> static GDALDataType GetGDALDataType()
 	return GetGDALDataTypeTraits<T>::datatype;
 }
 
-//read in the contents of a raster file to a user-specified one-dimensional array, for a given datatype
-//Free the data with CPLFree(data)
-template <typename T>
-int readRaster(std::string const filename, T *&data){
-	const char * name = filename.c_str();
-	GDALDataset  *poDataset;
-	GDALAllRegister();
-
-	poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
-	if( poDataset == NULL )
-		std::cout<<"no file"<< std::endl;
-
-	GDALRasterBand *band = poDataset -> GetRasterBand(1);
-	
-	cout << "xSize = " << GeoTransform[6] << ", XSize = " << band->GetXSize() << ", ySize = " << GeoTransform[7] << ", YSize = " << band->GetYSize() << endl;
-	int xSize = GeoTransform[6];
-	int ySize = GeoTransform[7];
-	data = (T *) CPLMalloc(sizeof(*data) * xSize * ySize); //the buffer that gets filled up
-	
-	if (data == NULL)
-	{
-		cerr << "ERROR: unable to allocate " << sizeof(*data) << " x " << xSize << " x " << ySize << " = " << sizeof(*data) * xSize * ySize << " bytes to read in raster file" << endl;
-		return -1;
-	}
-	
-	int err = band->RasterIO(GF_Read,0,0,xSize,ySize,data,xSize,ySize,GetGDALDataType<T>(),0,0,nullptr); //GDT_Int32
-
-	if (err != 0)
-		cout << "ERROR: cannot read raster data!" << endl;
-	
-	GDALClose( poDataset );
-	
-	return err;
-}
-
 //create array with size of raster
 template<typename T> 
-T** GEO::RasterConvert(int rows, int cols, T **M)
+T** RasterConvert(int rows, int cols, T **M)
 {
     M = new T*[rows];
     for (int i = 0; i < rows; i++){
@@ -154,16 +125,15 @@ T** GEO::RasterConvert(int rows, int cols, T **M)
 //read the entire file at once, rather than one at a time. gives faster IO. This assumes that we can fit the entire file in memory at once.
 
 template <typename T>
-void GEO::AssignValuesGraph(Graph& G, double transform[8], T** values)
+void GEO::AssignValuesGraph(Graph& G, RASTER raster)
 {
 	STATS stats;
 	line_type curEdge;
 	point_type centre;
-
+	
 	for (auto Ve : boost::make_iterator_range(vertices(G)))
 	{
-		G[Ve].data = getValue(G[Ve].location, transform, values);
-		G[Ve].elevation = getValue(G[Ve].location, transform, values);
+		G[Ve].data = getValue(G[Ve].location, raster.transform, raster.values);
 		if (std::isnan(G[Ve].data)) cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
 	}
 
@@ -174,9 +144,9 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], T** values)
 		curEdge = G[Eg].trace;
 		geometry::centroid(G[Eg].trace, centre);
 
-	   //G[Eg].Centre     = getValue(centre, transform, values);
+	    G[Eg].Centre     = getValue(centre, raster.transform, raster.values);
 	//	G[Eg].MeanValue  = LineExtractor(G[Eg].trace, transform, values) ;
-		G[Eg].CentreGrad = CentreGradient(G[Eg].trace, transform, values);
+		//G[Eg].CentreGrad = CentreGradient(G[Eg].trace, raster.transform, raster.values);
 // 		cout << G[Eg].CentreGrad << endl;
 	//	G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, transform, values);
 	//	G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, transform, values) ;
@@ -184,9 +154,9 @@ void GEO::AssignValuesGraph(Graph& G, double transform[8], T** values)
 	cout <<"done" << endl;
 }
 //make these instatiations so that other cpp files can find them
-template void GEO::AssignValuesGraph<double>(Graph& G, double transform[8], double** values);
-template void GEO::AssignValuesGraph<float>(Graph& G, double transform[8], float** values);
-template void GEO::AssignValuesGraph<int>(Graph& G, double transform[8], int** values);
+template void GEO::AssignValuesGraph<double>(Graph& G, RASTER raster);
+template void GEO::AssignValuesGraph<float>(Graph& G, RASTER raster);
+template void GEO::AssignValuesGraph<int>(Graph& G, RASTER raster);
 
 //make a directed graph from an undirected graph
 //assumes that AssignValuesGraph() has already been called on the graph, and an appropriate raster file, to initialise the height values (which are stored in FVertex.data, not FVertex.elevation)
@@ -338,18 +308,18 @@ double GEO::maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t)
 	return flow;//0
 }
 
-polygon_type GEO::BoundingBox(double transform[8], double raster_crop_size)
+polygon_type GEO::BoundingBox(double transform[8])
 {
 	long double Xmax, Xmin, Ymax, Ymin;
 	polygon_type pl;
 	box bx;
-	
+
 	//create new box of raster
-	Xmax = transform[0] + transform[1] * transform[6] - raster_crop_size;      // west
-	Xmin = transform[0] + raster_crop_size; 								  // east
-	Ymax = transform[3] - raster_crop_size; 								 // north
-	Ymin = transform[3] + transform[5] * transform[7] + raster_crop_size;	// south
-		
+	Xmax = transform[0] + transform[1] * transform[6] ;    // west
+	Xmin = transform[0] ; 								  // east
+	Ymax = transform[3] ; 								 // north
+	Ymin = transform[3] + transform[5] * transform[7] ;	// south
+	
 	bx.min_corner().set<0>( Xmin );
 	bx.min_corner().set<1>( Ymin );
 	bx.max_corner().set<0>( Xmax );
@@ -362,7 +332,7 @@ polygon_type GEO::BoundingBox(double transform[8], double raster_crop_size)
 double GEO::CrossGradient(line_type F, double transform[8], double** values)
 {
 	GEOMETRIE::Perpencicular <geometry::model::referring_segment<point_type>> functor;
-	polygon_type pl = BoundingBox(transform, 1);
+	polygon_type pl = BoundingBox(transform);
 	vector<double> D;
 
 	functor  = geometry::for_each_segment(F, functor );
@@ -392,7 +362,7 @@ double GEO::CrossGradient(line_type F, double transform[8], double** values)
 double GEO::ParallelGradient(line_type F, double transform[8], double** values)
 {
 	GEOMETRIE::SegPoints	 <geometry::model::referring_segment<point_type>> functor2;
-	polygon_type pl = BoundingBox(transform, 1);
+	polygon_type pl = BoundingBox(transform);
 
 	functor2 = geometry::for_each_segment(F, functor2);
 	vector<double>D;
@@ -422,7 +392,7 @@ double GEO::CentreGradient(line_type F, double transform[8], T** values)
 	//Only works for geotransforms with no rotation.
 	line_type cross;
 	point_type point, p1, p2;
-	polygon_type pl = BoundingBox(transform, 1);
+	polygon_type pl = BoundingBox(transform);
 	double len =  ceil((abs(transform[1]) + abs(transform[5])) / 2);
 	
 	geometry::centroid(F, point);
@@ -464,7 +434,7 @@ VECTOR GEO::ReadVector(int argc, char* f)
 	
 	if (argc == 1+1 )
 	{
-		ext =  strchr(f,'.') ;
+		ext =  strrchr(f,'.') ;
 		name = file.substr(0, file.find_last_of("."));
 		
 		if (ext == ".txt" ||  ext == ".shp")
@@ -481,6 +451,11 @@ VECTOR GEO::ReadVector(int argc, char* f)
 		exit (EXIT_FAILURE);
 	}
 	
+	
+	size_t first_folder = name.find_first_of("/\\");
+	while (first_folder != std::string::npos && first_folder + 1 < name.size() && (name[first_folder+1] == '/' || name[first_folder+1] == '\\')) name.erase(first_folder+1, 1);
+	
+	
 	size_t folder_index = name.find_last_of("/\\"); //this should work on both linux (/) and windows (\\) 
 	string folder = (folder_index != std::string::npos) ? name.substr(0               , folder_index + 1 ) : "./";
 	name          = (folder_index != std::string::npos) ? name.substr(folder_index + 1, std::string::npos) : name;
@@ -488,17 +463,17 @@ VECTOR GEO::ReadVector(int argc, char* f)
 	lineaments.folder = folder;
 	lineaments.name = name;
 
-	//read in the fault information from the vector file
+	//read information from the vector file
 	if (ext == ".shp")
 		read_shp(file, lineaments);
-	if (ext == ".txt")
-		read_wkt(name, lineaments.data);  
+	else
+		cerr << "ERROR: no shape file definend" << endl;
 		
 	return(lineaments);
 }
 
-template <typename T>
-RASTER GEO::ReadRaster(const string filename)
+template<typename T>
+RASTER ReadRaster(const string filename)
 {
 	/*
 	[0]  top left x 
@@ -508,9 +483,8 @@ RASTER GEO::ReadRaster(const string filename)
 	[4]  0 
 	[5]  n-s pixel resolution (negative value) 
 	*/
-
-	T* data;
-	float ** raster_data;
+	cout << "Reading raster " << filename;
+	float** raster_data;
 	const char * name = filename.c_str();
 	RASTER raster;
 	double adfGeoTransform[6];
@@ -520,7 +494,7 @@ RASTER GEO::ReadRaster(const string filename)
 	poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
     if( poDataset == NULL )
     {
-        cout << " ERROR: cannot open raster file " << endl;
+        cout << "\n ERROR: cannot open raster file " << endl;
 		exit(EXIT_FAILURE);
     }
     else
@@ -533,10 +507,10 @@ RASTER GEO::ReadRaster(const string filename)
 				
 			if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None )
 				memcpy ( &raster.transform, &adfGeoTransform, sizeof(adfGeoTransform) );
+				
 					
 			GDALRasterBand *band = poDataset -> GetRasterBand(1);  
-			raster_data = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), raster_data);
-
+			
 			poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
 			
 			if( poDataset == NULL )
@@ -544,49 +518,34 @@ RASTER GEO::ReadRaster(const string filename)
 
 			int xSize = poDataset->GetRasterXSize();
 			int ySize = poDataset->GetRasterYSize();
+			raster.transform[6] = xSize;
+			raster.transform[7] = ySize;
 			
-			cout << "xSize = " << xSize<< ", YSize = " << ySize << endl;
+			cout << " of size: "<<  xSize << " x " << ySize << endl;
 			
-			data = (T *) CPLMalloc(sizeof(*data) * xSize * ySize); 
-		
-			if (data != NULL)
-				{
-				int err = band->RasterIO(GF_Read,0,0,xSize,ySize,data,xSize,ySize,GetGDALDataType<T>(),0,0,nullptr); //GDT_Int32
-				if (err != 0)
-					cout << "ERROR: reading raster data!" << endl;
-			}
-			else if (data == NULL)
+			raster.values = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), raster.values);
+			
+			for(int row = 0; row < poDataset->GetRasterXSize(); row++) 
 			{
-				cerr << "ERROR: unable to allocate " << sizeof(*data) << " x " << xSize << " x " << ySize << " = " << sizeof(*data) * xSize * ySize << " bytes to read in raster file" << endl;
-
+				int err = band->RasterIO(GF_Read, row, 0, 1, ySize, &(raster.values[row][0]), 1, ySize, GetGDALDataType<T>(), 0, 0, nullptr);  //read coloun of raster (switch datatype depending on raster's data type)
+				if (err != 0)
+				{
+					cerr << " ERROR reading from raster" << endl;
+					exit (EXIT_FAILURE);
+				}
 			}
-			//CPLFREE()
+			GDALClose( poDataset );
 	}
-	
-	
-	GDALClose( poDataset );
-	
-	for(int row = 0; row < poDataset->GetRasterXSize(); row++) 
-	{
-		for(int col = 0; col < poDataset->GetRasterYSize(); col++) 
-		{
-			if( raster_data[row][col]  != 0)
-			cout << raster_data[row][col] << " ";
-		}
-		
-	}
-	cout << endl;
-	cout << raster.name << " " << raster.refWKT << " " << raster.transform[0] << endl;
 	return(raster);
 }
 
 
-void GEO::RasterAnalysis(string filename)
+Graph GEO::RasterGraph(VECTOR lines, int split, int spurs, string filename)
 {
 	const char * name = filename.c_str();
-	
+	Graph raster_graph;
 	//build a map to use switch case for differnt data types
-	enum {Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
+	enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
 	static std::map<string, int> d_type;
 	if ( d_type.empty() )
 	{
@@ -607,59 +566,73 @@ void GEO::RasterAnalysis(string filename)
 	std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
 	GDALClose( poDataset );
 	
+	GRAPH g;
+	RASTER R;
+	map_vertex_type map;
 	int type = d_type[datatype];
 	 switch (type) 
 	 {
 		case Byte:
 		{
 			cout << "byte" << endl;
-			RASTER R = ReadRaster<char>(filename);
+			R = ReadRaster<char>(filename);
 			cout << " " << endl;
 		} break;
 		 
 		case UInt16:
 		{
 			cout << "uint16" << endl;
-			RASTER R = ReadRaster<unsigned short>(filename);
+			R = ReadRaster<unsigned short>(filename);
 		} break;
 			
 		case Int16:
 		{
 			cout << "int16" << endl;
-			RASTER R = ReadRaster<short>(filename);
+			R = ReadRaster<short>(filename);
 		} break;
 			
 		case UInt32:
 		{
 			cout << "uint32" << endl;
-			RASTER R= ReadRaster<unsigned int>(filename);
+			R = ReadRaster<unsigned int>(filename);
 		} break;
 			
 		case Int32:
 		{
 			cout << "int32" << endl;
-			RASTER R = ReadRaster<int>(filename);
+			R = ReadRaster<int>(filename);
 		} break;
 		
 		case Float32:
 		{
 			cout << "Float32" << endl;
-			RASTER R= ReadRaster<float>(filename);
+			R = ReadRaster<float>(filename);
 		} break;
 			
 		case Float64:
 		{
 			cout << "Float64" << endl;
-			RASTER R = ReadRaster<double>(filename);
+			R = ReadRaster<double>(filename);
 		} break;
 			
 		default: 
 			cout << "ERROR: Could not determine dataype of raster" << endl;
 			break;
 	 }
+	 
+	 cout << "Building graph for raster " << R.name << endl;
+	 g.ReadVEC4raster(raster_graph, R, map, lines.data);
+	 g.SplitFaults(raster_graph, map, split); //split the faults in the graph into fault segments, according to the intersections of the faults
+	 g.RemoveSpurs(raster_graph, map, spurs); //remove any spurs from the graph network
+	 cout << "done" << endl;
+	 
+	 AssignValuesGraph<float>(raster_graph, R);
+	 
+	 
+	 
 	 cout << "finished" << endl;
 
-
+	return(raster_graph);
 }
 
 void GEO::ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_type, point_type> &source_target)
@@ -765,7 +738,7 @@ void GEO::ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_
 template <typename T>
 T GEO::getValue(point_type p, double transform[8], T** values)
 {
-	polygon_type pl = BoundingBox(transform, 1);
+	polygon_type pl = BoundingBox(transform);
 	if(geometry::within(p,pl))
 	{
 		int x = (int) (p.x() - transform[0]) / transform[1];
@@ -780,7 +753,7 @@ T GEO::getValue(point_type p, double transform[8], T** values)
 
 double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 {
-	polygon_type pl = BoundingBox(Transform, 1);
+	polygon_type pl = BoundingBox(Transform);
 	polygon_type pl2;
 	GEOMETRIE geom;
 	box AOI;
@@ -869,117 +842,6 @@ double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 	GDALClose( (GDALDatasetH) poDstDS );
 	chdir(cur_path);
 }
-
-//obtain information about raster's projection--------------------------
-
-void GEO::GetRasterProperties(std::string const& filename)
-{
-/*
-	[0]  top left x 
-	[1]  w-e pixel resolution 
-	[2]  0 
-	[3]  top left y 
-	[4]  0 
-	[5]  n-s pixel resolution (negative value) 
-	[6]  X-size
-	[7]  Y-size
-	*/
-	float** RR;
-	GDALDataset  *poDataset;
-	GDALAllRegister();
-	double adfGeoTransform[6];
-	int data;
-	float value = 0;
-
-	poDataset = (GDALDataset *) GDALOpen( filename.c_str(), GA_ReadOnly );
-	if( poDataset == NULL ){
-		std::cout<<"no file \"" << filename << "\" to read raster properties from" << std::endl;
-		exit(-1);
-	}
-
-	printf( "Driver: %s/%s\n",
-		poDataset->GetDriver()->GetDescription(),
-		poDataset->GetDriver()->GetMetadataItem( GDAL_DMD_LONGNAME ) );
-
-	printf( "Size is %dx%dx%d\n",
-		poDataset->GetRasterXSize(), poDataset->GetRasterYSize(),
-		poDataset->GetRasterCount() );
-		
-	printf( "Origin = (%.6f,%.6f)\n",
-		adfGeoTransform[0], adfGeoTransform[3] );
-		
-	printf( "Pixel Size = (%.6f,%.6f)\n",
-		adfGeoTransform[1], adfGeoTransform[5] ); 
-
-	//create multi-array from data------------------------------------------
-
-	GDALRasterBand *band = poDataset -> GetRasterBand(1);  
-	RR = RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), RR);
-
-	for (int i = 0; i < poDataset->GetRasterXSize(); i++)
-	{
-		for (int j = 0; j < poDataset->GetRasterYSize(); j++)
-		{
-			data = band->RasterIO(GF_Read,i,j,1,1,&value,1,1,GDT_Float32,0,0,nullptr);
-			
-			if (data == 0)
-			{
-				//RR[i][j] = value;
-				cout << value <<" ";
-			}
-			
-			if (data != 0)
-			{
-				//RR[i][j] = 0;
-				cout << "pff" << endl;
-			}
-		}
-		cout << endl;
-	}
-	cout << endl;
-	cout << "Converted input raster to array. \n" << endl;
-	GDALClose( poDataset );
-
-}
- 
-//read vector data from txt file (WKT format)--------------------------
-void GEO::read_wkt(std::string const& filename, std::vector<line_type>& lineString)
-{
-	string name;	 
-	line_type geometry;
-	ifstream cpp_file(filename.c_str());
-	if (cpp_file.is_open())
-	{
-		while ( !cpp_file.eof() )
-		{
-			string line;
-			getline(cpp_file, line);
-			boost::trim(line);
-			if ( !line.empty() && !boost::starts_with(line, "#") )
-			{
-				string::size_type pos = line.find(";");
-				if (pos != std::string::npos)
-				{
-					name = line.substr(pos + 1);
-					line.erase(pos);
-					trim(line);
-					trim(name);
-				}
-				geometry::read_wkt(line, geometry);
-				lineString.push_back(geometry);
-				geometry.clear();
-			}
-		}
-	} else {
-		cout << "ERROR: Failure reading WKT vector file: " << filename << endl;
-		exit(EXIT_FAILURE);
-	}
-	cout << "read " << lineString.size() << " faults from txt" << endl;
-}
- 
-
- 
- 
  
  void GEO::WriteSHP_lines(vector<line_type>lineaments, const char* Name)
  {
@@ -1445,10 +1307,9 @@ void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
 	GDALClose( poDS );
 }
 
-
-
 void GEO::WriteGraph(Graph G, VECTOR lines, string subF, bool raster)
 {
+	cout << "starting writegraph" << endl;
 	assert (num_vertices(G) != 0 && num_edges(G) != 0);
 	char cur_path[256];
 	char* reference = lines.refWKT;
@@ -1462,9 +1323,7 @@ void GEO::WriteGraph(Graph G, VECTOR lines, string subF, bool raster)
 
 	WriteSHP_g_lines(G, reference, Name_b, false);
 	WriteSHP_g_points(G, reference, Name_v, false);
-
-} 
-
+}
 
 
 

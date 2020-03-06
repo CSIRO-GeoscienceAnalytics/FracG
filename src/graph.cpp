@@ -155,7 +155,7 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 	cout << "	Converted " << faults.size() << " lineaments into " << num_edges(graph) << " edges." << endl;
 }
 
-void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
+void GRAPH::ReadVEC4raster(Graph& graph, RASTER raster, map_vertex_type& map, std::vector<line_type> &faults)
 {
 	GEO g;
 	GEOMETRIE geom;
@@ -169,9 +169,13 @@ void GRAPH::ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_
 
 	const unsigned int FRONT_ENODE = 1 << 0;
 	const unsigned int BACK_ENODE  = 1 << 1;
-	const double endpoint_threshold=0.5;
+	const double endpoint_threshold = 0.5;
 	
-	polygon_type pl = g.BoundingBox(GeoTransform, 100);
+	
+	cout << "here" << endl;
+	polygon_type pl = g.BoundingBox(raster.transform);
+	
+	cout << "here.." << endl;
 
 	//check for edge nodes (crop faults by raster area)--------------------
 
