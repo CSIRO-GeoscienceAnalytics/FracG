@@ -18,7 +18,6 @@ class GRAPH
 	{}
 	;  
 	
-	void DrawGraph(Graph G);
 	void RemoveSpurs(Graph& G, map_vertex_type& map, double minDist);
 
 	vertex_type AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph);
@@ -27,12 +26,12 @@ class GRAPH
 	void AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg, double FaultLength);
 	void ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
 	void ReadVEC4raster(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults);
-	void ReadVEC4MODEL(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults, box bx);
+	Graph ReadVEC4MODEL(std::vector<line_type> faults, box bx);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
 	void SplitFaults(Graph& graph, map_vertex_type& map, double minDist );
-	void GraphAnalysis(Graph& G, vector<line_type> faults, std::ofstream& txtF, int nb);
+	void GraphAnalysis(Graph& G, VECTOR lines, int nb);
 	void ShortPath(Graph G, map_vertex_type m, point_type source, point_type target, double radius);
 	void MinTree (Graph G);
-	void ComponentExtract(Graph G, vector <line_type> lineaments);
+	VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
 };
 #endif

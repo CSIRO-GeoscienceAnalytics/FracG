@@ -1,4 +1,0 @@
-#Power Law: c = 0.0815816, alpha = 3.32803, xmin = 28.5363, xmin_ind = 0 of 2
-#x_value data_cdf_low data_cdf_high model_cdf
-28.5363 0 0.5 0
-67.3747 0.5 1 0.864665

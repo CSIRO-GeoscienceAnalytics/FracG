@@ -91,7 +91,6 @@ box GEOMETRIE::ReturnAOI(vector<line_type> lines)
 {
 	box AOI;
 	polygon_type multiL;
-	
 	BOOST_FOREACH(line_type F, lines)
 	{ 
 			geometry::append(multiL, F);
@@ -217,88 +216,24 @@ void GEOMETRIE::SortDist(vector <std::tuple<long double, point_type, AttachPoint
 	std::sort(cross.begin(), cross.end(), FaultDistanceCompare());
 }
 
-void GEOMETRIE::CentreDistanceMap(std::string const& filename, float box_size)
+void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 {
 	GEO georef;
-	vector<line_type> lineString;
-	OGRSpatialReference srs;
-	char *pszWKT = NULL;
-	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
+	point_type centre;
 	vector<p_index> result;
+	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
 	
-//obtain shp-file information to work with------------------------------
-	const char * name = filename.c_str();
-	GDALAllRegister();
-	line_type Line;
-	point_type P, centre;
-	string f = filename.substr(filename.find_last_of('/')+1); 
-	string layer_name = f.substr(0, f.find("."));
-
-//open shp file and check whether it contains vector features-----------
-	GDALDataset *poDS = static_cast<GDALDataset*>
-	(
-		GDALOpenEx( name, GDAL_OF_VECTOR, NULL, NULL, NULL )
-	);
-	if( poDS == NULL )
-	{
-		printf( " Opening shapefile \"%s\" failed.\n", name );
-		exit( 1 );
-	}   
-	
-// get the spatial reference system-------------------------------------	
-	OGRSpatialReference * pOrigSrs = poDS->GetLayer( 0 )-> GetSpatialRef();
-	if ( pOrigSrs )
-	{
-		srs = *pOrigSrs;
-	}
-	if ( srs.IsProjected() )
-		srs.exportToWkt( &pszWKT );
-	else
-	{
-		cout << "ERROR: vector data without spatial reference" << endl;
-		 exit(EXIT_FAILURE);
-	}
-	
-	OGRLayer  *poLayer = poDS->GetLayer( 0 );
-	poLayer->ResetReading();
-	
-//now we read the line features and put them in a vector----------------        
-	poLayer->ResetReading();
-	OGRFeature *poFeature;
-	int index = 0;
-	while( (poFeature = poLayer->GetNextFeature()) != NULL )
-	{
-		OGRGeometry *poGeometry = poFeature->GetGeometryRef();
-		if( poGeometry != NULL
-				&& wkbFlatten(poGeometry->getGeometryType()) == wkbLineString)
-		{
-			OGRLineString *poLine = (OGRLineString *) poGeometry;
-			for (int i = 0; i < poLine->getNumPoints(); i++)
-			{
-				P.set<0>(poLine->getX(i));
-				P.set<1>(poLine->getY(i));
-				geometry::append(Line, P);
-			}
-			lineString.push_back(Line);
-
-			Line.clear();
-			index++;
-		}
-		OGRFeature::DestroyFeature( poFeature );
-	}
-	GDALClose( poDS );
-	
-	georef.CorrectNetwork(lineString, 10);
-	BOOST_FOREACH(line_type l, lineString)
+	int index = 0 ;
+	BOOST_FOREACH(line_type l, lines.data)
 	{
 		geometry::centroid(l, centre);
-		DistTree.insert(make_pair(centre, index));
+		DistTree.insert(make_pair(centre, ++index));
 	}
 	
 //now we nedd to create a georefernece system based on the bounding box
 //around the features adn the size of the smallest feature--------------
 
-	box AOI = ReturnAOI(lineString);
+	box AOI = ReturnAOI(lines.data);
 		
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -309,121 +244,49 @@ void GEOMETRIE::CentreDistanceMap(std::string const& filename, float box_size)
 	point_type ul(min_x, max_y);
 	point_type lr(max_x, min_y);
 	
-	double adfGeoTransform[6] = {min_x, box_size, 0 , max_y, 0, (box_size * (-1))};
+	double newGeoTransform[6] = {min_x, cell_size, 0 , max_y, 0, (cell_size * (-1))};
 	
-	int x_size = (long int) ceil((geometry::distance(ll, lr) / box_size));
-	int y_size = (long int) ceil((geometry::distance(ll, ul) / box_size));
+	int x_size = (long int) ceil((geometry::distance(ll, lr) / cell_size));
+	int y_size = (long int) ceil((geometry::distance(ll, ul) / cell_size));
 
 	vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  
 	
 	double cur_y = max_y;
 	double cur_x = min_x;
 	
-	
-
 // query for distance to fault centre at every grid cell----------------
-
 	cout << "Calulating distances to lineamnet centres for raster with size \n"
 		 << vec.size()<< " x " << vec[0].size() << endl;
+		 
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
 	for (int i = 0; i < x_size; i++)
 	{
 		cur_y = max_y;
 		for (int j = 0; j < y_size; j++)
 		{
-			point_type cur_pos((cur_x + box_size/2), (cur_y - box_size/2));
+			point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
 			DistTree.query(geometry::index::nearest(cur_pos, 1), back_inserter(result));
 			vec[i][j] = geometry::distance(cur_pos, result[0].first);
 			result.clear();
-			cur_y-= box_size;
+			cur_y-= cell_size;
 			 ++(*show_progress);
 		}
-		cur_x += box_size;
+		cur_x += cell_size;
 	}
-	cout << " done "<< endl;
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec, pszWKT, adfGeoTransform, "C_dist.tif");
+	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, "_dist.tif");
 }
 
-void GEOMETRIE::P21Map(std::string const& filename, float box_size )
+void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 {
 	GEO georef;
-	vector<line_type> lineString;
-	OGRSpatialReference srs;
-	char *pszWKT = NULL;
 	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
 	vector<p_index> result;
-	
-//obtain shp-file information to work with------------------------------
-	const char * name = filename.c_str();
-	GDALAllRegister();
-	line_type Line;
-	point_type P, centre;
-	string f = filename.substr(filename.find_last_of('/')+1); 
-	string layer_name = f.substr(0, f.find("."));
 
-//open shp file and check whether it contains vector features-----------
-	GDALDataset *poDS = static_cast<GDALDataset*>
-	(
-		GDALOpenEx( name, GDAL_OF_VECTOR, NULL, NULL, NULL )
-	);
-	if( poDS == NULL )
-	{
-		printf( " Opening shapefile \"%s\" failed.\n", name );
-		exit( 1 );
-	}   
-	
-// get the spatial reference system-------------------------------------	
-	OGRSpatialReference * pOrigSrs = poDS->GetLayer( 0 )-> GetSpatialRef();
-	if ( pOrigSrs )
-	{
-		srs = *pOrigSrs;
-	}
-	if ( srs.IsProjected() )
-		srs.exportToWkt( &pszWKT );
-	else
-	{
-		cout << "ERROR: vector data without spatial reference" << endl;
-		 exit(EXIT_FAILURE);
-	}
-	
-	OGRLayer  *poLayer = poDS->GetLayer( 0 );
-	poLayer->ResetReading();
-	
-//now we read the line features and put them in a vector----------------        
-	poLayer->ResetReading(); //you do this twice
-	OGRFeature *poFeature;
-	int index = 0;
-	while( (poFeature = poLayer->GetNextFeature()) != NULL )
-	{
-		OGRGeometry *poGeometry = poFeature->GetGeometryRef();
-		if( poGeometry != NULL
-				&& wkbFlatten(poGeometry->getGeometryType()) == wkbLineString)
-		{
-			OGRLineString *poLine = (OGRLineString *) poGeometry;
-			for (int i = 0; i < poLine->getNumPoints(); i++)
-			{
-				P.set<0>(poLine->getX(i));
-				P.set<1>(poLine->getY(i));
-				geometry::append(Line, P);
-			}
-			lineString.push_back(Line);
 
-			Line.clear();
-			index++;
-		}
-		OGRFeature::DestroyFeature( poFeature );
-	}
-	GDALClose( poDS );
-	
-	georef.CorrectNetwork(lineString, 10); //Don't use magic numbers
-//======================================================================
+//now we nedd to create a georefernece system based on the bounding box
 
-	
-//now we nedd to create a georefernece system based on teh bounding box
-//around the features adn the size of teh smallest feature--------------
-
-	box AOI = ReturnAOI(lineString);
+	box AOI = ReturnAOI(lines.data);
 	
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -434,7 +297,7 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	point_type ul(min_x, max_y);
 	point_type lr(max_x, min_y);
 	
-	double adfGeoTransform[6] = {min_x, box_size, 0 , max_y, 0, (box_size * (-1))};
+	double newGeoTransform[6] = {min_x, box_size, 0 , max_y, 0, (box_size * (-1))};
 	
 	int x_size = (long int) ceil((geometry::distance(ll, lr) / box_size));
 	int y_size = (long int) ceil((geometry::distance(ll, ul) / box_size));
@@ -446,38 +309,28 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 	double cur_y = max_y;
 	double cur_x = min_x;
 	
-	//put the segments into an rtree, so we don't need to check each one
-	typedef std::pair<box, decltype(lineString)::iterator> box_line; //a bounding box around the linestring, and the linestring
+
+//put the segments into an rtree, so we don't need to check each one----
+	typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring, and the linestring
 	geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
-	for (auto it = lineString.begin(); it < lineString.end(); it++)
+	for (auto it = lines.data.begin(); it < lines.data.end(); it++)
 	{
 		box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
 		line_tree.insert(std::make_pair(fault_bounding_box, it));
 	}
-	
-	
-	cout << setprecision(10) << cur_x << " " << cur_y << endl;
 
-	cout << " ----- " << endl;
-// query for distance to fault centre at every grid cell----------------
 
-	cout << "Calulating P21 map for raster with size \n"
+// query intesity and density for every grid cell-----------------------
+	cout << "Calulating P20 and P21 maps for raster with size \n"
 		 << vec_count.size()<< " x " << vec_count[0].size() << endl;
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
-	const double grad_start = 1000;
-	double grad = grad_start;
+
 	for (int i = 0; i < x_size; i++)
 	{
 		cur_y = max_y;
-		grad = grad_start;
-		
 		for (int j = 0; j < y_size; j++)
 		{
-
 			point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-			
-			//cout << setprecision(10) << cur_x << " " << cur_y << endl;
-			
 			point_type minBox(cur_x, (cur_y - box_size));
 			point_type maxBox((cur_x + box_size), cur_y );
 
@@ -486,41 +339,40 @@ void GEOMETRIE::P21Map(std::string const& filename, float box_size )
 			double intersec = 0;
 			double intersection_length = 0;
 		
-// 			std::list<line_type> output;
-			//get the lines that have intersecting bounding boxes
+//get the lines that have intersecting bounding boxes-------------------
 			std::vector<box_line> candidates;
 			line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));
 			for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
 			{
-				//then check the full linestring to see if they intersect with this pixel
+//then check the full linestring to see if they intersect with this pixel
 				if (!geometry::disjoint(*candidate->second, pixel))
 				{
 					intersec++; //intersection count for the P20 map
-					//and sum the length of the intersection(s) for the P21 map
+//and sum the length of the intersection(s) for the P21 map-------------
+
 					geometry::model::multi_linestring<line_type> intersecting;
 					geometry::intersection(pixel, *candidate->second, intersecting);
 					for (auto intersec_it = intersecting.begin(); intersec_it < intersecting.end(); intersec_it++)
 					{
 						intersection_length += geometry::length(*intersec_it);
 					}
-					
 				}
 			}
 			vec_count[i][j] = intersec;
 			vec_length[i][j] = intersection_length;
-// 			vec[i][j] = grad;;
 
 			cur_y-= box_size;
 			++(*show_progress);
-		
-			grad -= 10;
 		}
 		cur_x += box_size;
 	}
-	cout << " done "<< endl;
+	
+	cout << box_size << endl;
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec_count, pszWKT, adfGeoTransform, "P20.tif");
-	georef.WriteRASTER(vec_length, pszWKT, adfGeoTransform, "P21.tif");
+
+	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, "_P20.tif");
+	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, "_P21.tif");
+
 }
 
 

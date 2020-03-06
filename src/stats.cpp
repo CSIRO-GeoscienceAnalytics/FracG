@@ -2,34 +2,25 @@
 #include "geometrie.h"
 #include "GeoRef.h"
 #include "graph.h"
-#include "model.h"
+// #include "model.h"
 
 STATS::STATS ()
 
 {
-
 }
 
-vec STATS::Bootstrapping(vec Data)
+// create and open filestream in folder "statistics"
+ofstream CreateFileStream(string subdir_name, string name)
 {
-	srand ( time(NULL) ); 
-	int maxNb = Data.size(), size_seg, seg;
-	float new_CV, CV =  0.9 * stddev(Data) / mean(Data);
-	vec sampled_data = Data;
-
-	do {
-		size_seg = 0.05 * maxNb ;
-		seg = rand() % size_seg;
-		for (int i = 0; i < seg; i++)
-		{
-			int p1 = rand() % maxNb ;
-			int p2 = rand() % maxNb ;
-			sampled_data(p1) = Data(p2);
-		}
-		new_CV =  stddev(sampled_data) / mean(sampled_data);
-	} while (new_CV > CV);
-	cout << CV << endl;
-	return(sampled_data);
+	string stats_dirname = subdir_name + "/statisics/";
+	const char* stats_dir = stats_dirname.c_str();
+		if(!opendir(stats_dir))
+		
+	mkdir(stats_dir, 0777);
+	string csv_file = stats_dir + name;
+	ofstream txtF; 
+	txtF.open (csv_file, ios::out); 
+	return(txtF);
 }
 
 //struct to hold the quad tree data
@@ -113,7 +104,7 @@ void CountQuadTreeBoxes(QuadTreeNode &node, std::vector<std::tuple<double, long 
 	}
 }
 
-void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset)
+void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset)
 {
 	box bbox(faults.front().front(), faults.front().front()); //bounding box for the entire fault set. start with an arbitrary point that is known to be inside the bounding box of the faults
 	vector<box> bboxes;
@@ -212,39 +203,33 @@ void STATS::BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<
 			if (*ity != nullptr) CountQuadTreeBoxes(**ity, counts, 0);
 }
 
-void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
+void STATS::DoBoxCount(VECTOR lines)
 {
-	cout << "Box Counting (QuadTree Method)" << endl;
+	cout << "\n Box Counting (QuadTree Method)" << endl;
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_BoxCount.tsv"));
+	
 	std::clock_t startcputime = std::clock();
 	auto t_start = std::chrono::high_resolution_clock::now();
 	
 	//use the length of the longest fault as the starting box size
 	double longest = 0;
 	double shortest = std::numeric_limits<double>::infinity();
-	for (auto it = faults.begin(); it != faults.end(); it++)
+	for (auto it = lines.data.begin(); it != lines.data.end(); it++)
 	{
 		const double length = geometry::length(*it);
 		longest = max(longest, length);
 		shortest = min(shortest, length);
 	}
-	cout << "The fault length range is " << shortest << "m - " << longest << "m, for a range of 2^" << log2(longest/shortest) << endl;
+
 	const int max_depth = 6;
 	vector<std::tuple<double, long long int>> counts;
 	point_type offset(0,0);
-	BoxCountQuadTree(faults, counts, longest, max_depth, offset);
-	
-	//for debug purposes
-// 	cout << "Box counting results:" << endl;
-// 	for (auto t = counts.begin(); t < counts.end(); t++)
-// 	{
-// 		cout << std::get<0>(*t) << ", " << std::get<1>(*t) << endl;
-// 	}
-	
+	BoxCountQuadTree(lines.data, counts, longest, max_depth, offset);
+		
 	auto t_end = std::chrono::high_resolution_clock::now();
-	cout << "Boxcounting (QuadTree Method) 2: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n"
-		 <<  std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << endl;
-	txtF <<" frequency \t size" << endl;
-	
+	cout << "CPU  time: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds\n"
+		 << "Wall time: " << std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << endl;
+
 //Least-Square-Fit------------------------------------------------------
 	int NB = 0;
 	vec X(counts.size(),fill::zeros);
@@ -252,6 +237,7 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 	vec XX(counts.size(),fill::zeros);
 	vec XY(counts.size(),fill::zeros);
 	
+	txtF <<" frequency \t size" << endl;
 	for (auto it = counts.begin(); it != counts.end(); it++)
 	{
 		txtF << std::get<1>(*it) << "\t" << std::get<0>(*it) << endl;
@@ -291,9 +277,10 @@ void STATS::DoBoxCount(vector<line_type> faults, std::ofstream& txtF)
 
 	txtF << " LS-Fit: "<< "\t" << a  << "x + " << b << endl; 
 	txtF << " R^2: "   << "\t" << R2 <<endl; 
-	cout << "The linear fit line is of the form: "<<a<<"x + " << b << " ( R^2 = " << R2 << " )"  << endl;
+	cout << " Linear fit: "<<a<<"x + " << b << " (R^2 = " << R2 << ")"  << endl;
 
 	delete[] y_fit;
+	txtF.close();
 }
 
 
@@ -636,8 +623,8 @@ struct PrintCDFSingle : public boost::static_visitor<void>//(DistStats<T> &stats
 {
 	public:
 		const std::vector<double> &values;
-		const std::string fname;
-		PrintCDFSingle(const std::vector<double> &v, const std::string fn) : values(v), fname(fn) {};
+		std::ofstream &fname;
+		PrintCDFSingle(const std::vector<double> &v, std::ofstream &fn) : values(v), fname(fn) {};
 		
 		template<typename T>
 		void operator()(DistStats<T> &stats)
@@ -645,29 +632,84 @@ struct PrintCDFSingle : public boost::static_visitor<void>//(DistStats<T> &stats
 			const int NV = values.size(); //total number of data values
 			const int N  = NV - stats.xmin_ind; //number of data values that are above xmin
 			const double ND = N; //save having to convert this multiple times
-			std::string model_fname = fname+"_"+stats.name+".txt";
-			std::replace(model_fname.begin(), model_fname.end(), ' ', '_');
-			std::transform(model_fname.begin(), model_fname.end(), model_fname.begin(), ::tolower);
-			std::ofstream fout(model_fname);
-			fout << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
-			fout << "#x_value data_cdf_low data_cdf_high model_cdf" << endl;
+			//std::string model_fname = fname+"_"+stats.name+".txt";
+			//std::replace(model_fname.begin(), model_fname.end(), ' ', '_');
+			//std::transform(model_fname.begin(), model_fname.end(), model_fname.begin(), ::tolower);
+
+			fname << "CUMMULATIVE DISTRIBUTION FUNCTION" << endl;
+			fname << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
+			fname << "#x_value" << "\t"<< "data_cdf_low" <<"\t"<< "data_cdf_high" <<"\t"<< "model_cdf" << endl;
 			
 			for (int i = stats.xmin_ind; i < NV; i++)
 			{
 				const double data_low = (i     - stats.xmin_ind) / ND;
 				const double data_hi =  (i + 1 - stats.xmin_ind) / ND;
 				const double model_cdf = stats.model.cdf_func(values.at(i), stats.xmin, stats.params);
-				fout << values[i] << " " << data_low << " " << data_hi << " " << model_cdf << std::endl;
+				fname << values[i] << "\t" << data_low << "\t" << data_hi << "\t" << model_cdf << std::endl;
 			}
+			fname << endl;
+		}
+};
+
+//visitor struct to print out the pdf of a single model
+//we have to print out the different models separately, because different xmin's mean different data PDF's
+struct PrintPDFSingle : public boost::static_visitor<void>//(DistStats<T> &stats)
+{
+	public:
+		const std::vector<double> &values;
+		ofstream &fname;
+		PrintPDFSingle(const std::vector<double> &v, ofstream &fn) : values(v), fname(fn) {};
+		
+		template<typename T>
+		void operator()(DistStats<T> &stats)
+		{
+			fname << "PROBABILITY DENSITY FUNCTION" << endl;
+			const int NV = values.size(); //total number of data values
+			const int N  = NV - stats.xmin_ind; //number of data values that are above xmin
+			const double ND = N; //save having to convert this multiple times
+			
+			fname << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
+			fname << "#x_value" << "\t" << "data_pdf_low" <<"\t"<< "data_pdf_high" <<"\t"<< "model_pdf" << endl; 
+			
+			for (int i = stats.xmin_ind; i < NV; i++)
+			{
+				const double data_low = (i     - stats.xmin_ind) / ND;
+				const double data_hi =  (i + 1 - stats.xmin_ind) / ND;
+				const double model_pdf = stats.model.pdf_func(values.at(i), stats.xmin, stats.params);
+				fname << values[i] << "\t" << data_low << "\t" << data_hi << "\t" << model_pdf << std::endl;
+			}
+			fname << endl;
 		}
 };
 
 //print out all the model CDF's, as compared to their relative data CDF's
-void PrintCDFs(const StatsModelData dists, const vector<double> values, const std::string fname)
+void PrintBest2File(const StatsModelData dists, const vector<double> values, ofstream &fname)
 {
-	PrintCDFSingle print_visitor(values, fname);
-	for (auto s : dists.models) //is is a DistStats<whatever> struct
-		boost::apply_visitor(print_visitor, s);
+	PrintCDFSingle print_visitor_c(values, fname);
+	PrintPDFSingle print_visitor_p(values, fname);
+	
+	StatsModelData printModel;
+		
+	if (dists.best_matches.size() == 1)
+	{
+		const int best = dists.best_match;
+		if (best >= 0)
+		{
+			auto s = dists.models[best];
+			boost::apply_visitor(print_visitor_c, s);
+			boost::apply_visitor(print_visitor_p, s);
+
+		}
+		
+	} else if (dists.best_matches.size() > 1) 
+	{
+		for (auto it = dists.best_matches.begin(); it < dists.best_matches.end(); it++)
+		{
+			auto s = dists.models[*it];
+			boost::apply_visitor(print_visitor_c, s);
+			boost::apply_visitor(print_visitor_p, s);
+		}
+	}
 }
 
 template<typename T1, typename T2>
@@ -755,7 +797,7 @@ struct GenerateStats : public boost::static_visitor<void>//(DistStats<T> &stats)
 			stats.pvalue = GetPValue(stats.model, stats.params, xmin, values, stats.ks, generators);
 			stats.xmin = *xmin;
 			stats.xmin_ind = xmin - values.begin();
-			cout << "Model " << stats.name << " with parameters " << stats.params << " has ks value " << stats.ks << ", pvalue = " << stats.pvalue << ", with xmin = " << stats.xmin << ", at index " << stats.xmin_ind << " of " << values.size() << endl;
+	//cout << "Model " << stats.name << " with parameters " << stats.params << " has ks value " << stats.ks << ", pvalue = " << stats.pvalue << ", with xmin = " << stats.xmin << ", at index " << stats.xmin_ind << " of " << values.size() << endl;
 		}
 };
 
@@ -777,7 +819,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 		{
 			have_model = true;
 			model_data.best_match = it - models.begin();
-			cout << "Model " << boost::apply_visitor([](auto &x){return x.name;}, *it) << " has not been rejected" << endl;
+		//	cout << "Model " << boost::apply_visitor([](auto &x){return x.name;}, *it) << " has not been rejected" << endl;
 		}
 	}
 // 	cout << endl;
@@ -811,7 +853,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 			model_data.comparisons[ind1][ind2] = std::move(comparison_result);
 			if (p > DIFFERENCE_THRESHOLD)
 			{
-				cout << "Models " << name1 << " and " << name2 << " cannot be distinguished, with R = " << R << ", and p = " << p << endl;
+				//cout << "Models " << name1 << " and " << name2 << " cannot be distinguished, with R = " << R << ", and p = " << p << endl;
 				continue;
 			}
 			std::string best_name, worse_name;
@@ -823,7 +865,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 				best_name = name2;
 				worse_name = name1;
 			}
-			cout << "Model " << best_name << " is a better fit that model " << worse_name << ", with R = " << R << ", p = " << p << endl;
+			//cout << "Model " << best_name << " is a better fit that model " << worse_name << ", with R = " << R << ", p = " << p << endl;
 // 			if (model_data.best_match == worse_ind) model_data.best_match = best_ind;
 		}
 	}
@@ -900,21 +942,23 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 	//done
 }
 
-StatsModelData STATS::CompareStatsModels(bool print, std::vector<double> &values, std::ofstream& txtF)
+StatsModelData STATS::GetLengthDist(VECTOR lines)
 {
 	StatsModelData results;
-	std::sort(values.begin(), values.end());
-	cout << "The values are in the range " << values.front() << ", " << values.back() << endl;
-// 	for (auto it = values.begin(); it != values.end(); it++)
-// 	{
-// 		if (it != values.begin()) cout << ", ";
-// 		cout << *it;
-// 	}
-// 	cout << endl;
 	random::random_device rd{};
+	vector <double> values;
+	
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_lengthFit.tsv"));
+	
+	BOOST_FOREACH(line_type l , lines.data)
+		values.push_back(geometry::length(l));
+	
+	std::sort(values.begin(), values.end());
+	cout << "Determing length distribution for values in the range " << values.front() << ", " << values.back() << endl;
+
 	const int NTHREADS = std::max(1, omp_get_max_threads());
-	if (print)
-		cout << "Using " << NTHREADS << " threads" << endl;
+
+	cout << "Using " << NTHREADS << " threads" << endl;
 	std::vector<random::mt19937> rngs(NTHREADS);
 	for (auto it = rngs.begin(); it < rngs.end(); it++) *it = std::move(random::mt19937{rd}); //make one random number generator per omp thread
 	ModelHolder<PowerLawParams> power_law_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
@@ -959,95 +1003,38 @@ StatsModelData STATS::CompareStatsModels(bool print, std::vector<double> &values
 		 boost::apply_visitor(generate_visitor, *it);
 	}
 	
-	cout << endl;
-	
-	PrintCDFs(results, values, "model_cdf"); //print the cdf's for testing purposes
-	
 	const double ACCEPT_THRESHOLD = 0.1; //models are accepted if their pvalue is *ABOVE* this threshold
 	
 	const double DIFFERENCE_THRESHOLD = 0.1; //comparisons are considered meaningful if the pvalue is *BELOW* this threshold
 	DecideBestModel(results, values, ACCEPT_THRESHOLD, DIFFERENCE_THRESHOLD); //compare the models against each other
+	
+	
 	
 	if (results.best_matches.size() == 1)
 	{
 		const int best = results.best_match;
 		if (best >= 0)
 		{
-			if (print)
-				cout << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
-			txtF << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl;
-			
+		cout << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
+		txtF << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl;
 		}
 	} else if (results.best_matches.size() > 1) 
 	{
-		if (print)
-			cout << "The " << results.best_matches.size() << "\t" << " best matches are: ";
+		cout << "The " << results.best_matches.size() << " best matches are: ";
 		txtF << "The " << results.best_matches.size() << " best matches are: " << "\t";
 		for (auto it = results.best_matches.begin(); it < results.best_matches.end(); it++)
 		{
-			if (print)
-				cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
+			cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
 			txtF << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
 		}
 		cout << endl;
-		txtF << endl;
+		txtF << endl;		
 	}
+	
+	PrintBest2File(results, values, txtF); //print the cdf's for testing purposes
+	txtF.close();
 	return results;
 }
-
-double STATS::ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, double>>Maximas)
-{
-/***********************************************************************
-* Berkowitz, B. (1995). Analysis of fracture network connectivity 
-* using percolation theory. 
-* Mathematical Geology, 27(4), 467-483.
-***********************************************************************/
-	GEO georef;
-	point_type rn_p;
-	point_type p1, p2;
-	line_type ScanLine1, ScanLine2;
-	int line;// intersec1, intersec2; //commenting out these unsused variables
-// 	double rX1, rX2, rY1, rY2;
-	vector<pair<int, double>> TotalIntersec;
-	polygon_type pl = georef.BoundingBox(GeoTransform, 10);
-	vector<double> directions(100);
-	random::mt19937 gen;
-	random::uniform_int_distribution<> distX(GeoTransform[0], GeoTransform[0] + GeoTransform[1]*GeoTransform[6]);
-	random::uniform_int_distribution<> distY(GeoTransform[3], GeoTransform[3] + GeoTransform[5]*GeoTransform[7]);
-	
-	for (unsigned int i =0; i < Maximas.size();i++)
-	{
-		for (int j =0; j < (Maximas[i].second * 100);j++)
-			directions.push_back(Maximas[i].first);
-	}
-	
-
-	line = 0;
-	do{
-
-		bool accept = false;
-		do{
-			//rn_p.set<0>(distX(gen));
-			//rn_p.set<1>(distY(gen));	
-			//if (geometry::within(rn_p,pl))
-				accept = true;
-		}while (!accept);
-		
-		
-		
-
-		BOOST_FOREACH(line_type F, faults)
-		{
-
-		}
-		
-		line = 10;
-	}while (line < 10);
-	
-
-	return(0);
-
- }
  
 double STATS::PointExtractor(point_type P, double radius, double Transform[8], double** raster)
 {
@@ -1085,13 +1072,12 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 			 DATA(i) = D.at(i);
 		M = arma::mean(DATA);
 	}
-
 	return(M);
 }
  
 
- 
- void STATS::AnalyseRasterFaults(vector<READ> input, vector<line_type> faults)
+ template <typename T>
+ void STATS::AnalyseRaster(VECTOR lines, T R)
  {
 	GEO georef;
 	GEOMETRIE geom;
@@ -1105,16 +1091,30 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	string  Result, ResultsF, ResultsG, exten;
 	double strike, length, sinus;
 	 
+	 /*
 	ResultsF =  "FaultData_";
 
-	for(std::vector<READ>::size_type i = 0; i != input.size(); i++) 
+
+
+
+		
+		
+	for(std::vector<line_type>::size_type i = 0; i != lines.data.size(); i++) 
 	{ 
-		pl = georef.BoundingBox(input[i].transform, 1);
-		cout << "Analyse Raster '"<< input[i].name << "' for entire fault set" << endl;
-// 		double len = (abs(input[i].transform[1]) + abs(input[i].transform[5])) / 2;
-		Result = ResultsF + input[i].name + ".csv";
-		ofstream txtF (Result);
-		txtF << "File: " << input[i].name << endl;
+		
+		
+		
+		
+	//	pl = georef.BoundingBox(input[i].transform, 1);
+	//	cout << "Analyse Raster '"<< input[i].name << "' for entire fault set" << endl;
+
+	//	Result = ResultsF + input[i].name + ".csv";
+		
+		
+		
+		
+		//ofstream txtF (Result);
+		//txtF << "File: " << input[i].name << endl;
 			
 		//create simple statisics of entire raster file
 		vec rA_data(input[i].transform[6] * input[i].transform[7], fill::zeros);
@@ -1124,7 +1124,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 			{
 				rA_data(I) = input[i].values[x][y];
 				I++;
-			}
+		}
 		txtF << "Mean: "	<< arma::mean(rA_data) << "\t";
 		txtF << "Median: "	<< arma::median(rA_data) << "\t";
 		txtF << "Stdev: "	<< arma::stddev(rA_data) << "\t";
@@ -1160,8 +1160,10 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 //check if fault is within raster file----------------------------------
 			if(geometry::within(F.front(), pl) && geometry::within(F.back(),pl))
 			{
-				txtF << georef.LineExtractor(F, input[i].transform, input[i].values) << "\t";
 				
+				txtF << georef.LineExtractor(F, input[i].transform, input[i].values) << "\t";
+
+				/*
 				if(georef.getElevation(F.front(), input[i].name) > georef.getElevation(F.back(), input[i].name))
 					txtF << (georef.getElevation(F.front(), input[i].name) - georef.getElevation(F.back(), input[i].name))/geometry::length(F) << "\t";
 				else
@@ -1175,7 +1177,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 
 				vec MEAN_GRAD (functor2.Points.size(),fill::zeros);
 				
-
+				
 				int ii = 0;
 				for (vector<std::tuple<point_type, point_type, point_type>>::
 				const_iterator I = functor2.Points.begin(); I != functor2.Points.end(); ++I) 
@@ -1204,6 +1206,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 						ii++;
 					}
 				}
+				
 				txtF << arma::mean(MEAN_GRAD);
 			}
 			else 
@@ -1212,256 +1215,24 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 		fault_no++;
 		}
 		cout << "  done" << endl;
+		
 	}
+	* */
  }
- 
- void STATS::AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target, double Dist)
- {
-	GEO geo;
-	GRAPH G;
+  
 
-	map_vertex_type map;
-	
-	for(std::vector<READ>::size_type i = 0; i != input.size(); i++) 
-	{
-		Graph graph;
-		
-		//string g_name ="GRAPH_"+input[i].name+".shp";
-		string g_name ="GRAPH.shp";
-		const char *G_n = g_name.c_str();
-		map.clear();
-// 		double Dist = (input[i].transform[1]+input[i].transform[5]) / 4; //distance threshold for considering separated objects to be at the same locations //use the user-given value instead
-		cout << "Using distance threshold of " << Dist << endl;
-		
-		ofstream txtF; 
-		txtF.open ("Graph_"+input[i].name+".csv"); 
-		
-		cout << " Analyse Raster '"<< input[i].name <<"' for Graph" << endl;
-		cout << "  Building new Graph for raster" << endl;
-		G.ReadVEC4raster(graph, map, faults);// //convert the faults into a graph
-		G.SplitFaults(graph, map, Dist); //split the faults in the graph into fault segments, according to the intersections of the faults
-		G.RemoveSpurs(graph, map, Dist); //remove any spurs from the graph network
-		cout << " Assigning weights to vertices and edges" << endl;
-		G.GraphAnalysis(graph, faults, txtF, 10);
-// 		G.ShortPath(graph, map, source, target, 500); //for debug purposes, to see if this gets the same path as using the other graph-reading functions
-
-
-		geo.AssignValuesGraph(graph, input[i].transform, input[i].values);
-		
-		
-		
-	//	geo.AssignValuesAll(graph, input[i].name);
-		
-		
-		
-		geo.WriteSHP(graph, G_n); //write out the graph data as a file
-		//geo.WriteTxt(graph, input[i].name); //write out the graph data as a text file
-		DGraph flow_graph = geo.MakeDirectedGraph(graph); //don't know if we need these yet//, input[i].transform, input[i].values
-		geo.setup_maximum_flow(flow_graph);
-		double max_flow = geo.maximum_flow(flow_graph, source, target);
-		cout << "The maximum flow from (" << source.x() << ", " << source.y() << ") to (" << target.x() << ", " << target.y() << ") is " << max_flow << endl;
-		cout << "  done" << endl;
-		geo.WriteSHP_maxFlow(flow_graph, "Flow_Graph.shp");
-	}
- }
- 
-void STATS::AddData(vector<line_type> faults, point_type source, point_type target, double Dist)
+void STATS::KMCluster(bool input, int No)
 {
-	GEO georef;
-	GEOMETRIE geom;
-	
-	double old_GeoTransform[8];
-	bool prompt;
-	char choice;
-	string name, rasFile;
-	double** ADD_RASTER;	
-	vector<READ>  input;
 
-	cout<<"Additional raster files? y/n ";
-	cin>>choice;
-
-	if (choice == 'y')
-	{
-	std::copy(std::begin(GeoTransform), std::end(GeoTransform), std::begin(old_GeoTransform));
-		do{
-			prompt = false;
-			cout <<"raster file ";
-			cin >> name;
-			rasFile = (string) name;
-			georef.GetRasterProperties(rasFile, ADD_RASTER);
-			
-			input.push_back(READ(name, ADD_RASTER, GeoTransform));
-	
-			while (!prompt)
-			{
-				cout<<"Additional raster files? y/n ";
-				cin>>choice;
-				cout << endl;
-			
-				if (choice == 'y' || choice == 'n')	
-					prompt = true;
-			}
-		} while(choice == 'y');
-		
-	AnalyseRasterFaults(input, faults);
-	AnalyseRasterGraph(input, faults, source, target, Dist);
-	std::copy(std::begin(old_GeoTransform), std::end(old_GeoTransform), std::begin(GeoTransform));
-	}
 }
 
-FSTATS STATS::KMCluster(bool input, int No, FSTATS faultStats)
-{
-	bool status, prompt;
-	char choice;
-	int clust;
-	vector <double> 	data1;
-	vector <double> 	data2;
-	FSTATS result;
-	mat data(2, faultStats.size(),fill::zeros );
-	mat means;
 
-	for ( typename FSTATS::const_iterator it = faultStats.begin(); it != faultStats.end(); it++)
-	{	 
-		data1.push_back(it->first); 
-		data2.push_back(it->second); 
-	}
-	assert (data1.size() == data2.size());
-	for (int i = 0; i < (int) data1.size(); i++)
-	{
-			data(0,i) =  data1.at(i);
-			data(1,i) =  data2.at(i);
-	}
 
-	if (input)
-	{
-		do {
-			prompt = false;
-			cout <<"Enter number of clusters ";
-			std::cin >> clust;
 
-			status = kmeans(means, data, clust, random_subset, 15, true);
-		
-			if(!status)
-				cout << "clustering failed" << endl;
-			means.print("means:");
 
-			while (!prompt)
-			{
-				cout<<"Clustering ok? y/n ";
-				cin>>choice;
-				cout << endl;
-				if (choice == 'y' || choice == 'n')	
-					prompt = true;	
-			}
-		} while(choice == 'n');
-		
-		int g = 1;
-		data1.clear();
-		data2.clear();
-		for(const auto& val : means)
-		{
-			if (g%2)
-				data1.push_back(val);
-			else 
-				data2.push_back(val);
-			g++;
-		}
-		assert (data1.size() == data2.size());
-		for (int i = 0; i < (int) data1.size(); i++)
-			result.push_back(make_pair(data1.at(i), data2.at(i)));
-	}
-	
-	else if (!input)
-	{
-		status = kmeans(means, data, No, random_subset, 15, false);
-	
-		if(status == false)
-			cout << "clustering failed" << endl;
-		
-		int g = 1;
-		data1.clear();
-		data2.clear();
-		for(const auto& val : means)
-		{
-			if (g%2)
-				data1.push_back(val);
-			else 
-				data2.push_back(val);
-			g++;
-		}
-		assert (data1.size() == data2.size());
-		for (int i = 0; i < (int) data1.size(); i++)
-			result.push_back(make_pair(data1.at(i), data2.at(i)));
-	}
-	return result;
-}
 
-//evaluate the kernel density esimation, with an gaussian kernel, at an arbitrary point
-//angles is the array of angles in degrees, smooth is a smoothing factor (>0), and x is the point to be evaluated at
-double evaluate_angle_kde(arma::vec &angles, const double smooth, double x)
-{
-	x = std::fmod(x, MAX_ANGLE);
-	double sum = 0;
-	const double s2 = smooth*smooth;
-	for (auto it = angles.begin(); it < angles.end(); it++)
-	{
-		//because the kde wraps around, exavluate it on either side of the gaussian
-		const double x0 = *it;
-		double xd1 = x - x0;
-		double xd2 = MAX_ANGLE - std::abs(xd1);
-		sum += std::exp(-0.5 * xd1 * xd1 / s2);
-		sum += std::exp(-0.5 * xd2 * xd2 / s2);
-	}
-	return sum/(sqrt(2*M_PI) * angles.size() * smooth);
-}
 
-//return an evenly-sampled array of the kde that represents the given values and smoothing factor
-//and scale them to sum to 1, to be a probability distribution function
-arma::vec angle_kde_fill_array(int nsamples, arma::vec &angles, const double smooth)
-{
-	const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
-	arma::vec sampled(nsamples);
-	for (int i = 0; i < nsamples; i++){
-		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
-	}
-	return sampled;
-}
 
-//gaussion kernel for kde
-float k_gauss( double val)
-{
-	const double p = 1.0 / sqrt( 2.0 * M_PI);
-	float result = 0.5 * (val*val);
-	result = p * std::exp(- result);
-	return result;
-}
-
-//simple KDE
-vector< std::pair<double, double> > kde(arma::vec val, int len, float b)
-{
-	vector< std::pair<double, double> > density( len );
-
-	arma::vec val2(len,fill::zeros);
-	int i = 0;
-	for (auto& v : val)
-		val2[i] = v + 180;
-		
-	vec val3 = join_cols<vec>(val, val2);
-	len = val.size();
-
-	const double p = 1.0 / (b * len );
-	for(int r = 0; r < len; r++)
-	{
-		double sum = 0;
-		for(int i = 0; i < len; i++)
-		{
-			double dist = abs(val[r] - val[i]);
-			sum +=  k_gauss( dist / b );
-		}
-		density[r] = std::make_pair( val[r], p*sum );
-	}
-	return density;
-}
  
 void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 {
@@ -1503,6 +1274,39 @@ void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 	}
 }
 
+
+//evaluate the kernel density esimation, with an gaussian kernel, at an arbitrary point
+//angles is the array of angles in degrees, smooth is a smoothing factor (>0), and x is the point to be evaluated at
+double evaluate_angle_kde(arma::vec &angles, const double smooth, double x)
+{
+	x = std::fmod(x, MAX_ANGLE);
+	double sum = 0;
+	const double s2 = smooth*smooth;
+	for (auto it = angles.begin(); it < angles.end(); it++)
+	{
+		//because the kde wraps around, exavluate it on either side of the gaussian
+		const double x0 = *it;
+		double xd1 = x - x0;
+		double xd2 = MAX_ANGLE - std::abs(xd1);
+		sum += std::exp(-0.5 * xd1 * xd1 / s2);
+		sum += std::exp(-0.5 * xd2 * xd2 / s2);
+	}
+	return sum/(sqrt(2*M_PI) * angles.size() * smooth);
+}
+
+//return an evenly-sampled array of the kde that represents the given values and smoothing factor
+//and scale them to sum to 1, to be a probability distribution function
+arma::vec angle_kde_fill_array(int nsamples, arma::vec &angles, const double smooth)
+{
+	const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
+	arma::vec sampled(nsamples);
+	for (int i = 0; i < nsamples; i++){
+		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
+	}
+	return sampled;
+}
+
+
 //perform a moving average of the KDE, that wraps around
 void moving_average_filter_wraparound(vector< std::pair<double,double>> &KDE, int window_size)
 {
@@ -1539,29 +1343,6 @@ void moving_average_filter_wraparound(vector< std::pair<double,double>> &KDE, in
 		saved_index = (saved_index + 1) % window_size;
 	}
 }
- 
- 
- void interpolate(vector< std::pair<double, double>>&KDE)
-{
-// <boost/math/interpolators/barycentric_rational.hpp>
-	std::map<double, double> r;
-	for (auto e : KDE)
-	{
-		r[e.first] = e.second;
-	}
-	
-	auto x_range = boost::adaptors::keys(r);
-    auto y_range = boost::adaptors::values(r);
-    
-    if (x_range > y_range){
-		//math::barycentric_rational<double> interpolant(x_range.begin(), x_range.end(), y_range.begin());
-
-
-		//KDE.clear();
-		// for (int i = 0; i < 180; i++);
-		//	KDE.push_back(make_pair(i, interpolant(i)));
-	}
-}
 
 typedef std::pair<int, bool> crossing_type; //crossing position, whether the crossing is rising or falling
 typedef std::pair<int, int> crossing_location_type; //the falling and rising edges of a gaussian candidate location
@@ -1587,6 +1368,7 @@ vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
 // 	cout << endl;
 	return crossings;
 }
+
 
 //a simpler matching algorithm, that finds gaussian locations by matching leading edges to the next falling edge
 vector<crossing_location_type> simple_location_detection(vector<crossing_type> &crossings)
@@ -1614,93 +1396,6 @@ vector<crossing_location_type> simple_location_detection(vector<crossing_type> &
 	return found;
 }
 		
-
-//convert the gaussian locations at one scale to their locations at the next smallest scale, potentially finding a new gaussian
-void follow_scale_image_trace(vector<crossing_location_type> &current_positions, vector<crossing_type> &next_scale, crossing_location_type &new_crossing, const int max_index)
-{
-// 	cout << "The crossings currently being examined are at: ";
-// 	for (auto it = next_scale.begin(); it < next_scale.end(); it++) cout << "(" << it->first << ", " << it->second << "), ";
-// 	cout << endl;
-	new_crossing = std::make_pair(-1, -1);
-	vector<bool> used(current_positions.size(), false);
-	for (auto it = current_positions.begin(); it < current_positions.end(); it++)
-	{
-		int best_dist_fall = max_index + 1;
-		int best_loc_fall = -1;
-		int cross_idx_fall = -1;
-		int best_dist_rise = max_index + 1;
-		int best_loc_rise = -1;
-		int cross_idx_rise = -1;
-		for (auto cross_it = next_scale.begin(); cross_it < next_scale.end(); cross_it++)
-		{
-			const int cross_idx = cross_it - next_scale.begin();
-			if (used[cross_idx]) continue;
-			if (cross_it->second)
-			{
-				//rising
-				//*it is (falling, rising), *cross_it is (location, rising (true)/falling (false))
-				const int dist = std::min(std::abs(it->second - cross_it->first), max_index - 1 - std::abs(it->second - cross_it->first));
-				if (dist < best_dist_rise){
-					best_dist_rise = dist;
-					best_loc_rise = cross_it->first;
-					cross_idx_rise = cross_idx;
-				}
-			} else {
-				//falling
-				const int dist = std::min(std::abs(it->first - cross_it->first), max_index - 1 - std::abs(it->first - cross_it->first));
-				if (dist < best_dist_fall){
-					best_dist_fall = dist;
-					best_loc_fall = cross_it->first;
-					cross_idx_fall = cross_idx;
-				}
-			}
-		}
-		if (best_loc_fall >= 0){
-			it->first = best_loc_fall;
-			used[cross_idx_fall] = true;
-		}
-		if (best_loc_rise >= 0){
-			it->second = best_loc_rise;
-			used[cross_idx_rise] = true;
-		}
-	}
-	//potentially check for the initial positions of the next crossing pair to add
-// 	cout << "scale size / 2 = " << next_scale.size() / 2 << ", current pos size = " << current_positions.size() << ", diff = " << next_scale.size() / 2 - current_positions.size() << endl;
-	if (next_scale.size() / 2 == current_positions.size() + 1)
-	{
-		int fall_pos = -1;
-		int rise_pos = -1;
-		for (auto cross_it = next_scale.begin(); cross_it < next_scale.end(); cross_it++)
-		{
-			int idx = cross_it - next_scale.begin();
-			if (used[idx]) continue;
-			if (cross_it->second) rise_pos = cross_it->first;
-			else fall_pos = cross_it->first;
-		}
-		new_crossing = std::make_pair(fall_pos, rise_pos);
-// 		cout << "found new crossing at " << new_crossing.first << ", " <<new_crossing.second << endl;
-	}
-}
-
-//follow the arches/gaussians through the scale image, matching their locations are larger scales to their positions at smaller scales
-vector<crossing_location_type> follow_scale_image(vector<vector<crossing_type>> &scale_image, const int max_index, const int nGaussians)
-{
-// 	vector<crossing_type> last_crossing = scale_image.back();
-	vector<crossing_location_type> locations;
-	crossing_location_type next;
-// 	cout << "the scale image has " << scale_image.size() << " scales" << endl;
-	for (auto it = scale_image.rbegin(); it != scale_image.rend(); it++)
-	{
-// 		cout << "in fsi, scale posn's has size " << it->size() << endl;
-		follow_scale_image_trace(locations, *it, next, max_index);
-		if (next.first >= 0) locations.push_back(next); //use negative values in next to mark it as there being no new crossing
-		if ( (nGaussians > 0) && ((int) (locations.size()) >= nGaussians) ) return locations; //if a maximum number of gaussians is specified, return the largest nGaussians components
-	}
-	return locations; 
-}
-
-//params per gaussian. amplitude, sigma, position
-#define PPG  3
 
 //data structured used for nonlinear function fitting with the Gnu Scientific Library
 struct gauss_data{
@@ -1739,7 +1434,6 @@ int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 		}
 		gsl_vector_set(diff, i, sum - data->pdf[i]);
 	}
-	
 	return GSL_SUCCESS;
 }
 
@@ -1880,6 +1574,8 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		pdf[i] = KDE[i].second;
 	}
 	
+	//cout << "fitting a kde for " << fault_angles.size() << " faults" << endl;
+	
 // 	const double err_thresh = 1e-6;//1e-3;
 	
 	arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
@@ -1938,18 +1634,18 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		
 		//now use the initial values to fit the (sum of) gaussians properly
 		//debug output
-// 		for (auto it = positions.begin(); it < positions.end(); it++)
-// 		{
-// 			cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
-// 		}
-// 		cout << endl;
+//  		for (auto it = positions.begin(); it < positions.end(); it++)
+//  		{
+//  			cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
+//  		}
+//  		cout << endl;
 		
 		results = fit_gaussians(positions, pdf, angle);
 		
 		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - evaluate_gaussian_sum(results, angle[i]);
 		double rss = 0;
 		for (int i = 0; i < (int)residual.size(); i++) rss += residual[i]*residual[i];
-// 		double err = arma::norm(residual, 2);
+//  		double err = arma::norm(residual, 2);
 		if (nGaussians >= max_peaks) ft = arma::fft(residual); //If there aren't any more peaks to find, use the residuals of the fit with the current data
 		
 		double llikelihood = 1; //calculate the log likelihood
@@ -1961,9 +1657,9 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		int nParams = PPG * nGaussians; //number of free parameters
 		//2*nParams + 2 * std::log(err);// - 2 * llikelihood;
 		//(corrected) akaike information criterion
-		double aicc = 2*nParams + (2*nParams*(nParams + 1)) / (double)(fault_angles.size() - nParams - 1) - 2*llikelihood;
+		double aicc = 2*nParams /*+ (2*nParams*(nParams + 1)) / (double)(PPG*fault_angles.size() - nParams - 1)*/ - 2*llikelihood;
 // 		
-// 		cout << "At ng " << nGaussians << " the error is " << err << " with AICC = " << aicc << endl;
+//  		cout << "At ng " << nGaussians << " the error is " << err << " with AICC = " << aicc << endl;
 		bool has_negative = false;
 		for (auto it = results.begin(); it < results.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
 		if (!std::isnan(aicc) && !has_negative) ic.push_back(std::make_pair(aicc, results));
@@ -1973,8 +1669,11 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 	return result_it->second; //previous_results
 }
 
-void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
+
+void STATS::KDE_estimation_strikes(VECTOR &lines, string name)
 {
+	vector<line_type> &lineaments = lines.data;
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + "_"+name+"_KDE.tsv");
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
 	BOOST_FOREACH(line_type F,  lineaments)
@@ -1997,11 +1696,9 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 		GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
 	}
 	vector< std::pair<double, double>> Maximas;
-// 	MA_filter(GAUSS, 5);
+
 	moving_average_filter_wraparound(GAUSS, 5);
-	cout << " here.." << endl;
-// 	interpolate(GAUSS);
-	cout << " here..." << endl;
+
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
 		if (i == 0)
@@ -2046,66 +1743,93 @@ void STATS::KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF)
 	}
 }
 
+vector<double> BootsTrapping(vector<double>data)
+{
+	const int n = data.size();
+	vector<double> bt_data(data);
+	
+	boost::random_device dev;
+    boost::mt19937 rng(dev);
+    boost::random::uniform_int_distribution<> rand_bt(0,n);
+    
+	for (int i = 0; i < n; i++)
+		bt_data[i] = data[rand_bt(rng)];
+		
+	return(bt_data);
+}
+
+vector<double> PearsonCorrelation(vector<double>data1, vector<double>data2, size_t nb_iter)
+{
+	assert(data1.size() == data2.size());
+	
+	double init_pearson;
+	const size_t stride = 1;
+	size_t n = data1.size();
+	vector <double> BootsTrapping_Cor;
+	BootsTrapping_Cor.reserve(nb_iter + 1);
+	
+	gsl_vector_const_view D1 = gsl_vector_const_view_array( &data1[0], data1.size() );
+	gsl_vector_const_view D2 = gsl_vector_const_view_array( &data2[0], data2.size() );
+	
+	//first correlation coefficinet without bootstrapping
+	BootsTrapping_Cor.push_back(gsl_stats_correlation((double*) D1.vector.data, stride,
+                                           (double*) D2.vector.data, stride,
+                                            n ));
+      
+     //now perform bootstrapping analysis for iterations = nb_iter                                     
+    for (int i = 0; i < nb_iter; i++)
+    {
+		vector<double> bt_data1 = BootsTrapping(data1);
+		vector<double> bt_data2 = BootsTrapping(data2);
+		
+		gsl_vector_const_view bt_D1 = gsl_vector_const_view_array( &bt_data1[0], bt_data1.size() );
+		gsl_vector_const_view bt_D2 = gsl_vector_const_view_array( &bt_data2[0], bt_data2.size() );
+		
+		BootsTrapping_Cor.push_back(gsl_stats_correlation((double*) bt_D1.vector.data, stride,
+                                           (double*) bt_D2.vector.data, stride,
+                                                                                    n ));
+	}
+    return(BootsTrapping_Cor);
+}
 
 //create statisics from input file--------------------------------------
-void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
+void STATS::CreateStats(VECTOR lines)
 {
-	MODEL model;
-	size_t index = 0;
-	
-	int FaultNumber = faults.size();
-	float mean_angle, med_angle, stddev_angle, var_angle, range_angle, strike, sinuosity;
-	float mean_length, med_length, stddev_length, var_length, range_length, length;
-	float mean_sin, med_sin, stddev_sin, var_sin, range_sin;
+	GEO georef;
+	int FaultNumber = lines.data.size();
+	vector<line_type> faults = lines.data;
 	point_type centre;
-// 	double bin_size; //unused
-	//						index  wkt   strike  length  sinu   cdf_stri cdf_len cdf_sin nearf  distance to nearest fault
-	std::vector<std::tuple<int, string, double, double, double, double, double, double, int, double, int, double>> faultInfo;
+
+	vector<double> Angle, Length, Sinuosity;
+	Angle.reserve(faults.size());
+	Length.reserve(faults.size());
+	Sinuosity.reserve(faults.size());
+	
+	vector<string> Coodinates;
 	vector<p_index> points;
 	vector<pl_index> points2;
 	
-	GEO georef;
-	FSTATS len_dir, sin_dir,len_sin, result;
-	line_type multiL;
-	
-	std::vector<double> fault_lengths;
-	fault_lengths.reserve(faults.size());
-
-	std::vector< std::pair< int, vector<float>>> DirecDist;
-	std::vector<float> Transfer;
-
-	vec ANGLE(FaultNumber,fill::zeros);
-	vec LENGTH(FaultNumber,fill::zeros);
-	vec SINUOSITY(FaultNumber,fill::zeros);
-	
+	unsigned int index = 0;
 	BOOST_FOREACH(line_type F, faults)
 	{ 
-		strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
+		double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
 							* (180 / math::constants::pi<double>());
 		if (strike  < 0) 
 			strike  += 180;
-		length = (long double) geometry::length(F) / 1000;
-		sinuosity =   geometry::length(F) / geometry::distance(F.front(), F.back());
+		double length = (double) geometry::length(F) / 1000;
+		double sinuosity =   geometry::length(F) / geometry::distance(F.front(), F.back());
 
-		ANGLE(index) = strike;
-		LENGTH(index) = length;	
-		SINUOSITY(index) = sinuosity;
-		
-		len_dir.push_back(make_pair(length, strike));
-		len_sin.push_back(make_pair(sinuosity, length));
-		sin_dir.push_back(make_pair(sinuosity, strike));
-		
-		fault_lengths.push_back(length);
+		Angle.push_back(strike);
+		Length.push_back(length);
+		Sinuosity.push_back(sinuosity);
 
-		unsigned int i = 0;
-		string coord = "";
 		geometry::unique(F);
-		
+		string coord = "";
+		int p_nb = 0;
 		BOOST_FOREACH(point_type p, F)
 		{
-			if (i < F.size()-1)
+			if (p_nb < F.size()-1)
 			{
-				geometry::append(p,multiL);
 				coord += to_string(p.x()) + " ";
 				coord += to_string(p.y()) + ", ";
 			}
@@ -2113,209 +1837,82 @@ void STATS::CreateStats(ofstream& txtF, vector<line_type> faults)
 			{
 				coord += to_string(p.x()) + " ";
 				coord += to_string(p.y()) + "";
-				
 			}
-			i++;
+		p_nb++;
 		}
-
+		Coodinates.push_back(coord);
+		coord.clear();
 		geometry::centroid(F, centre);
-
 		points.push_back(std::make_pair(centre, index));
 		points2.push_back(std::make_tuple(centre, index, geometry::length(F)));
-		
-		faultInfo.push_back(make_tuple(index, coord, strike, length, sinuosity, 0, 0, 0, 0, 0, 0, 0));
 		index++;
 	}
-
-
-	//Orientation-----------------------------------------------------------
-	mean_angle    = mean(ANGLE);
-	med_angle     = median(ANGLE);
-	stddev_angle  = stddev(ANGLE);
-	var_angle     = var(ANGLE);
-	range_angle   = arma::range(ANGLE);
-
-	//Length----------------------------------------------------------------
-	mean_length   = mean(LENGTH);
-	med_length    = median(LENGTH);
-	stddev_length = stddev(LENGTH);
-	var_length    = var(LENGTH);
-	range_length  = arma::range(LENGTH);
-
-	//Sinuosity-------------------------------------------------------------
-	mean_sin      = mean(SINUOSITY);
-	med_sin       = median(SINUOSITY);
-	stddev_sin    = stddev(SINUOSITY);
-	var_sin       = var(SINUOSITY);
-	range_sin     = arma::range(SINUOSITY);
-
-	//correlation between geometric parameters------------------------------
-
-	mat a = conv_to<mat>::from(LENGTH);
-	mat b = conv_to<mat>::from(ANGLE);
-
-	mat cor_length_strike = cor(LENGTH, ANGLE);
-	mat cor_length_sinus  = cor(LENGTH, SINUOSITY);
-	mat cor_strike_sinus  = cor(ANGLE, SINUOSITY);
-
-	//covariance between geometric parameters-------------------------------
-	mat cov_length_strike = cov(LENGTH, ANGLE);
-	mat cov_length_sinus  = cov(LENGTH, SINUOSITY);
-	mat cov_strike_sinus  = cov(ANGLE, SINUOSITY);
-
-	//fault centre to fault centre distance---------------------------------
+/***********************************************************************
+* Bour, O., & Davy, P. (1999). 
+* Clustering and size distributions of fault patterns: Theory and measurements. 
+* Geophysical Research Letters, 26(13), 2001-2004.
+***********************************************************************/
+//fault centre to  centre distance--------------------------------------
 	vector<p_index> closest;
 	georef.Point_Tree(points, closest);
 	vec distance(points.size(),fill::zeros);
 	
-	//fault centre to fault centre distance of larger fault----------------
-	/***********************************************************************
-	* Bour, O., & Davy, P. (1999). 
-	* Clustering and size distributions of fault patterns: Theory and measurements. 
-	* Geophysical Research Letters, 26(13), 2001-2004.
-	***********************************************************************/
+//fault centre to centre distance to larger larger fault----------------------
 	vector<pl_index> closest2;
-	georef.Point_Tree2(points2, closest2, floor(LENGTH.max()*1000));
+	georef.Point_Tree2(points2, closest2, floor(arma::vec(Length).max()*1000));
 	vec distance2(points.size(),fill::zeros);
 
+//write data to file----------------------------------------------------
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_statistics.tsv"));
+	txtF << lines.name <<endl;
+	txtF << "index \t strike \t length \t sinuosity \t nearest fault" 
+		 <<"\t distance to nearest line \t nearest larger line \t distance to nearest larger line" << endl;
+	
 	size_t curPos = 0;
-	for  (std::tuple<int, string, double, double, double, double, double, double, int, double, int, double> &it : faultInfo)
+	for (int i = 0; i< lines.data.size(); i++)
 	{
-		get<5>(it) = normcdf((double)ANGLE(curPos), (double)mean_angle, (double)stddev_angle);
-		get<6>(it) = normcdf((double)LENGTH(curPos), (double)mean_length, (double)stddev_length);
-		get<7>(it) = normcdf((double)SINUOSITY(curPos), (double)mean_sin, (double)stddev_sin);
-		get<8>(it) = closest[curPos].second;
-		get<9>(it) = geometry::distance(points[curPos].first, closest[curPos].first);
-		get<10>(it) = get<1>(closest2[curPos]);
-		get<11>(it) = geometry::distance(points[curPos].first, get<0>(closest2[curPos]));
-		distance[curPos] = geometry::distance(points[curPos].first, closest[curPos].first);
-		distance2[curPos] = geometry::distance(points[curPos].first, get<0>(closest2[curPos]));
+		txtF << i << "\t" << Angle.at(i) << "\t" <<  Length.at(i) << "\t" << Sinuosity.at(i) << "\t"
+			 << closest[curPos].second  << "\t" << geometry::distance(points[curPos].first, closest[curPos].first) << "\t"
+			 << get<1>(closest2[curPos]) <<"\t" << geometry::distance(points[curPos].first, get<0>(closest2[curPos])) << "\t" << Coodinates.at(i) << endl;
+			 
+		distance[i]  = geometry::distance(points[curPos].first, closest[curPos].first);
+		distance2[i] = geometry::distance(points[curPos].first, get<0>(closest2[curPos]));
 		curPos++;
 	}
-	
-	txtF.open ("Fault_Statistics.csv", ios::out | ios::app); 
-	txtF << "index  \t  wkt  \t  strike  \t  length  \t sinuosity  \t cdf_strike  \t cdf_length \t cdf_sinuosity \t nearest fault \t distance to nearest fault \t neares larger fault \t distance to nearest larger fault" << endl;
-	
-	for  (std::tuple<int, string, double, double, double, double, double, double, int, double, int, double> it : faultInfo)
-	{
-		txtF << get<0>(it) << "\t"<< get<1>(it) << "\t"<< get<2>(it) << "\t"<< get<3>(it) << "\t"
-			 << get<4>(it) << "\t"<< get<5>(it) << "\t"<< get<6>(it) << "\t"<< get<7>(it) << "\t"
-			 << get<8>(it) << "\t"<< get<9>(it) << "\t"<< get<10>(it)<< "\t"<< get<11>(it) << endl;
-	}
 
-	txtF << "Mean:     "<< "\t" << " " << "\t" << mean_angle <<"\t" << mean_length << "\t" << mean_sin << "\t" << "\t" << "\t" << "\t" << "\t" << mean(distance)   	<< "\t" << "\t" << mean(distance2)   	<< "\n"
-		<< "Median:   "<< "\t" << " " << "\t" << med_angle  <<"\t" << med_length  << "\t" << med_sin  << "\t" << "\t" << "\t" << "\t" << "\t" << median(distance) 	<< "\t" << "\t" << median(distance2) 	<< "\n"
-		<< "Stddev:   "<< "\t" << " " << "\t" <<stddev_angle<<"\t" <<stddev_length<< "\t" <<stddev_sin<< "\t" << "\t" << "\t" << "\t" << "\t" << stddev(distance) 	<< "\t" << "\t" << stddev(distance2) 	<< "\n"
-		<< "Variance: "<< "\t" << " " << "\t" << var_angle  <<"\t" << var_length  << "\t" << var_sin  << "\t" << "\t" << "\t" << "\t" << "\t" << var(distance)		<< "\t" << "\t" << var(distance2)	 	<< "\n"
-		<< "Range:    "<< "\t" << " " << "\t" << range_angle<< "\t"<< range_length<< "\t" << range_sin<< "\t" << "\t" << "\t" << "\t" << "\t" << arma::range(distance)<< "\t" << "\t" <<arma::range(distance2)<< "\n"
-		<< endl;;
+	txtF << "Mean:     " << "\t" << arma::mean(arma::vec(Angle)) 		<< "\t" << arma::mean(arma::vec(Length))			<< "\t" << arma::mean(arma::vec (Sinuosity)) 	 	 << "\t" << "\t" << arma::mean(distance) 		  << "\t" << "\t" << arma::mean(distance2)   		<< "\n"
+		 << "Median:   " << "\t" << arma::median(arma::vec(Angle)) 	<< "\t" << arma::median(arma::vec(Length))		<< "\t" << arma::median(arma::vec (Sinuosity)) 	 	 << "\t" << "\t" << arma::median(distance)	  << "\t" << "\t" << arma::median(distance2) 		<< "\n"
+		 << "Stddev:   " << "\t" << arma::stddev(arma::vec(Angle)) 	<< "\t" << arma::stddev(arma::vec(Length))		<< "\t" << arma::stddev(arma::vec (Sinuosity)) 	 	 << "\t" << "\t" << arma::stddev(distance) 	  << "\t" << "\t" << arma::stddev(distance2) 		<< "\n"
+		 << "Variance: " << "\t" << arma::var(arma::vec(Angle))  		<< "\t" << arma::var(arma::vec(Length))			<< "\t" << arma::var(arma::vec (Sinuosity))  		 << "\t" << "\t" << arma::var(distance)		  << "\t" << "\t" << arma::var(distance2)			<< "\n"
+		 << "Range:    " << "\t" << arma::range(arma::vec(Angle))<< "\t" << arma::range(arma::vec(Length))	<< "\t" << arma::range(arma::vec (Sinuosity))<< "\t" << "\t" << arma::range(distance) << "\t" << "\t" << arma::range(distance2)	<< "\n"
+		 << endl;
+	txtF.close(); 
+		 
+	txtF = CreateFileStream(lines.folder, lines.name + string("_correlations.tsv"));
 		
-		cout << "stats.." <<endl;
-//KDE estimation of orientation to obtain number of lineament sets------
-	sort(ANGLE.begin(), ANGLE.end());
-	vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 15);
-	arma::vec est_pdf = angle_kde_fill_array(MAX_ANGLE * 10, ANGLE, 15); //
-	for (unsigned int i = 0; i < est_pdf.size(); i++)
-	{
-		GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
-	}
-	vector< std::pair<double, double>> Maximas;
+txtF << "\n Linear correlations "
+	 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "best fit function" << "\t" << "Error" <<  "\t" << endl; 
+//testing for linear correlations---------------------------------------
+	vector<double> p_dist  = arma::conv_to< std::vector<double> >::from(distance);
+	vector<double> p_dist2 = arma::conv_to< std::vector<double> >::from(distance2);
 
-// 	interpolate(GAUSS);
-
-	for (unsigned int i = 0; i < GAUSS.size(); i++)
-	{
-		if (i == 0)
-			if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
-				GAUSS[i].second > GAUSS[i+1].second)
-					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
-
-		if (i != 0 && i != GAUSS.size())
-			if (GAUSS[i].second > GAUSS[i-1].second &&
-				GAUSS[i].second > GAUSS[i+1].second)
-					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
-		
-		
-		if (i == GAUSS.size())
-			if (GAUSS[i].second > GAUSS[i-1].second && 
-				GAUSS[i].second > GAUSS[0].second)
-					Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
-	}
-
-	cout << "Estimated Lineament sets: "<< Maximas.size() << endl;
-
-
-	//model.GaussianMix(GAUSS, Maximas.size());
-
-/*
-	unsigned int m = 0;
-	vector< std::pair<double, double> >::iterator vs = GAUSS.begin();
+	vector<double> len_sin_cor = PearsonCorrelation(Length, Sinuosity, 50);
+	cout << "P_cor: " << arma::mean(arma::vec((len_sin_cor))) << " " << arma::stddev(arma::vec (len_sin_cor)) << endl;
 	
-	for (unsigned int i = 0; i < GAUSS.size(); i++)
-	{
-		//cout << GAUSS[i].first << " " << Maximas[m].first << endl; //this takes up a lot of screen space
-		if (GAUSS[i].first == Maximas[m].first)
-		{
-			auto result = *std::min_element(vs, GAUSS.begin() + i, [](const auto& lhs, const auto& rhs) 
-			{
-				return lhs.second < rhs.second;
-			});
-			cout << result.first << " " << result.second << endl;
-			vs = GAUSS.begin() + i;
-			m++;
-			
-			if (m > Maximas.size())
-				m = 0;
-		}
-	}
-*/
-	//ScanLineDensity(faults, Maximas);
-
-	txtF << "Fault sets:" << "\t" << Maximas.size() << endl;
-	txtF << "Angle \t Density \t Smoothed Density" << endl;
-	for(unsigned int i =0; i < GAUSS.size(); i++)
-		txtF << GAUSS[i].first << "\t " << GAUSS[i].second  <<  endl;   
-	txtF << endl;
-		
-	txtF << "Generation \t Angle \t Probability" << endl;
-	int G = 1;
-	for(auto e : Maximas)
-	{
-		txtF << G << "\t" << e.first << "\t" << e.second << endl;
-		G++;
-	}	
-
-	txtF << "K-MEANS CLUSTERING " << endl;
-	//K-MEANS Clustering----------------------------------------------------
-	txtF <<" k-means length and strike (" << Maximas.size() << ") sets: " << endl;
-	result = KMCluster(false, Maximas.size(), len_dir);
-	for ( typename FSTATS::const_iterator it = result.begin(); it != result.end(); it++)
-		txtF << it->first << "\t" << it->second << endl;
-	result.clear();
-	txtF << endl; 
+	vector<double> len_p_dist_cor = PearsonCorrelation(Length, p_dist, 50);
+	cout << "P_cor: " << arma::mean(arma::vec((len_p_dist_cor))) << " " << arma::stddev(arma::vec (len_p_dist_cor)) << endl;
 	
-	txtF <<" k-means sinuosity and strike (" << Maximas.size() << ") sets" << endl;
-	result = KMCluster(false, Maximas.size(), sin_dir);
-	for ( typename FSTATS::const_iterator it = result.begin(); it != result.end(); it++)
-		txtF << it->first << "\t" << it->second << endl;
-	result.clear();
-	txtF << endl; 
-	
-	txtF <<" k-means sinuosity and length (" << Maximas.size() << ") sets" << endl;;
-	result = KMCluster(false, Maximas.size(), len_sin);
-	for ( typename FSTATS::const_iterator it = result.begin(); it != result.end(); it++)
-		txtF << it->first << "\t" << it->second << endl;
-	result.clear();
-	
-	txtF << "BOX-COUNTING " << endl;
-	DoBoxCount(faults, txtF);
-	txtF << "KS-FITTING (LENGTH DISTRIBUTION) " << endl;
+	vector<double> len_p_dist_cor2 = PearsonCorrelation(Length, p_dist2, 50);
+	cout << "P_cor: " << arma::mean(arma::vec((len_p_dist_cor2))) << " " << arma::stddev(arma::vec (len_p_dist_cor2)) << endl;
 
-	CompareStatsModels(true, fault_lengths, txtF);
+//testing fro clustering depending on orientation-----------------------
 }
 
-void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTER)
+
+template <typename T>
+void STATS::DEManalysis(Graph& G, double radius, string filename, T r)
 {
+	/*
 	std::clock_t startcputime = std::clock();
 	GEO ref;
 	GEOMETRIE geom;
@@ -2514,4 +2111,5 @@ void STATS::DEManalysis(Graph& G, double radius, string filename, double** RASTE
 	cout << " analysed edges " << endl;
 	//----------------------------------------------------------------------
 	cout << "DEM Analysis: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds [CPU Clock] \n" << endl;
+	*/
 }

@@ -1,23 +1,15 @@
 #ifndef _STATS_h
 #define _STATS_h
 #include "main.h"
-#include <boost/variant.hpp>
-#include <boost/variant/static_visitor.hpp>
-#include <boost/variant/apply_visitor.hpp>
-#include <boost/math/tools/roots.hpp>
-#include <boost/math/special_functions/sign.hpp>
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_blas.h>
-#include <gsl/gsl_multifit_nlinear.h>
-#include <armadillo>
+
+#define MAX_ANGLE 180
+#define PPG  3 //params per gaussian. amplitude, sigma, position
+
 
 using namespace FGraph;
 using namespace boost;
 using namespace std;
 using namespace arma;
-
-#define MAX_ANGLE 180
 
 enum class ModelMatch {Exponential, PowerLaw, LogNorm};
 
@@ -97,26 +89,30 @@ class STATS
 		STATS();
 		~STATS()
 		{}
-	; 
 
-	vec Bootstrapping(vec Data);
+	void CreateStats(VECTOR lines);
+	
+	template <typename T>
+	void DEManalysis(Graph& G, double radius, string filename, T r);
+	
+	template <typename T>
+	void AnalyseRaster(VECTOR lines, T R);
+
+
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
+	
+	StatsModelData GetLengthDist(VECTOR lines);
+	
+	void DoBoxCount(VECTOR lines);
 
-	void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset);
-	void DoBoxCount(vector<line_type> faults, std::ofstream& txtF);
-	StatsModelData CompareStatsModels(bool print, std::vector<double> &values, std::ofstream& txtF);
-	
-	void AddData(vector<line_type> faults, point_type source, point_type target, double Dist);
-	void AnalyseRasterFaults(vector<READ> input, vector<line_type> faults);
-	void AnalyseRasterGraph(vector<READ> input, vector<line_type> faults, point_type source, point_type target, double Dist);
-	
-	void CreateStats(ofstream& txtF, vector<line_type> faults);
-	void DEManalysis(Graph& G, double radius, string filename, double** RASTER);
-	FSTATS KMCluster(bool input, int No, FSTATS faultStats);
+
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	double ScanLineDensity(vector<line_type> faults,  vector< std::pair<double, double> >Maximas);
-	void KDE_estimation_strikes(vector<line_type> lineaments, ofstream& txtF);
-
-	void WriteData(ofstream& txtF);
+	void KDE_estimation_strikes(VECTOR &lines, string name);
+	
+	
+	
+	
+	
+	void KMCluster(bool input, int No);
 };
 #endif

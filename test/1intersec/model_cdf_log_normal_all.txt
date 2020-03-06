@@ -1,4 +1,0 @@
-#Log Normal All: mu = 4.17325, sigma = 0.00604181, xmin = 64.5349, xmin_ind = 0 of 2
-#x_value data_cdf_low data_cdf_high model_cdf
-64.5349 0 0.5 0.158655
-65.3195 0.5 1 0.841345

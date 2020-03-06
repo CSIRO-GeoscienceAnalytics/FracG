@@ -1,6 +1,5 @@
 #ifndef _GEOMETRIE_h
 #define _GEOMETRIE_h
-
 #include "main.h"
 
 using namespace boost;
@@ -104,8 +103,8 @@ class GEOMETRIE
 	line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
 	void SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross);
 	
-	void CentreDistanceMap (std::string const& filename, float cell_size);
-	void P21Map(std::string const& filename, float cell_size);
+	void CentreDistanceMap (VECTOR lines, float cell_size);
+	void P_Maps(VECTOR lines, float cell_size);
 	
 	
 	box ReturnAOI(vector<line_type> lines);
