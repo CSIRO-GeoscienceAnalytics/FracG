@@ -457,6 +457,11 @@ void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes,
 	std::map<vertex_type, int>::iterator comp_it;
 	numK = boost::connected_components(G, boost::make_assoc_property_map(components)); 
 	
+// 	for (each vertex u){
+// 		auto it = components.fund(u);
+// 		G[u] = it->second;
+// 	}
+	
 		//classify edges
 	for (auto Eg : make_iterator_range(edges(G)))
 	{
@@ -466,12 +471,10 @@ void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes,
 		comp_it = components.find(U);
 		if (comp_it != components.end())
 		{
-			if(components.find(U) == components.find(u))
-			{
-				G[U].component  = comp_it->second;
-				G[u].component  = comp_it->second;
-				G[Eg].component = comp_it->second;
-			}
+			G[U].component  = comp_it->second;
+			G[u].component  = comp_it->second;
+			G[Eg].component = comp_it->second;
+			
 		}
 
 		if (G[U].Enode == false || G[u].Enode == false)

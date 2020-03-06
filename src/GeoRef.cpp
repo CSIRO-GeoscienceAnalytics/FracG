@@ -746,7 +746,7 @@ T GEO::getValue(point_type p, double transform[8], T** values)
 		x = boost::algorithm::clamp(x, 0, (int)transform[6]);
 		y = boost::algorithm::clamp(y, 0, (int)transform[7]);
 		
-		cout << values[x][y] << endl;
+// 		cout << values[x][y] << endl;
 		
 		return(values[x][y]);
 	}
@@ -1282,7 +1282,7 @@ void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
 	}
 	
 	OGRFieldDefn oField3( "Data", OFTReal );
-	oField3.SetWidth(10);
+	oField3.SetWidth(20);
 	oField3.SetPrecision(5);
 	if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
 	{
@@ -1323,12 +1323,13 @@ void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
 
 void GEO::WriteGraph(Graph G, VECTOR lines, string subF, bool raster)
 {
-	cout << "starting writegraph" << endl;
 	assert (num_vertices(G) != 0 && num_edges(G) != 0);
 	char cur_path[256];
 	char* reference = lines.refWKT;
 	getcwd(cur_path, 255);
 	string subdir_name = CreateDir(lines, {"Vector", subF});
+	
+	cout << "subdir name = " << subdir_name << endl;
 	
 	string n_b =  subdir_name + "/" + lines.name + "_branches.shp";
 	string n_v =  subdir_name + "/" + lines.name + "_vertices.shp";
