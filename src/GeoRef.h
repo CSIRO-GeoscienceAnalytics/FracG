@@ -90,7 +90,7 @@ class GEO
 	
 
 	void CorrectNetwork(vector<line_type>&F, double dist);
-	void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], const char* Name);
+	void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, string suffix = "");
 	void WriteSHP_lines(vector<line_type>lineaments, const char* Name);
 	void WriteSHP_maxFlow(DGraph G,  const char* Name);
 	void WriteSHP(Graph G, const char* Name);

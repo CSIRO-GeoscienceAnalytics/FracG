@@ -10,7 +10,7 @@
 #include "geometrie.h"
 #include "main.h"
 #include "stats.h"
-#include "model.h"
+// #include "model.h"
 #include "main.h"
 
 using namespace std; 
@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 	GRAPH G; 
 	STATS stats;
 	GEOMETRIE geom;
-	MODEL m;
+// 	MODEL m;
 	
 	Graph graph;
 	s_t source_target;

@@ -113,6 +113,7 @@ namespace FGraph
 	
 	struct VECTOR
 	{
+		string folder;
 		string name;
 		char *refWKT;
 		vector<line_type> data;

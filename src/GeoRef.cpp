@@ -10,22 +10,18 @@ double GeoTransform[8];
 
 
 // create and open filestream in folder "statistics"
-const char* CreateRDir()
+string CreateDir(VECTOR &input_file, std::initializer_list<string> folders)
 {
-	const char* rast_dir = "./raster/";
-		if(!opendir(rast_dir))
-	mkdir(rast_dir, 0777);
-	return(rast_dir );
-}
-
-// create and open filestream in folder "statistics"
-const char* CreateVDir(string subF)
-{
-	string vec_dir = "./Vector/" + subF + "/";
-	const char* v_dir = &vec_dir[0];
-	if(!opendir(v_dir))
-		mkdir(v_dir, 0777);
-	return(v_dir );
+	string folder_name(input_file.folder);
+	if (folder_name.size() <= 0) folder_name = ".";
+	for (auto it = folders.begin(); it != folders.end(); it++) folder_name += "/"+*it;
+	cout << "making folder " << input_file.folder << ", name = " << input_file.name << " -> ";
+	for (auto it = folders.begin(); it != folders.end(); it++) cout << "/" << *it;
+	cout << endl << folder_name << endl;
+	const char* folder_cstr = folder_name.c_str();
+	if(!opendir(folder_cstr))
+		mkdir(folder_cstr, 0777);
+	return folder_name;
 }
 
 //read vector data from shp file---------------------------------------
@@ -488,6 +484,11 @@ VECTOR GEO::ReadVector(int argc, char* f)
 		exit (EXIT_FAILURE);
 	}
 	
+	size_t folder_index = name.find_last_of("/\\"); //this should work on both linux (/) and windows (\\) 
+	string folder = (folder_index != std::string::npos) ? name.substr(0               , folder_index + 1 ) : "./";
+	name          = (folder_index != std::string::npos) ? name.substr(folder_index + 1, std::string::npos) : name;
+	
+	lineaments.folder = folder;
 	lineaments.name = name;
 
 	//read in the fault information from the vector file
@@ -828,35 +829,36 @@ double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 	return(0);
  }
   
- void GEO::WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], const char* Name)
+ void GEO::WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, string suffix)
 {
   //get the path of the current directory
-  char cur_path[256];
-  getcwd(cur_path, 255);
-	
- GDALDataset *poDstDS;
- GDALDriver *poDriver;
- char *pszSRS_WKT = NULL;
- char **papszMetadata;
- int x = data.size();
- int y = data[0].size();
- const char *pszFormat = "GTiff";
- 
- chdir(CreateRDir());
+	char cur_path[256];
+	getcwd(cur_path, 255);
 
- poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
- if( poDriver == NULL )
- {
-	cout << "ERROR: Could not load GDAL driver ( GTiff)" << endl;
-	EXIT_FAILURE;
- }
-    papszMetadata = poDriver->GetMetadata();
-	poDstDS = poDriver->Create(Name, x,y, 1, GDT_Float32, NULL);
-	GDALRasterBand *poBand;
+	GDALDataset *poDstDS;
+	GDALDriver *poDriver;
+	char *pszSRS_WKT = NULL;
+	char **papszMetadata;
+	int x = data.size();
+	int y = data[0].size();
+	const char *pszFormat = "GTiff";
+
+	string subdir = CreateDir(input_file, {"raster"});
+
+	poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
+	if( poDriver == NULL )
+	{
+		cout << "ERROR: Could not load GDAL driver ( GTiff)" << endl;
+		EXIT_FAILURE;
+	}
+	
+	papszMetadata = poDriver->GetMetadata();
+	poDstDS = poDriver->Create((subdir + "/" + input_file.name + suffix).c_str(), x,y, 1, GDT_Float32, NULL);
 	poDstDS->SetGeoTransform( adfGeoTransform );
 	poDstDS->SetProjection( SpatialRef );
-	poBand = poDstDS->GetRasterBand(1);
 	
+	GDALRasterBand *poBand = poDstDS->GetRasterBand(1);
+
 	float *rowBuff = (float*) CPLMalloc(sizeof(float)*x);
 	cout << "Writing raster: " << endl;
 	progress_display * show_progress =  new boost::progress_display(y * x);
@@ -865,7 +867,7 @@ double GEO::LineExtractor(line_type L, double Transform[8], double** raster)
 		for(int col = 0; col < x; col++) 
 		{
 			rowBuff[col] = (float) data[col][row];
-			 ++(*show_progress);
+				++(*show_progress);
 		}
 		poBand->RasterIO(GF_Write, 0, row, x, 1, rowBuff, x, 1, GDT_Float32, 0, 0);
 	}
@@ -1456,17 +1458,16 @@ void GEO::WriteGraph(Graph G, VECTOR lines, string subF, bool raster)
 	char cur_path[256];
 	char* reference = lines.refWKT;
 	getcwd(cur_path, 255);
-	chdir(CreateVDir(subF));
+	string subdir_name = CreateDir(lines, {"Vector", subF});
 	
-	string n_b =  subF + lines.name + "_branches.shp";
-	string n_v =  subF + lines.name + "_vertices.shp";
-	const char* Name_b = &n_b[0];
-	const char* Name_v = &n_v[0];
+	string n_b =  subdir_name + "/" + lines.name + "_branches.shp";
+	string n_v =  subdir_name + "/" + lines.name + "_vertices.shp";
+	const char* Name_b = n_b.c_str();
+	const char* Name_v = n_v.c_str();
 
 	WriteSHP_g_lines(G, reference, Name_b, false);
 	WriteSHP_g_points(G, reference, Name_v, false);
 
-	chdir(cur_path);
 } 
 
 

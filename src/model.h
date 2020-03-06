@@ -1,6 +1,6 @@
 #ifndef _MODEL_h
 #define _MODEL_h
-#include <gmsh.h>
+#include <gmsh/Gmsh.h>
 #include "main.h"
 #include "geometrie.h"
 #include "graph.h"

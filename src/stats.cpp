@@ -2,7 +2,7 @@
 #include "geometrie.h"
 #include "GeoRef.h"
 #include "graph.h"
-#include "model.h"
+// #include "model.h"
 
 STATS::STATS ()
 
@@ -10,9 +10,10 @@ STATS::STATS ()
 }
 
 // create and open filestream in folder "statistics"
-ofstream CreateFileStream(string name)
+ofstream CreateFileStream(string subdir_name, string name)
 {
-	const char* stats_dir = "./statisics/";
+	string stats_dirname = subdir_name + "/statisics/";
+	const char* stats_dir = stats_dirname.c_str();
 		if(!opendir(stats_dir))
 		
 	mkdir(stats_dir, 0777);
@@ -205,7 +206,7 @@ void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double,
 void STATS::DoBoxCount(VECTOR lines)
 {
 	cout << "\n Box Counting (QuadTree Method)" << endl;
-	ofstream txtF = CreateFileStream(lines.name + string("_BoxCount.tsv"));
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_BoxCount.tsv"));
 	
 	std::clock_t startcputime = std::clock();
 	auto t_start = std::chrono::high_resolution_clock::now();
@@ -947,7 +948,7 @@ StatsModelData STATS::GetLengthDist(VECTOR lines)
 	random::random_device rd{};
 	vector <double> values;
 	
-	ofstream txtF = CreateFileStream(lines.name + string("_lengthFit.tsv"));
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_lengthFit.tsv"));
 	
 	BOOST_FOREACH(line_type l , lines.data)
 		values.push_back(geometry::length(l));
@@ -1574,6 +1575,8 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 		pdf[i] = KDE[i].second;
 	}
 	
+	cout << "fitting a kde for " << fault_angles.size() << " faults" << endl;
+	
 // 	const double err_thresh = 1e-6;//1e-3;
 	
 	arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
@@ -1671,7 +1674,7 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 void STATS::KDE_estimation_strikes(VECTOR lines)
 {
 	vector<line_type> &lineaments = lines.data;
-	ofstream txtF = CreateFileStream(lines.name + string("_KDE.tsv"));
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_KDE.tsv"));
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
 	BOOST_FOREACH(line_type F,  lineaments)
@@ -1862,7 +1865,7 @@ void STATS::CreateStats(VECTOR lines)
 	vec distance2(points.size(),fill::zeros);
 
 //write data to file----------------------------------------------------
-	ofstream txtF = CreateFileStream(lines.name + string("_statistics.tsv"));
+	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_statistics.tsv"));
 	txtF << lines.name <<endl;
 	txtF << "index \t strike \t length \t sinuosity \t nearest fault" 
 		 <<"\t distance to nearest line \t nearest larger line \t distance to nearest larger line" << endl;
@@ -1887,7 +1890,7 @@ void STATS::CreateStats(VECTOR lines)
 		 << endl;
 	txtF.close(); 
 		 
-	txtF = CreateFileStream(lines.name + string("_correlations.tsv"));
+	txtF = CreateFileStream(lines.folder, lines.name + string("_correlations.tsv"));
 		
 txtF << "\n Linear correlations "
 	 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "best fit function" << "\t" << "Error" <<  "\t" << endl; 

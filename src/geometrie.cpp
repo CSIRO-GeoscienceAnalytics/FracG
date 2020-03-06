@@ -274,7 +274,7 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 		cur_x += cell_size;
 	}
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, (lines.name + "_dist.tif").c_str() );
+	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, "_dist.tif");
 }
 
 void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
@@ -364,8 +364,8 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 	
 	cout << box_size << endl;
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, (lines.name + "_P20.tif").c_str());
-	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, (lines.name + "_P21.tif").c_str());
+	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, "_P20.tif");
+	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, "_P21.tif");
 }
 
 

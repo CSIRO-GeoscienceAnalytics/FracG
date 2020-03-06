@@ -12,9 +12,10 @@ GRAPH::GRAPH ()
 
 
 // create and open filestream in folder "statistics"
-ofstream CreateGraphFileStream(string name)
+ofstream CreateGraphFileStream(string folder, string name)
 {
-	const char* stats_dir = "./graph/";
+	string folder_name = folder + "/graph/";
+	const char* stats_dir = folder_name.c_str();
 		if(!opendir(stats_dir))
 		
 	mkdir(stats_dir, 0777);
@@ -652,7 +653,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb)
 		}
 
 //write results---------------------------------------------------------
-		txtG = CreateGraphFileStream(lines.name);
+		txtG = CreateGraphFileStream(lines.folder, lines.name);
 		if (txtG.is_open())  
 		{ 
 			txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
