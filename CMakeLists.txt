@@ -1,7 +1,7 @@
 #check for cmaek version adn set some compiler flags
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.9)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fopenmp ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fopenmp ")
 
 #Name of the Project and version
 project(FracG VERSION 1.0.1 DESCRIPTION "Lineament Network Analysis")
@@ -10,7 +10,7 @@ project(FracG VERSION 1.0.1 DESCRIPTION "Lineament Network Analysis")
 find_package(GDAL REQUIRED)
 include_directories( include ${GDAL_INCLUDE_DIRS})
 
-find_package(Boost REQUIRED COMPONENTS random system filesystem)
+find_package(Boost REQUIRED COMPONENTS random system filesystem program_options)
 include_directories( include ${BOOST_INCLUDE_DIRS})
 
 find_package(Armadillo REQUIRED)
@@ -41,19 +41,17 @@ file(GLOB SOURCES "src/*.cpp")
 #excetutable
 add_executable(FracG ${SOURCES}) 
 
-
 #import the external libaries we need 
 target_link_libraries(FracG ${GDAL_LIBRARIES})
 target_link_libraries(FracG ${BOOST_LIBRARIES})
 target_link_libraries(FracG Boost::random)
 target_link_libraries(FracG Boost::system)
 target_link_libraries(FracG Boost::filesystem)
+target_link_libraries(FracG Boost::program_options)
 target_link_libraries(FracG ${ARMADILLO_LIBRARIES})
 target_link_libraries(FracG ${GSL_LIBRARIES})
-target_link_libraries(FracG ${OPENMP_LIBRARIES} )
+target_link_libraries(FracG OpenMP::OpenMP_CXX)
 target_link_libraries(FracG ${GMSH_LIB})
-
-
 
 #install to global env (use sudo make install)
 install(TARGETS FracG DESTINATION /usr/local/bin)

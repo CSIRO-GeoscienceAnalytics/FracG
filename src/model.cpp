@@ -1,4 +1,4 @@
-#include "model.h"
+#include "../include/model.h"
 
 MODEL::MODEL ()
 {
@@ -42,6 +42,7 @@ void BoundingBox_2d(Graph G, int nb_cells, int &p_tag, int &l_tag, float &lc)
 	double max_y = geometry::get<geometry::max_corner, 1>(AOI);
 
 	lc = min((max_x-min_x)/nb_cells, (max_y-min_y)/nb_cells);
+	cout <<"init lc: " << lc<<endl;
 
 	factory::addPoint(min_x, min_y, 0, lc, ++p_tag);
 	factory::addPoint(max_x, min_y, 0, lc, ++p_tag);
@@ -50,32 +51,8 @@ void BoundingBox_2d(Graph G, int nb_cells, int &p_tag, int &l_tag, float &lc)
 
 	for (int i = 1; i < p_tag; i++)
 		factory::addLine(i, i+1, ++l_tag);
+
 	factory::addLine(p_tag, 1, ++l_tag); 
-}
-
-void addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc)
-{
-	int deg;
-	int init_p_tag = p_tag + 1;
-	vector<int> spline_points;
-	
-	BOOST_FOREACH(point_type p, line)
-	{
-		deg = floor(source + target / 2);
-
-		if (geometry::equals(p, line.front()))
-			deg =  lc/source;
-
-		if (geometry::equals(p, line.back()))
-			deg =  lc/target;
-			
-		factory::addPoint(p.x(), p.y(), 0, ( deg ), ++p_tag);
-	}
-
-	for( int i = init_p_tag; i < p_tag+1; i++ )
-		spline_points.push_back( i );
-		
-	factory::addSpline(spline_points, ++l_tag);
 }
 
 void NameBoundingBox(int nb_bb_pts, vector< vector<pair<int, int>> > fused_lines, vector<int>& intersec)
@@ -140,9 +117,13 @@ void MangeIntersections_bb(int &l_tag, int nb_bb_pts, vector< vector<pair<int, i
 
 void EmbedLineaments_all(Graph G, vector< vector<pair<int, int>>> fused_lines, vector<int> intersec, int nb_bb_pts,  const char* dir, string name)
 {
-	ofstream ss_names;
+	ofstream ss_names, lowD_ss_name, interface_ss_name;
 	string full_path = dir + string(name) + string(".txt");
+	string full_path2 = dir + string(name) + string("_lowD.txt");
+	string full_path3 = dir + string(name) + string("_interface.txt");
 	ss_names.open (full_path); 
+	lowD_ss_name.open (full_path2); 
+	interface_ss_name.open (full_path3); 
    factory::synchronize();
   
    //get the tags of lineaments that are not the bounding box
@@ -161,10 +142,14 @@ void EmbedLineaments_all(Graph G, vector< vector<pair<int, int>>> fused_lines, v
       model::setPhysicalName(1, nb_bb_pts+i+1, "lineament_"+ to_string(i));
       model::mesh::embed(1, phys_group, 2, 1);
       ss_names << " lineament_"+ to_string(i);
+      lowD_ss_name << " lowerD_lineament_"+ to_string(i);
+      interface_ss_name << " interface_lineament_"+ to_string(i);
 	}
 	model::addPhysicalGroup(2, {1}, 1);
 	model::setPhysicalName(2, 1, "host_rock");
 	ss_names.close();
+	lowD_ss_name.close(); 
+	interface_ss_name.close();
 }
 
 vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
@@ -190,6 +175,7 @@ vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
 	
 	//create the bounding box for the entire set
 	box AOI = geom.ReturnAOI(lines);
+	polygon_type t_AOI = geom.Return_tigth_AOI(lines);
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
 	double max_x = geometry::get<geometry::max_corner, 0>(AOI);
@@ -209,13 +195,10 @@ vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
 			point_type max_p ( (rand_p.x() + size), (rand_p.y() + size) );
 			box sample_w{{rand_p.x(), rand_p.y()}, {max_p.x(), max_p.y()}}; 
 
-			if (geometry::within(rand_p, AOI))
+			if (geometry::within(rand_p, t_AOI))
 			{
 				SamplingWindows.push_back(sample_w);
 				found = true;
-				
-				cout << setprecision(10) << rand_p.x() << " " << rand_p.y() << endl;
-
 			}
 		}while (!found);
 	size += step;
@@ -223,9 +206,67 @@ vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
 	return(SamplingWindows);
 }
 
+void MODEL::BuildPointTree(Graph G)
+{
+	int index = 0;
+	for (auto Eg : make_iterator_range(edges(G)))
+	{
+		BOOST_FOREACH(point_type p, G[Eg].trace)
+			DistTree.insert(make_pair(p, ++index));
+	}
+}
+
+void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc)
+{
+	int deg;
+	int init_p_tag = p_tag + 1;
+	vector<int> spline_points;
+	
+	geometry::unique(line);
+	line_type simpl_line;
+
+	boost::geometry::simplify(line, simpl_line, 100);
+
+	BOOST_FOREACH(point_type p, simpl_line)
+	{
+//find nearsest five neigbouring points and calculate average distance--
+		vector<p_index> result;
+		vector<double> distances;
+		
+		
+//mesh refinement-------------------------------------------------------
+		DistTree.query(geometry::index::nearest(p, 5), back_inserter(result));
+		
+		for (auto r = result.begin(); r < result.end(); r++)
+			distances.push_back( geometry::distance(p, r[0].first));
+			
+		double average = accumulate( distances.begin(), distances.end(), 0.0)/distances.size();  
+		double f = average/lc;
+		//if ( f < 0.5)
+		//	deg = average;
+		//else
+		//	deg = lc/floor(source + target) ; 
+
+		if (geometry::equals(p, line.front()))
+			deg /= source;
+
+		if (geometry::equals(p, line.back()))
+			deg /=  target;
+//----------------------------------------------------------------------
+		factory::addPoint(p.x(), p.y(), 0, ( deg ), ++p_tag);
+	}
+	for( int i = init_p_tag; i < p_tag+1; i++ )
+		spline_points.push_back( i );
+	
+	if (spline_points.size() < 2)
+		cout << spline_points.size() << endl;
+	factory::addSpline(spline_points, ++l_tag);
+}
+
 void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
 {
-  cout << "creating mesh for lineament set" << endl;
+  cout << "creating 2D mesh for lineament set" << endl;
+  BuildPointTree(G);
   const char* dir = CreateDir(false);
   string output_filename = dir + filename + ".msh";
   
@@ -248,7 +289,7 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
   for (auto Eg : make_iterator_range(edges(G)))
 	 addLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
 	 
-  MangeIntersections_bb(l_tag,  nb_bb_pts, fused_lines);
+  MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
   NameBoundingBox(nb_bb_pts, fused_lines, intersec);
   EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, dir, "SideSet_Names");
   
@@ -258,7 +299,7 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
   if (output)
 	gmsh::fltk::run();
   gmsh::finalize();
-  cout << "Created msh-file " << filename << endl;
+  cout << "Created msh-file " << filename << endl << endl;;
 }
 
 void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, string filename)
@@ -268,6 +309,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 	vector <box> sampling_windows;
 	sampling_windows = CreateSamplingWindows(faults, 5);
 	
+	cout << "Creating "<< nb_samples << " samples from lineamnet set" << endl;
 	
 	for (int w = 0; w < sampling_windows.size(); w++)
 	{
@@ -285,7 +327,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 
 		if (num_edges(G) > 0)
 		{
-			string output_filename = dir + filename + string("_sample_")+ to_string(w) + ".msh";
+			string output_filename = dir + filename + string("_sample_") + to_string(w) +  ".msh";
 			gmsh::initialize();
 			model::add(output_filename);
 			if (output)
@@ -322,4 +364,5 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 			gmsh::finalize();
 		}
 	}
+	cout << " done \n" << endl;
 }

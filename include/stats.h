@@ -1,10 +1,9 @@
 #ifndef _STATS_h
 #define _STATS_h
-#include "main.h"
+#include "../include/fracg.h"
 
 #define MAX_ANGLE 180
 #define PPG  3 //params per gaussian. amplitude, sigma, position
-
 
 using namespace FGraph;
 using namespace boost;
@@ -91,28 +90,14 @@ class STATS
 		{}
 
 	void CreateStats(VECTOR lines);
-	
-	template <typename T>
-	void DEManalysis(Graph& G, double radius, string filename, T r);
-	
-	template <typename T>
-	void AnalyseRaster(VECTOR lines, T R);
-
-
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
-	
 	StatsModelData GetLengthDist(VECTOR lines);
-	
 	void DoBoxCount(VECTOR lines);
-
-
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	void KDE_estimation_strikes(VECTOR &lines, string name);
-	
-	
-	
-	
-	
-	void KMCluster(bool input, int No);
+	void KDE_estimation_strikes(VECTOR &lines, bool set);
+	int CheckGaussians(double angle);
+	void ScanLine(VECTOR lines, int nb);
+	void KMCluster(bool output, VECTOR lines);
+	void RasterStatistics(VECTOR lines, int dist, string filename);
 };
 #endif
