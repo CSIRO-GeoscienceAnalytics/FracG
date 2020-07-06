@@ -1,5 +1,5 @@
-#include "geometrie.h"
-#include "GeoRef.h"
+#include "../include/geometrie.h"
+#include "../include/GeoRef.h"
 
 GEOMETRIE::GEOMETRIE ()
 
@@ -72,6 +72,8 @@ double GEOMETRIE::minSpacing(line_type Trace)
 	return len;
 }
 
+
+
 line_type GEOMETRIE::ShortestLine(vector <line_type> Set)
 {
 	double dist = std::numeric_limits<double>::max();
@@ -92,14 +94,22 @@ box GEOMETRIE::ReturnAOI(vector<line_type> lines)
 	box AOI;
 	polygon_type multiL;
 	BOOST_FOREACH(line_type F, lines)
-	{ 
-			geometry::append(multiL, F);
-	}
+		geometry::append(multiL, F);
+	
 	AOI = boost::geometry::return_envelope<box>(multiL);
 	return(AOI);
 }
 
- 
+polygon_type GEOMETRIE::Return_tigth_AOI(vector<line_type> lines)
+{
+	polygon_type hull;
+	polygon_type multiL;
+	BOOST_FOREACH(line_type F, lines)
+		geometry::append(multiL, F);
+	
+	boost::geometry::convex_hull(multiL, hull);
+	return(hull);
+}
 
 //return the segment of a line that is the closest to the given point
 //the returned iterator points to the linsestring point that is *after* the given point
@@ -222,8 +232,9 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 	point_type centre;
 	vector<p_index> result;
 	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
-	
+
 	int index = 0 ;
+
 	BOOST_FOREACH(line_type l, lines.data)
 	{
 		geometry::centroid(l, centre);
@@ -234,7 +245,8 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 //around the features adn the size of the smallest feature--------------
 
 	box AOI = ReturnAOI(lines.data);
-		
+	polygon_type t_AOI = Return_tigth_AOI(lines.data);
+	
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
 	double max_x = geometry::get<geometry::max_corner, 0>(AOI);
@@ -255,7 +267,7 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 	double cur_x = min_x;
 	
 // query for distance to fault centre at every grid cell----------------
-	cout << "Calulating distances to lineamnet centres for raster with size \n"
+	cout << "Calculating distances to lineamnet centres for raster with size \n"
 		 << vec.size()<< " x " << vec[0].size() << endl;
 		 
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
@@ -265,8 +277,13 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 		for (int j = 0; j < y_size; j++)
 		{
 			point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-			DistTree.query(geometry::index::nearest(cur_pos, 1), back_inserter(result));
-			vec[i][j] = geometry::distance(cur_pos, result[0].first);
+			if (geometry::within(cur_pos, t_AOI))
+			{
+				DistTree.query(geometry::index::nearest(cur_pos, 1), back_inserter(result));
+				vec[i][j] = geometry::distance(cur_pos, result[0].first);
+			}
+			else 
+				vec[i][j] = -256;
 			result.clear();
 			cur_y-= cell_size;
 			 ++(*show_progress);
@@ -275,18 +292,19 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 	}
 //write the raster file---------------------------------------------
 	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, "_dist.tif");
+	cout << " done \n" << endl;
 }
 
-void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
+void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
 {
 	GEO georef;
 	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
 	vector<p_index> result;
 
-
 //now we nedd to create a georefernece system based on the bounding box
 
 	box AOI = ReturnAOI(lines.data);
+	polygon_type t_AOI = Return_tigth_AOI(lines.data);
 	
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -305,11 +323,9 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 	vector<vector<double> > vec_count (x_size , vector<double> (y_size, 0));
 	vector<vector<double> > vec_length(x_size , vector<double> (y_size, 0));
 	
-
 	double cur_y = max_y;
 	double cur_x = min_x;
 	
-
 //put the segments into an rtree, so we don't need to check each one----
 	typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring, and the linestring
 	geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
@@ -318,7 +334,6 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 		box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
 		line_tree.insert(std::make_pair(fault_bounding_box, it));
 	}
-
 
 // query intesity and density for every grid cell-----------------------
 	cout << "Calulating P20 and P21 maps for raster with size \n"
@@ -331,51 +346,49 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size )
 		for (int j = 0; j < y_size; j++)
 		{
 			point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-			point_type minBox(cur_x, (cur_y - box_size));
-			point_type maxBox((cur_x + box_size), cur_y );
-
-			box pixel(minBox, maxBox);
-
-			double intersec = 0;
-			double intersection_length = 0;
-		
-//get the lines that have intersecting bounding boxes-------------------
-			std::vector<box_line> candidates;
-			line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));
-			for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
+			if (geometry::within(cur_pos,t_AOI))
 			{
-//then check the full linestring to see if they intersect with this pixel
-				if (!geometry::disjoint(*candidate->second, pixel))
-				{
-					intersec++; //intersection count for the P20 map
-//and sum the length of the intersection(s) for the P21 map-------------
+				point_type minBox(cur_x, (cur_y - box_size));
+				point_type maxBox((cur_x + box_size), cur_y );
 
-					geometry::model::multi_linestring<line_type> intersecting;
-					geometry::intersection(pixel, *candidate->second, intersecting);
-					for (auto intersec_it = intersecting.begin(); intersec_it < intersecting.end(); intersec_it++)
+				box pixel(minBox, maxBox);
+				double intersec = 0;
+				double intersection_length = 0;
+			
+	//get the lines that have intersecting bounding boxes-------------------
+				std::vector<box_line> candidates;
+				line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));
+				for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
+				{
+	//then check the full linestring to see if they intersect with this pixel
+					if (!geometry::disjoint(*candidate->second, pixel))
 					{
-						intersection_length += geometry::length(*intersec_it);
+						intersec++; //intersection count for the P20 map
+	//and sum the length of the intersection(s) for the P21 map-------------
+
+						geometry::model::multi_linestring<line_type> intersecting;
+						geometry::intersection(pixel, *candidate->second, intersecting);
+						for (auto intersec_it = intersecting.begin(); intersec_it < intersecting.end(); intersec_it++)
+						{
+							intersection_length += geometry::length(*intersec_it);
+						}
 					}
 				}
+				vec_count[i][j] = intersec;
+				vec_length[i][j] = intersection_length;
 			}
-			vec_count[i][j] = intersec;
-			vec_length[i][j] = intersection_length;
-
+			else
+			{
+				vec_count[i][j]  = -256;
+				vec_length[i][j] = -256;
+			}
 			cur_y-= box_size;
 			++(*show_progress);
 		}
 		cur_x += box_size;
 	}
-	
-	cout << box_size << endl;
-//write the raster file---------------------------------------------
-
+//write the raster files---------------------------------------------
 	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, "_P20.tif");
 	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, "_P21.tif");
-
+	cout << "done \n" << endl;
 }
-
-
-
-
-

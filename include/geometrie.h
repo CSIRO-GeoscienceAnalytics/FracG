@@ -1,6 +1,6 @@
 #ifndef _GEOMETRIE_h
 #define _GEOMETRIE_h
-#include "main.h"
+#include "../include/fracg.h"
 
 using namespace boost;
 using namespace FGraph;
@@ -22,11 +22,11 @@ class GEOMETRIE
 	{
 		line_type cross;
 		point_type centre, p1, p2;
-		int seg_count;
 		vector<line_type> all;
+		double d;
 
-		Perpencicular() : cross(), centre(), p1(), p2(), all()
-		{seg_count = 0;}
+		Perpencicular() : cross(), centre(), p1(), p2(), all(), d()
+		{}
 
 		inline void operator()(Segment const& s)
 		{
@@ -43,10 +43,10 @@ class GEOMETRIE
 			geometry::clear(p1);
 			geometry::clear(p2);
 
-			p1.set<0>((centre.x() + ( ry/l) * 60 ));
-			p1.set<1>((centre.y() + (-rx/l) * 60 ));
-			p2.set<0>((centre.x() + (-ry/l) * 60 ));
-			p2.set<1>((centre.y() + ( rx/l) * 60 ));
+			p1.set<0>((centre.x() + ( ry/l) * d ));
+			p1.set<1>((centre.y() + (-rx/l) * d ));
+			p2.set<0>((centre.x() + (-ry/l) * d ));
+			p2.set<1>((centre.y() + ( rx/l) * d ));
 			geometry::clear(cross);
 			
 			geometry::append(cross, p1);
@@ -56,45 +56,25 @@ class GEOMETRIE
 		}
 	};
 	
+//gets the segmnet intersection with lne-----------------------------
 	template <typename Segment>
-	struct SegPoints
+	struct GetMidSegment
 	{
 		line_type cross;
-		point_type centre, p1, p2;
-		int seg_count;
-		vector<std::tuple<point_type, point_type, point_type>> Points;
+		line_type midSeg;
 		
-		SegPoints() : cross(), centre(), p1(), p2(), Points()
-		{seg_count = 0;}
-
+		GetMidSegment() : cross(), midSeg()
+		{}
 		inline void operator()(Segment const& s)
 		{
-			geometry::convert(s, cross);
-			geometry::centroid(cross, centre);
-			Points.push_back(make_tuple(cross.front(), centre, cross.back()));
+	
+		if (geometry::intersects(s, cross))
+			geometry::convert(s, midSeg);
+		 
 		}
 	};
 	
-
-	//find the centre of a segment------------------------------------------ 
-	template <typename Segment>
-	struct MidPoint
-	{
-		line_type cross;
-		point_type centre;
-		vector<point_type> all;
-
-		MidPoint() : cross(), centre(), all()
-		{}
-
-		inline void operator()(Segment const& s)
-		{
-			geometry::convert(s, cross);
-			geometry::centroid(cross, centre);
-			geometry::clear(cross);
-			all.push_back(centre);
-		}
-	};
+	
 
 	BUFFER DefineSquareBuffer(point_type POINT, const double Bdistance );
 	BUFFER DefinePointBuffer(point_type POINT, const double Bdistance );
@@ -108,6 +88,7 @@ class GEOMETRIE
 	
 	
 	box ReturnAOI(vector<line_type> lines);
+	polygon_type Return_tigth_AOI(vector<line_type> lines);
 	line_type ShortestLine(vector <line_type> Set);
 
 };
