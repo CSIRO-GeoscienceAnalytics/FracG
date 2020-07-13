@@ -11,6 +11,7 @@
 #include "../include/stats.h"
 #include "../include/fracg.h"
 #include "../include/model.h"
+#include "../include/util.h"
 
 using namespace std; 
 
