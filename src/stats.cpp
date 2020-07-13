@@ -1675,14 +1675,14 @@ void STATS::KDE_estimation_strikes(VECTOR &lines, bool set)
 		gauss_params = gauss_p;
 }
 
-vector<double> BootsTrapping(vector<double>data)
+vector<double> BootStrapping(vector<double>data)
 {
 	const int n = data.size();
 	vector<double> bt_data(data);
 	
 	boost::random_device dev;
     boost::mt19937 rng(dev);
-    boost::random::uniform_int_distribution<> rand_bt(0,n);
+    boost::random::uniform_int_distribution<> rand_bt(0,n-1);
     
 	for (int i = 0; i < n; i++)
 		bt_data[i] = data[rand_bt(rng)];
@@ -1711,8 +1711,8 @@ vector<double> PearsonCorrelation(vector<double>data1, vector<double>data2, size
      //now perform bootstrapping analysis for iterations = nb_iter                                     
     for (int i = 0; i < nb_iter; i++)
     {
-		vector<double> bt_data1 = BootsTrapping(data1);
-		vector<double> bt_data2 = BootsTrapping(data2);
+		vector<double> bt_data1 = BootStrapping(data1);
+		vector<double> bt_data2 = BootStrapping(data2);
 		
 		gsl_vector_const_view bt_D1 = gsl_vector_const_view_array( &bt_data1[0], bt_data1.size() );
 		gsl_vector_const_view bt_D2 = gsl_vector_const_view_array( &bt_data2[0], bt_data2.size() );

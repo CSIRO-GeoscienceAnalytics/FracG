@@ -218,7 +218,7 @@ void MODEL::BuildPointTree(Graph G)
 
 void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc)
 {
-	int deg;
+	int deg = 0; //TODO: deg needs to be set properly, this line only avoids undefined values
 	int init_p_tag = p_tag + 1;
 	vector<int> spline_points;
 	
@@ -299,7 +299,7 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
   if (output)
 	gmsh::fltk::run();
   gmsh::finalize();
-  cout << "Created msh-file " << filename << endl << endl;;
+  cout << "Created msh-file " << filename << endl << endl;
 }
 
 void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, string filename)
@@ -309,7 +309,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 	vector <box> sampling_windows;
 	sampling_windows = CreateSamplingWindows(faults, 5);
 	
-	cout << "Creating "<< nb_samples << " samples from lineamnet set" << endl;
+	cout << "Creating "<< nb_samples << " samples from lineament set" << endl;
 	
 	for (int w = 0; w < sampling_windows.size(); w++)
 	{

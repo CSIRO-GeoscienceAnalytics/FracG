@@ -286,12 +286,14 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 	//start by making the indices
 	Graph::vertex_iterator v, vstart, vend;
 	boost::tie(vstart, vend) = boost::vertices(g);
+    int index = 0;
 	for (v = vstart; v < vend; v++)
 	{
 		FVertex<point_type> fv = g[*v];
 		DVertex dv(fv.location, fv.Enode, fv.data, v - vstart);
 		dvertex_type dvd = boost::add_vertex(dv, dg);
 		vertex_map[*v] = dvd;
+        dg[dvd].index = index++; //initialise vertex index list
 	}
 	
 	Graph::edge_iterator e, estart, eend;
@@ -479,6 +481,12 @@ double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
 		std::swap(s, t);
 		cout << "Swapping source and target to find maximum flow from higher location to lower location" << endl;
 	}
+	
+	for (v = vstart; v < vend; v++)
+    {
+        //I'm not sure if this should be distance to the target, or if I should calculate the shortest paths from the target, or perhaps I set it to zero
+        dg[*v].distance = geometry::distance(dg[*v].location, dg[t].location); //set distance map
+    }
 	
 	//sanity check, make sure we're not calculating the max flow from a vertex to itself
 	if (s == t){
@@ -1868,7 +1876,7 @@ void GEO::WriteSHP_maxFlow(DGraph G, string name)
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    name.append(".shp");
+    if (!boost::algorithm::ends_with(name, ".shp")) name.append(".shp");
     const char* Name = name.c_str();
     const char* refWKT = refWKT_shp;
     

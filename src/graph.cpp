@@ -2,6 +2,7 @@
 #include "../include/geometrie.h"
 #include "../include/GeoRef.h"
 #include "../include/stats.h"
+#include "../include/util.h"
 
 #include <random>
 
@@ -10,18 +11,24 @@ GRAPH::GRAPH ()
 {
 }
 
+namespace fs = boost::filesystem;
 
 // create and open filestream in folder "statistics"
-ofstream CreateGraphFileStream(string folder, string name)
+ofstream CreateGraphFileStream(string name)
 {
-	string folder_name = folder + "/graph/";
-	const char* stats_dir = folder_name.c_str();
-		if(!opendir(stats_dir))
+// 	string folder_name = folder + "/graph/";
+// 	const char* stats_dir = folder_name.c_str();
+// 		if(!opendir(stats_dir))
 		
-	mkdir(stats_dir, 0777);
-	string tsv_file = stats_dir + name + (string)"_g_statistics.tsv";
+// 	mkdir(stats_dir, 0777);
+    
+    fs::path file(name);
+    system::error_code ec;
+    fs::create_directories(file.parent_path(), ec);
+    
+// 	string tsv_file = stats_dir + name + (string);
 	ofstream txtF; 
-	txtF.open (tsv_file, ios::out | ios::app); 
+	txtF.open (name, ios::out | ios::app); 
 	return(txtF);
 }
 
@@ -664,8 +671,11 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string name)
 		}
 
 //write results---------------------------------------------------------
-		string graphFile = lines.name + "_" + name;
-		txtG = CreateGraphFileStream(lines.folder, graphFile);
+		//string graphFile =  + ;
+//         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
+        string save_name = FGraph::add_prefix_suffix(name, {"graphs"}, lines.name + "_", "_g_statistics.tsv", true); //we need to clean this up //lines.folder
+//         cout << "the resulting name is " << save_name << endl;
+		txtG = CreateGraphFileStream(save_name);
 		if (txtG.is_open())  
 		{ 
 			txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
@@ -1375,8 +1385,8 @@ void GRAPH::MaximumFlow_R(Graph G, map_vertex_type map, string filename, string 
 	georef.setup_maximum_flow(dg, capacity_type);
 	double mf =  georef.maximum_flow(dg, s, t);
 	cout << "maximum flow is: " << mf << endl;
-	const char* name = ("max_flow_R_" + filename).c_str();
-	georef.WriteSHP_maxFlow(dg, name);
+	string name = FGraph::add_prefix_suffix(filename, "max_flow_R_");//
+	georef.WriteSHP_maxFlow(dg, name.c_str());
 	cout << " done \n" << endl;
 }
 
@@ -1392,8 +1402,8 @@ void GRAPH::MaximumFlow_VG(Graph G, map_vertex_type map, string filename, float 
 	georef.setup_maximum_flow(dg, capacity_type);
 	double mf =  georef.maximum_flow(dg, s, t);
 	cout << "maximum flow is: " << mf << endl;
-	const char* name = ("max_flow_VG_" + filename).c_str();
-	georef.WriteSHP_maxFlow(dg, name);
+	string name = FGraph::add_prefix_suffix(filename, "max_flow_VG_");
+	georef.WriteSHP_maxFlow(dg, name.c_str());
 	cout << " done \n" << endl;
 }
 
@@ -1408,7 +1418,7 @@ void GRAPH::MaximumFlow_HG(Graph G, map_vertex_type map, string filename, float 
 	DGraph dg = georef.MakeDirectedGraph(G);
 	georef.setup_maximum_flow(dg, capacity_type);
 	double mf =  georef.maximum_flow(dg, s, t);
-	const char* name = ("max_flow_HG_" + filename).c_str();
-	georef.WriteSHP_maxFlow(dg, name);
+	string name = FGraph::add_prefix_suffix(filename, "max_flow_HG_");
+	georef.WriteSHP_maxFlow(dg, name.c_str());
 	cout << " done \n" << endl;
 }
