@@ -6,6 +6,8 @@
 
 #include <random>
 
+const std::string graph_subdir="graph";
+
 GRAPH::GRAPH ()
 
 {
@@ -594,7 +596,7 @@ void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes,
 }
 
 //Topolgy analysis of graph---------------------------------------------
-void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string name)
+void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
 {
 	assert (num_vertices(G) != 0 && num_edges(G) != 0);
 	cout<< "GRAPH'S ANALYSIS OF NETWORK" << endl;
@@ -673,7 +675,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string name)
 //write results---------------------------------------------------------
 		//string graphFile =  + ;
 //         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-        string save_name = FGraph::add_prefix_suffix(name, {"graphs"}, lines.name + "_", "_g_statistics.tsv", true); //we need to clean this up //lines.folder
+        string save_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, lines.name, "_g_statistics.tsv", true); //we need to clean this up //lines.folder
 //         cout << "the resulting name is " << save_name << endl;
 		txtG = CreateGraphFileStream(save_name);
 		if (txtG.is_open())  
@@ -760,12 +762,15 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string name)
 				if (NbB > nb)
 				{
 					cout << "Component no " << i << " containing " << NbB << " branches " << endl;
-					string comp = lines.name + name + "_Graph_component_" + std::to_string(i);
+					string comp = lines.name + "_Graph_component_" + std::to_string(i);// + name
 					VECTOR comp_Lineamants;
 					comp_Lineamants.folder = lines.folder;
 					comp_Lineamants.name = comp;
 					comp_Lineamants.refWKT = lines.refWKT;
 					comp_Lineamants.data = Fault_in_component ;
+                    comp_Lineamants.out_folder = lines.out_folder;
+                    comp_Lineamants.out_path = lines.out_path;
+                    comp_Lineamants.in_path = lines.in_path;
 					STATS stats;
 					stats.GetLengthDist(comp_Lineamants);
 					stats.KDE_estimation_strikes(comp_Lineamants, false);
@@ -797,7 +802,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string name)
 }
   
 //find shortest path between source and target--------------------------
-Graph GRAPH::ShortPath(Graph G, map_vertex_type m, string filename)
+Graph GRAPH::ShortPath(Graph G, map_vertex_type m, std::string in_filename, std::string out_filename)
 { 
 	GEO Gref;
 	Graph shortP;
@@ -805,7 +810,7 @@ Graph GRAPH::ShortPath(Graph G, map_vertex_type m, string filename)
 	line_type SV , TV;
 	point_type source, target;
 	
-	Gref.Get_Source_Target(filename.c_str(), source, target);
+	Gref.Get_Source_Target(in_filename.c_str(), source, target);
 
 	vertex_type S = AddNewVertex(m, source, G);
 	vertex_type T = AddNewVertex(m, target, G);
@@ -897,14 +902,18 @@ Graph GRAPH::ShortPath(Graph G, map_vertex_type m, string filename)
 		vector<line_type> edges_shortPath;
 		for (auto Eg : make_iterator_range(edges(shortP)))
 			edges_shortPath.push_back(shortP[Eg].trace);
-		Gref.WriteSHP_lines(edges_shortPath, "short_path");
+        if (out_filename != "")
+        {
+            std::string save_filename = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir});
+            Gref.WriteSHP_lines(edges_shortPath, save_filename);
+        }
 	}
 	cout << " done " << endl;
 	return(shortP);
 }
 
 //create minimum spanning tree (backbone of network)--------------------
-Graph GRAPH::MinTree (Graph G)
+Graph GRAPH::MinTree (Graph G, std::string filename)
 {  
 	cout << "Generating minimum spanning tree" << endl;
 	Graph min_graph;
@@ -935,7 +944,13 @@ Graph GRAPH::MinTree (Graph G)
 	vector<line_type> edges_minTree;
 	for (auto Eg : make_iterator_range(edges(min_graph)))
 		edges_minTree.push_back(min_graph[Eg].trace);
-	Gref.WriteSHP_lines(edges_minTree, "min_tree");
+    
+	if (filename != "")
+    {
+        std::string save_filename = FGraph::add_prefix_suffix_subdirs(filename, {graph_subdir});
+        Gref.WriteSHP_lines(edges_minTree, save_filename);
+    }
+    
 	cout << " done \n" << endl;
 	return(min_graph);
 }
@@ -1374,27 +1389,30 @@ void AssignGrad(Graph G, float p1, float p2, bool vert)
 	delete raster.values;
 }
 
-void GRAPH::MaximumFlow_R(Graph G, map_vertex_type map, string filename, string capacity_type)
+void GRAPH::MaximumFlow_R(Graph G, map_vertex_type map, string st_filename, string capacity_type, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
-	georef.Get_Source_Target(filename.c_str(), s, t);
+	georef.Get_Source_Target(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with raster data." << endl;
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
 	georef.setup_maximum_flow(dg, capacity_type);
 	double mf =  georef.maximum_flow(dg, s, t);
 	cout << "maximum flow is: " << mf << endl;
-	string name = FGraph::add_prefix_suffix(filename, "max_flow_R_");//
-	georef.WriteSHP_maxFlow(dg, name.c_str());
+	if (out_filename != "")
+    {
+        std::string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_R_");//
+        georef.WriteSHP_maxFlow(dg, name.c_str());
+    }
 	cout << " done \n" << endl;
 }
 
-void GRAPH::MaximumFlow_VG(Graph G, map_vertex_type map, string filename, float top, float bottom, string capacity_type)
+void GRAPH::MaximumFlow_VG(Graph G, map_vertex_type map, string st_filename, float top, float bottom, string capacity_type, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
-	georef.Get_Source_Target(filename.c_str(), s, t);
+	georef.Get_Source_Target(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << endl;  
 	AssignGrad(G, top, bottom, false);
 	
@@ -1402,23 +1420,29 @@ void GRAPH::MaximumFlow_VG(Graph G, map_vertex_type map, string filename, float 
 	georef.setup_maximum_flow(dg, capacity_type);
 	double mf =  georef.maximum_flow(dg, s, t);
 	cout << "maximum flow is: " << mf << endl;
-	string name = FGraph::add_prefix_suffix(filename, "max_flow_VG_");
-	georef.WriteSHP_maxFlow(dg, name.c_str());
+    if (out_filename != "")
+    {
+        std::string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_VG_");
+        georef.WriteSHP_maxFlow(dg, name.c_str());
+    }
 	cout << " done \n" << endl;
 }
 
-void GRAPH::MaximumFlow_HG(Graph G, map_vertex_type map, string filename, float left, float right, string capacity_type)
+void GRAPH::MaximumFlow_HG(Graph G, map_vertex_type map, string st_filename, float left, float right, string capacity_type, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
-	georef.Get_Source_Target(filename.c_str(), s, t);
+	georef.Get_Source_Target(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << endl;  
 	AssignGrad(G, left, right, false);
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
 	georef.setup_maximum_flow(dg, capacity_type);
 	double mf =  georef.maximum_flow(dg, s, t);
-	string name = FGraph::add_prefix_suffix(filename, "max_flow_HG_");
-	georef.WriteSHP_maxFlow(dg, name.c_str());
+    if (out_filename != "")
+    {
+        string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_HG_");
+        georef.WriteSHP_maxFlow(dg, name.c_str());
+    }
 	cout << " done \n" << endl;
 }

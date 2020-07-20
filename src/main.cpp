@@ -9,6 +9,8 @@ namespace fs = boost::filesystem;
 
 //string constants for parsing input arguments
 const char *SHAPEFILE="shapefile";
+const char *OUT_DIR="out_dir";
+//const char *OUT_SUBDIR="out_subdir";
 const char *DIST_THRESH="dist_thresh";
 const char *SCANLINE_COUNT="scanline_count";
 const char *RASTER_SPACING="raster_spacing";
@@ -52,7 +54,8 @@ int main(int argc, char *argv[])
     desc.add_options()
         ("help", "write help message")
         (SHAPEFILE, po::value<string>(), "fault/fracture vector data, as a shapefile")
-        
+        (OUT_DIR, po::value<string>()->default_value(""), "Write output to this directory")
+        //(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
         (DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
         (SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
         (RASTER_SPACING, po::value<double>()->default_value(3000.0), "Pixel size of output raster maps")
@@ -98,6 +101,8 @@ int main(int argc, char *argv[])
 	//TODO: Need to put in some variables here to control whether or not to do each of these functions
 	
 	const string shapefile_name = vm[SHAPEFILE].as<string>();
+    const string out_dir = vm[OUT_DIR].as<string>();
+//     const string out_subdir = vm[OUT_SUBDIR].as<string>();
 	
 	const double dist_threshold = vm[DIST_THRESH].as<double>(); //NOTE: different things use different distance thresholds, we need to sort out whether or not they should be made consistent, or use separate thresholds
     const double raster_spacing = vm[RASTER_SPACING].as<double>();
@@ -124,14 +129,20 @@ int main(int argc, char *argv[])
     const int gmsh_sample_count = vm[GMSH_SAMPLE_COUNT].as<int>();
     const bool gmsh_sample_show_output = vm[GMSH_SAMPLE_SHOW_OUTPUT].as<bool>();
 	
+    //input and output files and directories
     fs::path vector_file(shapefile_name);
+    fs::path in_stem = vector_file.stem();
     fs::path source_dir = vector_file.parent_path();
+    std::string output_dir_string = out_dir;
+    if (out_dir == "") output_dir_string = (vector_file.parent_path() / ("fracg_output_" + in_stem.string())).string();
+    fs::path out_path( output_dir_string + "/" );
+//     cout << "in file is " << vector_file << ", in stem=" << in_stem << ", source_dir="<<source_dir<<",our_parent="<<out_parent<<", out_path="<<out_path<<endl;
     
 	// this is the correction of the network
-	VECTOR lines = geo.ReadVector(vector_file.c_str());		  // read the first layer of the shape file
+	VECTOR lines = geo.ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	geo.CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
 
-	geo.WRITE_SHP(lines, "corrected");					// this writes the shp file after correction
+	geo.WRITE_SHP(lines, FGraph::add_prefix_suffix(shapefile_name, "corrected_"));					// this writes the shp file after correction
 
 	// the following functions analyse staatistical properties of the network
  	stats.GetLengthDist(lines); 							     // test for three distributions of length 
@@ -149,22 +160,22 @@ int main(int argc, char *argv[])
 	G.ReadVEC(graph, map, lines.data); 					  //convert the faults into a graph
 	G.SplitFaults(graph, map, dist_threshold);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
 	G.RemoveSpurs(graph, map, dist_threshold);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
-	G.GraphAnalysis(graph, lines, graph_min_branches, graph_results_filename.c_str());		//graph, vector data, minimum number of branches per component to analyse
+	G.GraphAnalysis(graph, lines, graph_min_branches, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
 	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	//simple graph algorithms
-	Graph m_tree = G.MinTree(graph);							 //just a minimum spanning tree
-	Graph s_path = G.ShortPath(graph, map, (source_dir/"S_T.shp").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
+	Graph m_tree = G.MinTree(graph, (out_path / "min_tree").string());							 //just a minimum spanning tree
+	Graph s_path = G.ShortPath(graph, map, (source_dir/"S_T.shp").string(), (out_path / "short_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
 	
 	//create a shp file with lineaments classified based on orientation (from KDE) and intersecions (from graph)
-	G.ClassifyLineaments(graph, lines, classify_lineaments_dist, "classified");  // number is the vritical distance between lineamnt and intersection point and the string is the filename
+	G.ClassifyLineaments(graph, lines, classify_lineaments_dist, (out_path/"classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
 
 	stats.RasterStatistics(lines, raster_stats_dist, (source_dir/"DEM.tif").string());		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
 	Graph r_graph = geo.BuildRasterGraph(lines, dist_threshold, dist_threshold, (source_dir/"DEM.tif").string());//5 5, another distance threshold to check
 	
-	G.MaximumFlow_R(r_graph, map, (source_dir/"S_T.shp").string(), max_flow_cap_type);				  //maximum flow with raster data, capacity derived from length
+	G.MaximumFlow_R(r_graph, map, (source_dir/"S_T.shp").string(), max_flow_cap_type, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
 //	G.MaximumFlow_HG(graph, map, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
 //	G.MaximumFlow_VG(graph, map, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
@@ -172,7 +183,9 @@ int main(int argc, char *argv[])
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
 	G.IntersectionMap(graph, lines, raster_spacing, raster_spacing);//2000 2500 need to check what values to use here, also need to check the function itself
 	
-	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, "a_mesh");						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	m.SampleNetwork_2D(gmsh_sample_show_output, lines.data, gmsh_sample_cell_count, gmsh_sample_count, "a_messample");	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
-	return EXIT_SUCCESS; 
+    fs::path mesh_dir = out_path / "mesh";
+    
+	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+	m.SampleNetwork_2D(gmsh_sample_show_output, lines.data, gmsh_sample_cell_count, gmsh_sample_count, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	return EXIT_SUCCESS;
 } 

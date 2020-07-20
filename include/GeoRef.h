@@ -47,7 +47,7 @@ class GEO
 	void WriteGraph(Graph g, VECTOR lines, string subF);
 	void WriteGraph_R(Graph G, VECTOR lines, string subF);
 	
-	VECTOR ReadVector(const char* file);
+	VECTOR ReadVector(std::string in_file, std::string out_directory="");
 	void ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_type, point_type> &source_target);
 
 	void Point_Tree(vector<p_index> pointsF, vector<p_index>& closest);

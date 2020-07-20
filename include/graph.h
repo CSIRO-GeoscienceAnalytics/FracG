@@ -39,11 +39,11 @@ class GRAPH
 	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);
 	void ClassifyLineaments(Graph G, VECTOR lines, float dist, string name);
 	
-	Graph MinTree (Graph G);
-	Graph ShortPath(Graph G, map_vertex_type m, string filename);
+	Graph MinTree (Graph G, std::string out_filename="");
+	Graph ShortPath(Graph G, map_vertex_type m, std::string in_filename, std::string out_filename="");
 	
-	void MaximumFlow_R(Graph G, map_vertex_type map, string filename, string type);
-	void MaximumFlow_VG(Graph G, map_vertex_type map, string filename, float top, float bottom, string capacity_type);
-	void MaximumFlow_HG(Graph G, map_vertex_type map, string filename, float left, float rigth, string capacity_type);
+	void MaximumFlow_R(Graph G, map_vertex_type map, string st_filename, string type, std::string out_filename);
+	void MaximumFlow_VG(Graph G, map_vertex_type map, string st_filename, float top, float bottom, string capacity_type, std::string out_filename);
+	void MaximumFlow_HG(Graph G, map_vertex_type map, string st_filename, float left, float rigth, string capacity_type, std::string out_filename);
 };
 #endif
