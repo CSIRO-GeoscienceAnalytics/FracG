@@ -63,6 +63,8 @@
 
 #include <boost/algorithm/clamp.hpp>
 
+#include <boost/filesystem.hpp>
+
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/algorithms/buffer.hpp> 
 #include <boost/geometry/algorithms/equals.hpp>
@@ -117,6 +119,9 @@ namespace FGraph
 	struct VECTOR
 	{
 		string folder;
+		boost::filesystem::path in_path;
+        string out_folder;
+        boost::filesystem::path out_path;
 		string name;
 		char *refWKT;
 		vector<line_type> data;

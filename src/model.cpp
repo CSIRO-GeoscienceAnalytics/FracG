@@ -1,4 +1,5 @@
 #include "../include/model.h"
+#include "../include/util.h"
 
 MODEL::MODEL ()
 {
@@ -115,12 +116,12 @@ void MangeIntersections_bb(int &l_tag, int nb_bb_pts, vector< vector<pair<int, i
 	factory::fuse(bb_lines, l_lines, ov, fused_lines, -1, true, true);
 }
 
-void EmbedLineaments_all(Graph G, vector< vector<pair<int, int>>> fused_lines, vector<int> intersec, int nb_bb_pts,  const char* dir, string name)
+void EmbedLineaments_all(Graph G, vector< vector<pair<int, int>>> fused_lines, vector<int> intersec, int nb_bb_pts, string name)
 {
 	ofstream ss_names, lowD_ss_name, interface_ss_name;
-	string full_path = dir + string(name) + string(".txt");
-	string full_path2 = dir + string(name) + string("_lowD.txt");
-	string full_path3 = dir + string(name) + string("_interface.txt");
+	string full_path  = FGraph::add_prefix_suffix(name, "", ".txt", true);
+	string full_path2 = FGraph::add_prefix_suffix(name, "", "_lowD.txt", true);
+	string full_path3 = FGraph::add_prefix_suffix(name, "", "_interface.txt", true);
 	ss_names.open (full_path); 
 	lowD_ss_name.open (full_path2); 
 	interface_ss_name.open (full_path3); 
@@ -267,8 +268,8 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
 {
   cout << "creating 2D mesh for lineament set" << endl;
   BuildPointTree(G);
-  const char* dir = CreateDir(false);
-  string output_filename = dir + filename + ".msh";
+//   const char* dir = CreateDir(false);
+  string output_filename = FGraph::add_prefix_suffix(filename, "", ".msh");
   
   float lc;
   int nb_bb_pts;
@@ -291,7 +292,7 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
 	 
   MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
   NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, dir, "SideSet_Names");
+  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::add_prefix_suffix(output_filename, "", "SideSet_Names", true));
   
   factory::synchronize();
   model::mesh::generate(2);
@@ -305,11 +306,11 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
 void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, string filename)
 {
 	GRAPH g;
-	const char* dir = CreateDir(true);
+// 	const char* dir = CreateDir(true);
 	vector <box> sampling_windows;
 	sampling_windows = CreateSamplingWindows(faults, 5);
 	
-	cout << "Creating "<< nb_samples << " samples from lineament set" << endl;
+	cout << "Creating "<< nb_samples << " samples from lineament set" << endl; //TODO: nb_samples isn't used here
 	
 	for (int w = 0; w < sampling_windows.size(); w++)
 	{
@@ -327,7 +328,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 
 		if (num_edges(G) > 0)
 		{
-			string output_filename = dir + filename + string("_sample_") + to_string(w) +  ".msh";
+			string output_filename = FGraph::add_prefix_suffix(filename, "", "_sample_" + to_string(w) +  ".msh");
 			gmsh::initialize();
 			model::add(output_filename);
 			if (output)
@@ -356,7 +357,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 		 
 			MangeIntersections_bb(l_tag,  nb_bb_pts, fused_lines);
 			NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-			EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, dir, (string("_sample_")+ to_string(w)));
+			EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, output_filename);
 
 			factory::synchronize();
 			model::mesh::generate(2);

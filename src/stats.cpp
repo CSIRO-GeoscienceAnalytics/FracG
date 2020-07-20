@@ -2,15 +2,18 @@
 #include "../include/geometrie.h"
 #include "../include/GeoRef.h"
 #include "../include/graph.h"
+#include "../include/util.h"
 
 STATS::STATS ()
 {
 }
 
+const std::string stats_subdir = "/statisics/";
+
 // create and open filestream in folder "statistics"
 ofstream CreateFileStream(string subdir_name, string name)
 {
-	string stats_dirname = subdir_name + "/statisics/";
+	string stats_dirname = subdir_name + stats_subdir;
 	const char* stats_dir = stats_dirname.c_str();
 		if(!opendir(stats_dir))
 		
@@ -204,7 +207,7 @@ void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double,
 void STATS::DoBoxCount(VECTOR lines)
 {
 	cout << "Box Counting (QuadTree Method)" << endl;
-	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_BoxCount.tsv"));
+	ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_BoxCount.tsv"));
 	
 	std::clock_t startcputime = std::clock();
 	auto t_start = std::chrono::high_resolution_clock::now();
@@ -946,7 +949,7 @@ StatsModelData STATS::GetLengthDist(VECTOR lines)
 	random::random_device rd{};
 	vector <double> values;
 	
-	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_lengthFit.tsv"));
+	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_lengthFit.tsv"));
 	
 	BOOST_FOREACH(line_type l , lines.data)
 		values.push_back(geometry::length(l));
@@ -1608,7 +1611,8 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 void STATS::KDE_estimation_strikes(VECTOR &lines, bool set)
 {
 	vector<line_type> &lineaments = lines.data;
-	ofstream txtF = CreateFileStream(lines.folder, lines.name + "_KDE.tsv");
+    std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, lines.name, "_KDE.tsv");
+	ofstream txtF = FGraph::CreateFileStream(out_name);
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
 	BOOST_FOREACH(line_type F,  lineaments)
@@ -1816,7 +1820,7 @@ void STATS::ScanLine(VECTOR lines, int nb)
 	{
 		vector <double> density;
 		vector<pair<int, double>> direc_nb;
-		ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_scaline.tsv"));
+		ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_scaline.tsv"));
 		txtF << lines.name << endl;
 
 		for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
@@ -1959,7 +1963,7 @@ void STATS::CreateStats(VECTOR lines)
 	vec distance2(points.size(),fill::zeros);
 
 //write data to file----------------------------------------------------
-	ofstream txtF = CreateFileStream(lines.folder, lines.name + string("_statistics.tsv"));
+	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_statistics.tsv"));
 	txtF << lines.name <<endl;
 	if (gauss_params.size() > 0)
 	{
@@ -1999,7 +2003,7 @@ void STATS::CreateStats(VECTOR lines)
 		 << endl;
 	txtF.close(); 
 		 
-	txtF = CreateFileStream(lines.folder, lines.name + string("_correlations.tsv"));
+	txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_correlations.tsv"));
 		
 txtF << "\n Linear correlations "
 	 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "StdDev" << endl; 
@@ -2085,7 +2089,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			cout << "clustering angle and lenght failed" << endl;
 		else
 		{
-			txtF = CreateFileStream(lines.folder, lines.name + string("_km_angle_length.tsv"));
+			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_kmeans_angle_length.tsv"));
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and length" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
@@ -2114,7 +2118,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			cout << "clustering angle and lenght failed" << endl;
 		else
 		{
-			txtF = CreateFileStream(lines.folder, lines.name + string("_km_angle_sinuosity.tsv"));
+			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_kmeans_angle_sinuosity.tsv"));
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
@@ -2144,7 +2148,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			cout << "clustering angle and lenght failed" << endl;
 		else
 		{
-			txtF = CreateFileStream(lines.folder, lines.name + string("_km_length_sinuosity.tsv"));
+			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_kmeans_length_sinuosity.tsv"));
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of length and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;

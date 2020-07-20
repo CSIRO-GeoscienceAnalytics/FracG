@@ -2,6 +2,11 @@
 #include "../include/graph.h"
 #include "../include/geometrie.h"
 #include "../include/stats.h"
+#include "../include/util.h"
+
+namespace fs = boost::filesystem;
+
+const std::string raster_subdir="raster";
 
 GEO::GEO ()
 {
@@ -551,7 +556,7 @@ polygon_type GEO::BoundingBox(double transform[8], double buffer)
 	return(pl);
 }
 
-VECTOR GEO::ReadVector(const char *f)
+VECTOR GEO::ReadVector(std::string in_filename, std::string out_directory)
 {
     //this needs to be re-written
 //     if (argc < 1)
@@ -560,15 +565,18 @@ VECTOR GEO::ReadVector(const char *f)
 //         exit (EXIT_FAILURE);
 //     }
 	VECTOR lineaments;
-	string file = f; //this crashes if there are no arrguments
+    fs::path in_file(in_filename);
+// 	string file = f; //this crashes if there are no arrguments
 	string ext, name;
 	
+    
+    
 // 	if (argc == 1+1 )
 // 	{
-    ext =  strrchr(f,'.') ;
-    name = file.substr(0, file.find_last_of("."));
+    ext =  in_file.extension().string();
+//     name = file.substr(0, file.find_last_of("."));
     
-    if (ext == ".txt" ||  ext == ".shp")
+    if (ext == ".txt" ||  ext == ".shp") //we don't read from text files
         cout << "Fault  data from " << ext << "-file." << endl;
     else
     {
@@ -583,25 +591,30 @@ VECTOR GEO::ReadVector(const char *f)
 // 	}
 	
 	
-	size_t first_folder = name.find_first_of("/\\");
-	while (first_folder != std::string::npos && first_folder + 1 < name.size() && (name[first_folder+1] == '/' || name[first_folder+1] == '\\')) name.erase(first_folder+1, 1);
+// 	size_t first_folder = name.find_first_of("/\\");
+// 	while (first_folder != std::string::npos && first_folder + 1 < name.size() && (name[first_folder+1] == '/' || name[first_folder+1] == '\\')) name.erase(first_folder+1, 1);
+// 	
+// 	
+// 	size_t folder_index = name.find_last_of("/\\"); //this should work on both linux (/) and windows (\\) 
+// 	string folder = (folder_index != std::string::npos) ? name.substr(0               , folder_index + 1 ) : "./";
+// 	name          = (folder_index != std::string::npos) ? name.substr(folder_index + 1, std::string::npos) : name;
 	
-	
-	size_t folder_index = name.find_last_of("/\\"); //this should work on both linux (/) and windows (\\) 
-	string folder = (folder_index != std::string::npos) ? name.substr(0               , folder_index + 1 ) : "./";
-	name          = (folder_index != std::string::npos) ? name.substr(folder_index + 1, std::string::npos) : name;
-	
-	lineaments.folder = folder;
-	lineaments.name = name;
+	lineaments.folder = in_file.parent_path().string();
+	lineaments.name = in_file.stem().string();
+    lineaments.out_folder = (out_directory == "") ? lineaments.folder : out_directory;
+    lineaments.in_path = in_file.parent_path();
+    lineaments.out_path = fs::path(lineaments.out_folder);
+    
+//     cout << " folder = " << lineaments.folder << ", name = " << lineaments.name << ", out_folder = " << lineaments.out_folder << ", in_path = " << lineaments.in_path << ", out_path = " << lineaments.out_path << std::endl;
 
 	//read information from the vector file
 	if (ext == ".shp")
-		read_shp(file, lineaments);
+		read_shp(in_filename, lineaments);
 	else
 		cerr << "ERROR: no shape file definend" << endl;
 	
 	//set variable in FracG namespace
-	refWKT_shp = lineaments.refWKT;
+	refWKT_shp = lineaments.refWKT; //TODO: store this in the local variables, not a global. or rather, read it from local varaibles
 	return(lineaments);
 }
 
@@ -734,7 +747,9 @@ template<typename T>
 void WriteSHP_r(VECTOR lines, int dist, RASTER<T> raster)
 {
 	GEO georef;
-	string subdir = CreateDir(lines, {"raster_shp"});
+	std::string save_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"raster_shp"}, lines.name, ".shp", true);
+	FGraph::CreateDir(save_name);
+    
 	GDALAllRegister();
 	const char* ref = raster.refWKT;
 	const char *pszDriverName = "ESRI Shapefile";
@@ -753,7 +768,7 @@ void WriteSHP_r(VECTOR lines, int dist, RASTER<T> raster)
 	
 	poDriver->SetDescription("RasterData");
 	
-	poDS = poDriver->Create((subdir + "/" + lines.name).c_str(), 0, 0, 0, GDT_Unknown, NULL );
+	poDS = poDriver->Create(save_name.c_str(), 0, 0, 0, GDT_Unknown, NULL );
 	if( poDS == NULL )
 	{
 		printf( "Creation of output file failed.\n" );
@@ -908,9 +923,9 @@ CellSorter(point_type origin) { this->origin = origin; }
 template<typename T>
 void WriteTXT(VECTOR lines, int dist, RASTER<T> raster, string filename)
 {
-	string tsv_file = raster.name + ".tsv";
-	ofstream txtF; 
-	txtF.open (tsv_file, ios::out); 
+    std::string raster_name = fs::path(raster.name).stem().string();
+	string tsv_filename = FGraph::add_prefix_suffix(lines.out_path, lines.name + "_" + raster_name, ".tsv", true);
+	ofstream txtF = FGraph::CreateFileStream(tsv_filename);
 	
 	GEO georef;
 	GEOMETRIE geom;
@@ -1066,13 +1081,13 @@ template void GEO::AnalyseRaster<int>(VECTOR lines, int dist, RASTER<int> raster
 template void GEO::AnalyseRaster<float>(VECTOR lines, int dist, RASTER<float> raster);
 template void GEO::AnalyseRaster<double>(VECTOR lines, int dist, RASTER<double> raster);
 
-Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
+Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_filename)
 {
-	cout << "Generating graph linked to raster " << filename << endl;
+	cout << "Generating graph linked to raster " << raster_filename << endl;
 	GRAPH G;
 	Graph raster_graph;
 	//switch case based on raster type
-	const char * name = filename.c_str();
+	const char * name = raster_filename.c_str();
 
 	//build a map to use switch case for differnt data types
 	enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
@@ -1104,7 +1119,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout	<< "byte (will not perform graph analysis)" << endl;
 			RASTER<char> R;
-			R = ReadRaster<char>(filename);
+			R = ReadRaster<char>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
@@ -1113,10 +1128,10 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout << "uint16" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(filename);
+			R = ReadRaster<int>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, filename);
+			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1124,10 +1139,10 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout << "int16" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(filename);
+			R = ReadRaster<int>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, filename);
+			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1135,10 +1150,10 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout << "uint32" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(filename);
+			R = ReadRaster<int>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, filename);
+			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1146,10 +1161,10 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout << "int32" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(filename);
+			R = ReadRaster<int>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, filename);
+			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 		
@@ -1157,11 +1172,10 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout << "Float32" << endl;
 			RASTER<float> R;
-			R = ReadRaster<float>(filename);
+			R = ReadRaster<float>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			AssignValuesGraph<float>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, filename);
-			WriteGraph_R(raster_graph, lines, "raster");
+			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1169,10 +1183,10 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string filename)
 		{
 			cout << "Float64" << endl;
 			RASTER<double> R;
-			R = ReadRaster<double>(filename);
+			R = ReadRaster<double>(raster_filename);
 			raster_graph = RasterGraph(lines, split, spur, R);
 			AssignValuesGraph<double>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, filename);
+			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 
 		} break;
@@ -1368,7 +1382,8 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 	int y = data[0].size();
 	const char *pszFormat = "GTiff";
 
-	string subdir = CreateDir(input_file, {"raster"});
+    std::string out_name = FGraph::add_prefix_suffix_subdirs(input_file.out_path, {raster_subdir}, input_file.name, suffix, true);
+	FGraph::CreateDir(out_name);
 
 	poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
 	if( poDriver == NULL )
@@ -1378,7 +1393,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 	}
 	
 	papszMetadata = poDriver->GetMetadata();
-	poDstDS = poDriver->Create((subdir + "/" + input_file.name + suffix).c_str(), x,y, 1, GDT_Float32, NULL);
+	poDstDS = poDriver->Create(out_name.c_str(), x,y, 1, GDT_Float32, NULL);
 	poDstDS->SetGeoTransform( adfGeoTransform );
 	poDstDS->SetProjection( SpatialRef );
 	
@@ -1409,7 +1424,8 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    name.append(".shp");
+    name = FGraph::add_prefix_suffix(name, "", ".shp");
+    FGraph::CreateDir(name);
     const char* Name = name.c_str();
     const char* refWKT = refWKT_shp;
     
@@ -1482,7 +1498,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    name.append(".shp");
+    name = FGraph::add_prefix_suffix(name, "", ".shp");
     const char* Name = name.c_str();
 
     OGRSpatialReference oSRS;
@@ -1876,7 +1892,8 @@ void GEO::WriteSHP_maxFlow(DGraph G, string name)
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    if (!boost::algorithm::ends_with(name, ".shp")) name.append(".shp");
+    name = FGraph::add_prefix_suffix(name, "", ".shp");
+    FGraph::CreateDir(name);
     const char* Name = name.c_str();
     const char* refWKT = refWKT_shp;
     
@@ -2093,10 +2110,12 @@ void GEO::WriteGraph(Graph G, VECTOR lines, string subF)
 	char cur_path[256];
 	char* reference = lines.refWKT;
 	getcwd(cur_path, 255);
-	string subdir_name = CreateDir(lines, {"graph_shp", subF});
 	
-	string n_b =  subdir_name + "/" + lines.name + "_branches.shp";
-	string n_v =  subdir_name + "/" + lines.name + "_vertices.shp";
+    string subdir_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+    FGraph::CreateDir(subdir_name);
+	
+	string n_b =  FGraph::add_prefix_suffix(subdir_name, "", lines.name + "_branches.shp");
+	string n_v =  FGraph::add_prefix_suffix(subdir_name, "", lines.name + "_vertices.shp");
 	const char* Name_b = n_b.c_str();
 	const char* Name_v = n_v.c_str();
 
@@ -2105,6 +2124,7 @@ void GEO::WriteGraph(Graph G, VECTOR lines, string subF)
 	cout << " done" << endl;
 }
 
+//TODO: Why is this a separate function from the above?
 void GEO::WriteGraph_R(Graph G, VECTOR lines, string subF)
 {
 	cout << "starting writegraph (raster)" << endl;
@@ -2112,10 +2132,11 @@ void GEO::WriteGraph_R(Graph G, VECTOR lines, string subF)
 	char cur_path[256];
 	char* reference = lines.refWKT;
 	getcwd(cur_path, 255);
-	string subdir_name = CreateDir(lines, {"graph_shp", subF});
+	string subdir_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+	FGraph::CreateDir(subdir_name);
 	
-	string n_b =  subdir_name + "/" + lines.name + "_branches.shp";
-	string n_v =  subdir_name + "/" + lines.name + "_vertices.shp";
+	string n_b =  FGraph::add_prefix_suffix(subdir_name, "", lines.name + "_branches.shp");
+	string n_v =  FGraph::add_prefix_suffix(subdir_name, "", lines.name + "_vertices.shp");
 	const char* Name_b = n_b.c_str();
 	const char* Name_v = n_v.c_str();
 
