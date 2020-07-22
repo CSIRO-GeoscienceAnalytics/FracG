@@ -308,9 +308,9 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 	GRAPH g;
 // 	const char* dir = CreateDir(true);
 	vector <box> sampling_windows;
-	sampling_windows = CreateSamplingWindows(faults, 5);
+	sampling_windows = CreateSamplingWindows(faults, nb_samples);
 	
-	cout << "Creating "<< nb_samples << " samples from lineament set" << endl; //TODO: nb_samples isn't used here
+	cout << "Creating "<< nb_samples << " samples from lineament set" << endl;
 	
 	for (int w = 0; w < sampling_windows.size(); w++)
 	{
@@ -329,6 +329,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 		if (num_edges(G) > 0)
 		{
 			string output_filename = FGraph::add_prefix_suffix(filename, "", "_sample_" + to_string(w) +  ".msh");
+            FGraph::CreateDir(output_filename);
 			gmsh::initialize();
 			model::add(output_filename);
 			if (output)
