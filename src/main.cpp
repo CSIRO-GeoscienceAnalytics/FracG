@@ -29,7 +29,7 @@ const char *GRAPH_RESULTS_FOLDER="graph_results_folder";
 const char *GMSH_CELL_COUNT="gmsh_cell_count";
 const char *GMSH_SHOW_OUTPUT="gmsh_show_output";
 
-const char *GMSH_SAMPLE_CELL_COUNT="gmsh_cell_count";
+const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
 const char *GMSH_SAMPLE_COUNT="gmsh_sample_count";
 const char *GMSH_SAMPLE_SHOW_OUTPUT="gmsh_sample_show_output";
 
