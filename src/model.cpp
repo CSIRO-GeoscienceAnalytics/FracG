@@ -264,12 +264,12 @@ void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int
 	factory::addSpline(spline_points, ++l_tag);
 }
 
-void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
+void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename)
 {
   cout << "creating 2D mesh for lineament set" << endl;
   BuildPointTree(G);
-//   const char* dir = CreateDir(false);
-  string output_filename = FGraph::add_prefix_suffix(filename, "", ".msh");
+  out_filename = FGraph::add_prefix_suffix(out_filename, "", ".msh");
+  FGraph::CreateDir(out_filename);
   
   float lc;
   int nb_bb_pts;
@@ -292,15 +292,15 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename)
 	 
   MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
   NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::add_prefix_suffix(output_filename, "", "SideSet_Names", true));
+  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::add_prefix_suffix(out_filename, "", "_SideSet_names", true));
   
   factory::synchronize();
   model::mesh::generate(2);
-  gmsh::write(output_filename);
+  gmsh::write(out_filename);
   if (output)
 	gmsh::fltk::run();
   gmsh::finalize();
-  cout << "Created msh-file " << filename << endl << endl;
+  cout << "Created msh-file " << out_filename << endl << endl;
 }
 
 void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, string filename)

@@ -20,8 +20,8 @@ class MODEL
 	void BuildPointTree(Graph G);
 	
 	void addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc);
-	void WriteGmsh_2D(bool output, Graph G, int nb_cells, string filename);
-	void SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, string filename);
+	void WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename);
+	void SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, string out_filename);
 	
 };
 #endif

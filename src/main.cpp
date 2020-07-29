@@ -9,6 +9,7 @@ namespace fs = boost::filesystem;
 
 //string constants for parsing input arguments
 const char *SHAPEFILE="shapefile";
+const char *RASTER_FILE="raster_file";
 const char *OUT_DIR="out_dir";
 //const char *OUT_SUBDIR="out_subdir";
 const char *DIST_THRESH="dist_thresh";
@@ -54,6 +55,7 @@ int main(int argc, char *argv[])
     desc.add_options()
         ("help", "write help message")
         (SHAPEFILE, po::value<string>(), "fault/fracture vector data, as a shapefile")
+        (RASTER_FILE, po::value<string>()->default_value(""), "Raster file to use in analysis")
         (OUT_DIR, po::value<string>()->default_value(""), "Write output to this directory")
         //(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
         (DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
@@ -78,6 +80,7 @@ int main(int argc, char *argv[])
     ;
     po::positional_options_description pdesc;
     pdesc.add(SHAPEFILE, 1); //first positional argument is the shapefile
+    pdesc.add(RASTER_FILE, 2); //second positional argument is the raster file
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).positional(pdesc).run(),  vm);
     po:notify(vm);
@@ -101,6 +104,7 @@ int main(int argc, char *argv[])
 	//TODO: Need to put in some variables here to control whether or not to do each of these functions
 	
 	const string shapefile_name = vm[SHAPEFILE].as<string>();
+    string raster_name = vm[RASTER_FILE].as<string>();
     const string out_dir = vm[OUT_DIR].as<string>();
 //     const string out_subdir = vm[OUT_SUBDIR].as<string>();
 	
@@ -138,11 +142,13 @@ int main(int argc, char *argv[])
     fs::path out_path( output_dir_string + "/" );
 //     cout << "in file is " << vector_file << ", in stem=" << in_stem << ", source_dir="<<source_dir<<",our_parent="<<out_parent<<", out_path="<<out_path<<endl;
     
+    if (raster_name == "") raster_name = (source_dir/"DEM.tif").string();
+    
 	// this is the correction of the network
 	VECTOR lines = geo.ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	geo.CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
 
-	geo.WRITE_SHP(lines, FGraph::add_prefix_suffix(shapefile_name, "corrected_"));					// this writes the shp file after correction
+	geo.WRITE_SHP(lines, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction
 
 	// the following functions analyse staatistical properties of the network
  	stats.GetLengthDist(lines); 							     // test for three distributions of length 
@@ -164,18 +170,18 @@ int main(int argc, char *argv[])
 	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	//simple graph algorithms
-	Graph m_tree = G.MinTree(graph, (out_path / "min_tree").string());							 //just a minimum spanning tree
-	Graph s_path = G.ShortPath(graph, map, (source_dir/"S_T.shp").string(), (out_path / "short_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
+	Graph m_tree = G.MinTree(graph, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
+	Graph s_path = G.ShortPath(graph, map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
 	
 	//create a shp file with lineaments classified based on orientation (from KDE) and intersecions (from graph)
-	G.ClassifyLineaments(graph, lines, classify_lineaments_dist, (out_path/"classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
+	G.ClassifyLineaments(graph, lines, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
 
-	stats.RasterStatistics(lines, raster_stats_dist, (source_dir/"DEM.tif").string());		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
+	stats.RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
-	Graph r_graph = geo.BuildRasterGraph(lines, dist_threshold, dist_threshold, (source_dir/"DEM.tif").string());//5 5, another distance threshold to check
+	Graph r_graph = geo.BuildRasterGraph(lines, dist_threshold, dist_threshold, raster_name);//5 5, another distance threshold to check
 	
-	G.MaximumFlow_R(r_graph, map, (source_dir/"S_T.shp").string(), max_flow_cap_type, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
+	G.MaximumFlow_R(r_graph, map, (source_dir / "S_T.shp").string(), max_flow_cap_type, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
 //	G.MaximumFlow_HG(graph, map, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
 //	G.MaximumFlow_VG(graph, map, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
@@ -183,7 +189,7 @@ int main(int argc, char *argv[])
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
 	G.IntersectionMap(graph, lines, raster_spacing, raster_spacing);//2000 2500 need to check what values to use here, also need to check the function itself
 	
-    fs::path mesh_dir = out_path / "mesh";
+    fs::path mesh_dir = out_path / "mesh/";
     
 	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
 	m.SampleNetwork_2D(gmsh_sample_show_output, lines.data, gmsh_sample_cell_count, gmsh_sample_count, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.

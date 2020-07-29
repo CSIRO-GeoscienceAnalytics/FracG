@@ -207,7 +207,7 @@ void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double,
 void STATS::DoBoxCount(VECTOR lines)
 {
 	cout << "Box Counting (QuadTree Method)" << endl;
-	ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_BoxCount.tsv"));
+	ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / ("box_count.tsv"));
 	
 	std::clock_t startcputime = std::clock();
 	auto t_start = std::chrono::high_resolution_clock::now();
@@ -949,7 +949,7 @@ StatsModelData STATS::GetLengthDist(VECTOR lines)
 	random::random_device rd{};
 	vector <double> values;
 	
-	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_lengthFit.tsv"));
+	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("length_distributions.tsv"));
 	
 	BOOST_FOREACH(line_type l , lines.data)
 		values.push_back(geometry::length(l));
@@ -1077,11 +1077,11 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	return(M);
 }
  
-void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
+void STATS::RasterStatistics(VECTOR lines, int dist, std::string raster_filename)
 {
 	cout << "Generating raster statisics " << endl;
 	GEO georef;
-	const char * name = filename.c_str();
+	const char * name = raster_filename.c_str();
 	enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
 	static std::map<string, int> d_type;
 	if ( d_type.empty() )
@@ -1117,7 +1117,7 @@ void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
 		{
 			cout << "uint16" << endl;
 			RASTER<int> R;
-			R.name = filename;
+			R.name = raster_filename;
 			georef.AnalyseRaster<int>(lines, dist, R);
 		} break;
 			
@@ -1125,7 +1125,7 @@ void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
 		{
 			cout << "int16" << endl;
 			RASTER<int> R;
-			R.name = filename;
+			R.name = raster_filename;
 			georef.AnalyseRaster<int>(lines, dist, R);
 		} break;
 			
@@ -1133,7 +1133,7 @@ void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
 		{
 			cout << "uint32" << endl;
 			RASTER<int> R;
-			R.name = filename;
+			R.name = raster_filename;
 			georef.AnalyseRaster<int>(lines, dist, R);
 
 		} break;
@@ -1142,7 +1142,7 @@ void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
 		{
 			cout << "int32" << endl;
 			RASTER<int> R;
-			R.name = filename;
+			R.name = raster_filename;
 			georef.AnalyseRaster<int>(lines, dist, R);
 		} break;
 		
@@ -1150,7 +1150,7 @@ void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
 		{
 			cout << "Float32" << endl;
 			RASTER<float> R;
-			R.name = filename;
+			R.name = raster_filename;
 			georef.AnalyseRaster<float>(lines, dist, R);
 		} break;
 			
@@ -1158,7 +1158,7 @@ void STATS::RasterStatistics(VECTOR lines, int dist, string filename)
 		{
 			cout << "Float64" << endl;
 			RASTER<double> R;
-			R.name = filename;
+			R.name = raster_filename;
 			georef.AnalyseRaster<double>(lines, dist, R);
 		} break;
 			
@@ -1318,11 +1318,11 @@ vector<crossing_location_type> simple_location_detection(vector<crossing_type> &
 	while ((int)found.size() < nGauss)
 	{
 		for (int i = 0; i < (int) crossings.size(); i++){
-			//find a leading edge
+			//find a leading edge (that we haven't used yet)
 			if (used[i] || crossings[i].second) continue;
 			for (int j = (i + 1) % crossings.size(); j != i; j = (j + 1) % crossings.size())
 			{
-				//and the next falling edge
+				//and the next falling edge (that we haven't used yet)
 				if (used[j] || !crossings[j].second) continue;
 				found.push_back(std::make_pair(crossings[i].first, crossings[j].first));
 				used[i] = true;
@@ -1611,7 +1611,7 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 void STATS::KDE_estimation_strikes(VECTOR &lines, bool set)
 {
 	vector<line_type> &lineaments = lines.data;
-    std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, lines.name, "_KDE.tsv");
+    std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
 	ofstream txtF = FGraph::CreateFileStream(out_name);
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
@@ -1814,20 +1814,20 @@ line_type RandomLine(box AOI, polygon_type t_AOI, double angle)
 	return(r_line);
 }
 
-void STATS::ScanLine(VECTOR lines, int nb)
+void STATS::ScanLine(VECTOR lines, int nb_scanlines)
 {
 	if (gauss_params.size() != 0)
 	{
 		vector <double> density;
 		vector<pair<int, double>> direc_nb;
-		ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_scaline.tsv"));
+		ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
 		txtF << lines.name << endl;
 
 		for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
 		{
 			float frac = std::ceil((std::get<0>(*it) - 0.05) * 10.0) / 10.0; 
 			if (frac > 0)
-				direc_nb.push_back(make_pair(frac * nb, std::get<2>(*it)));
+				direc_nb.push_back(make_pair(frac * nb_scanlines, std::get<2>(*it)));
 		}
 		cout << "Scanline analysis for " << direc_nb.size() << " orientations " << endl;
 		txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< endl;
@@ -1888,7 +1888,7 @@ void STATS::ScanLine(VECTOR lines, int nb)
 	else
 		cout << "Cannot set scan line orientations (no data on prinipal orientations)" << endl;
 		
-	cout << "Analysed " << nb << " scalines \n" << endl;
+	cout << "Analysed " << nb_scanlines << " scalines \n" << endl;
 }
 
 //create statisics from input file--------------------------------------
@@ -1963,7 +1963,7 @@ void STATS::CreateStats(VECTOR lines)
 	vec distance2(points.size(),fill::zeros);
 
 //write data to file----------------------------------------------------
-	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_statistics.tsv"));
+	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.tsv"));//statistics
 	txtF << lines.name <<endl;
 	if (gauss_params.size() > 0)
 	{
@@ -2003,7 +2003,7 @@ void STATS::CreateStats(VECTOR lines)
 		 << endl;
 	txtF.close(); 
 		 
-	txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_correlations.tsv"));
+	txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("length_orientations_correlations.tsv"));
 		
 txtF << "\n Linear correlations "
 	 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "StdDev" << endl; 
@@ -2013,21 +2013,21 @@ txtF << "\n Linear correlations "
 	vector<double> p_dist2 = arma::conv_to< std::vector<double> >::from(distance2);
 
 	vector<double> len_sin_cor = PearsonCorrelation(Length, Sinuosity, 50);
-	txtF << "length sinuosity: " << arma::mean(arma::vec((len_sin_cor))) << "\t" << arma::stddev(arma::vec (len_sin_cor)) << endl;
+	txtF << "length sinuosity: \t" << arma::mean(arma::vec((len_sin_cor))) << "\t" << arma::stddev(arma::vec (len_sin_cor)) << endl;
 	
 	vector<double> len_orient_cor = PearsonCorrelation(Length, Angle, 50);
-	txtF << "length orientation: " << arma::mean(arma::vec((len_orient_cor))) << "\t" << arma::stddev(arma::vec (len_orient_cor)) << endl;
+	txtF << "length orientation: \t" << arma::mean(arma::vec((len_orient_cor))) << "\t" << arma::stddev(arma::vec (len_orient_cor)) << endl;
 	
 	vector<double> orient_sin_cor = PearsonCorrelation(Length, Angle, 50);
-	txtF << "orientation sinuosity: " << arma::mean(arma::vec((orient_sin_cor))) << "\t" << arma::stddev(arma::vec (orient_sin_cor)) << endl;
+	txtF << "orientation sinuosity: \t" << arma::mean(arma::vec((orient_sin_cor))) << "\t" << arma::stddev(arma::vec (orient_sin_cor)) << endl;
 	
 	vector<double> len_p_dist_cor = PearsonCorrelation(Length, p_dist, 50);
-	txtF << "length distance: " << arma::mean(arma::vec((len_p_dist_cor))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor)) << endl;
+	txtF << "length distance: \t" << arma::mean(arma::vec((len_p_dist_cor))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor)) << endl;
 	
 	vector<double> len_p_dist_cor2 = PearsonCorrelation(Length, p_dist2, 50);
-	txtF << "length distanse (larger): " << arma::mean(arma::vec((len_p_dist_cor2))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor2)) << endl;
+	txtF << "length distanse (larger): \t" << arma::mean(arma::vec((len_p_dist_cor2))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor2)) << endl;
 	
-	cout << "Wrote geometric statisics to file "<< lines.name <<"_statistics.tsv \n" << endl; 
+	cout << "Wrote geometric statisics to file" << endl; 
 }
 
 int GetCluster(pair<double, double> point, vector<pair<double,double>> clusters)
@@ -2089,7 +2089,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			cout << "clustering angle and lenght failed" << endl;
 		else
 		{
-			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_kmeans_angle_length.tsv"));
+			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_angle_length.tsv"));
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and length" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
@@ -2118,7 +2118,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			cout << "clustering angle and lenght failed" << endl;
 		else
 		{
-			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_kmeans_angle_sinuosity.tsv"));
+			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_angle_sinuosity.tsv"));
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
@@ -2148,7 +2148,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			cout << "clustering angle and lenght failed" << endl;
 		else
 		{
-			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / (lines.name + "_kmeans_length_sinuosity.tsv"));
+			txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_length_sinuosity.tsv"));
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of length and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;

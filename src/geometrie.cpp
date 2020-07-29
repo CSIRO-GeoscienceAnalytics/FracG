@@ -1,5 +1,8 @@
 #include "../include/geometrie.h"
 #include "../include/GeoRef.h"
+#include "../include/util.h"
+
+const std::string geom_subdir = "geometry";
 
 GEOMETRIE::GEOMETRIE ()
 
@@ -291,7 +294,10 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 		cur_x += cell_size;
 	}
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, "_dist.tif");
+
+
+    std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
+	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
 	cout << " done \n" << endl;
 }
 
@@ -388,7 +394,10 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
 		cur_x += box_size;
 	}
 //write the raster files---------------------------------------------
-	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, "_P20.tif");
-	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, "_P21.tif");
+    std::string p20_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "P20_map", ".tif");
+	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, p20_name);
+    
+    std::string p21_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "P21_map", ".tif");
+	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, p21_name);
 	cout << "done \n" << endl;
 }

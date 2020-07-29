@@ -675,7 +675,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
 //write results---------------------------------------------------------
 		//string graphFile =  + ;
 //         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-        string save_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, lines.name, "_g_statistics.tsv", true); //we need to clean this up //lines.folder
+        string save_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
 //         cout << "the resulting name is " << save_name << endl;
 		txtG = CreateGraphFileStream(save_name);
 		if (txtG.is_open())  
@@ -1013,8 +1013,8 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 	
 	int x_size = (long int) ceil((geometry::distance(ll, lr) / cell_size));
 	int y_size = (long int) ceil((geometry::distance(ll, ul) / cell_size));
-	vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  
-	vector<vector<double> > vec2(x_size , vector<double> (y_size, 0)); 
+	vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  //count of intersections in area
+	vector<vector<double> > vec2(x_size , vector<double> (y_size, 0));  //sum of degree of intersections in area
 	
 	double cur_y = max_y;
 	double cur_x = min_x;
@@ -1085,8 +1085,11 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 		}
 
 //write the raster file---------------------------------------------
-	georef.WriteRASTER(vec,  lines.refWKT, newGeoTransform, lines, "_intersec.tif");
-	georef.WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, "_intersec2.tif");
+    std::string isec_dens_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "intersection_density", ".tif");
+	georef.WriteRASTER(vec,  lines.refWKT, newGeoTransform, lines, isec_dens_name);
+    
+    std::string isec_intens_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
+	georef.WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, isec_intens_name);
 	cout << " done \n" << endl;
 }
 

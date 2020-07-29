@@ -96,8 +96,8 @@ class STATS
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
 	void KDE_estimation_strikes(VECTOR &lines, bool set);
 	int CheckGaussians(double angle);
-	void ScanLine(VECTOR lines, int nb);
+	void ScanLine(VECTOR lines, int nb_scanlines);
 	void KMCluster(bool output, VECTOR lines);
-	void RasterStatistics(VECTOR lines, int dist, string filename);
+	void RasterStatistics(VECTOR lines, int dist, std::string raster_filename);
 };
 #endif
