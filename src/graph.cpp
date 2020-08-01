@@ -15,24 +15,24 @@ GRAPH::GRAPH ()
 
 namespace fs = boost::filesystem;
 
-// create and open filestream in folder "statistics"
-ofstream CreateGraphFileStream(string name)
-{
-// 	string folder_name = folder + "/graph/";
-// 	const char* stats_dir = folder_name.c_str();
-// 		if(!opendir(stats_dir))
-		
-// 	mkdir(stats_dir, 0777);
-    
-    fs::path file(name);
-    system::error_code ec;
-    fs::create_directories(file.parent_path(), ec);
-    
-// 	string tsv_file = stats_dir + name + (string);
-	ofstream txtF; 
-	txtF.open (name, ios::out | ios::app); 
-	return(txtF);
-}
+// // create and open filestream in folder "statistics"
+// ofstream CreateGraphFileStream(string name)
+// {
+// // 	string folder_name = folder + "/graph/";
+// // 	const char* stats_dir = folder_name.c_str();
+// // 		if(!opendir(stats_dir))
+// 		
+// // 	mkdir(stats_dir, 0777);
+//     
+//     fs::path file(name);
+//     system::error_code ec;
+//     fs::create_directories(file.parent_path(), ec);
+//     
+// // 	string tsv_file = stats_dir + name + (string);
+// 	ofstream txtF; 
+// 	txtF.open (name, ios::out | ios::app); 
+// 	return(txtF);
+// }
 
 
 //take a location, and return the corresponding graph vertex, and the list of possible vertices
@@ -127,33 +127,34 @@ vertex_type GRAPH::GetVertex(map_vertex_type& map, point_type const& key, Graph&
 //add a new edge to the graph, and record the full length of the fault that comprises this fault segment
 bool GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg, double FaultLength)
 {
-// 	cout << "Adding edge between " << S << " and " << T << " with number of vertices " << num_vertices(G) << endl;
 	edge_type edge;
 	bool added_new = false;
-		if (!boost::edge(S, T, G).second && !geometry::equals(G[S].location, G[T].location))
-		{
-			std::tie(edge, added_new) = add_edge(S, T,
+    if (!boost::edge(S, T, G).second && !geometry::equals(G[S].location, G[T].location))
+    {
+			std::tie(edge, added_new) = boost::add_edge(S, T,
 				{geometry::length(FaultSeg)/1000, FaultSeg}, G);
 			G[edge].fault_length = FaultLength;
 	}
+// 	cout << "Adding edge between " << S << " and " << T << " with number of vertices " << num_vertices(G) << ", successful ? " << added_new << endl;
 	return added_new;
 }
 
 //read vector data into graph------------------------------------------
-void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &faults)
+graph_map<point_type, vertex_type, Graph> GRAPH::ConvertLinesToGraph(std::vector<line_type> &faults, double distance_threshold)
 {
-	GEO g;
-	GEOMETRIE geom;
+    graph_map<point_type, vertex_type, Graph> map(distance_threshold);
+    Graph &graph = map.get_graph();
 	vertex_type VA, VB;
 
 	//create edges and nodes for faults in the graph-------------------------
 	int nb = 0;
 	BOOST_FOREACH(line_type f, faults)
 	{
-		VA = AddNewVertex(map, f.front(), graph);
-		VB = AddNewVertex(map, f.back(), graph);
+		VA = map.add_vertex(f.front());
+		VB = map.add_vertex(f.back());
 
 		AddNewEdge(graph, VA, VB, f);
+        std::cout <<" Adding edge from " << VA << " to " << VB << ", there are now " << num_edges(graph) << " in the graph" << std::endl;
 		
 		if (boost::edge(VA,VB, graph).second)
 		{
@@ -163,13 +164,16 @@ void GRAPH::ReadVEC(Graph& graph, map_vertex_type& map, std::vector<line_type> &
 		nb++;
 	}
 	cout << "Converted " << faults.size() << " lineaments into " << num_edges(graph) << " edges." << endl;
+    return map;
 }
 
 
-void GRAPH::ReadVEC4raster(Graph& graph, double transform[8],  map_vertex_type& map, std::vector<line_type> &faults)
+graph_map<> GRAPH::ReadVEC4raster(double transform[8], std::vector<line_type> &faults, double map_distance_threshold)
 {
 	GEO g;
 	GEOMETRIE geom;
+    graph_map<> map(map_distance_threshold);
+    Graph& graph = map.get_graph();
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
 	std::pair <point_type, point_type> NODES;
@@ -216,8 +220,8 @@ void GRAPH::ReadVEC4raster(Graph& graph, double transform[8],  map_vertex_type& 
 		type  = get<2> (*it);
 		const double fault_length = get<3>(*it);
 		
-		VA = AddNewVertex(map, NODES.first, graph);
-		VB = AddNewVertex(map, NODES.second, graph);
+		VA = map.add_vertex(NODES.first);
+		VB = map.add_vertex(NODES.second);
 
 		//if( (degree(VA, graph) == 0) && (degree(VB, graph) == 0) )
 		AddNewEdge(graph, VA, VB, TRACE, fault_length);
@@ -231,14 +235,15 @@ void GRAPH::ReadVEC4raster(Graph& graph, double transform[8],  map_vertex_type& 
 	faults.clear();
 	for (auto Eg : make_iterator_range(edges(graph)))
 		faults.push_back(graph[Eg].trace);
+    return map;
 }
 
-Graph GRAPH::ReadVEC4MODEL(std::vector<line_type> faults, box bx)
+Graph GRAPH::ReadVEC4MODEL(std::vector<line_type> faults, box bx, double map_distance_threshold)
 {
 	GEO g;
 	Graph graph;
 	GEOMETRIE geom;
-	map_vertex_type map;
+	graph_map map(graph, map_distance_threshold);
 	
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >> G;
@@ -282,8 +287,8 @@ Graph GRAPH::ReadVEC4MODEL(std::vector<line_type> faults, box bx)
 		type  = get<2> (*it);
 		nb = get<3> (*it);
 
-		VA = AddNewVertex(map, NODES.first, graph);
-		VB = AddNewVertex(map, NODES.second, graph);
+		VA = map.add_vertex(NODES.first);
+		VB = map.add_vertex(NODES.second);
 
 		AddNewEdge(graph, VA, VB, TRACE);
 				
@@ -310,10 +315,11 @@ Graph GRAPH::ReadVEC4MODEL(std::vector<line_type> faults, box bx)
 //a "spur" is a fault segment that extends only slightly past a fault intersection
 //these are assumed to be an issue of the digitisation/data quality, and that real physical faults either end at the fault intersection, or continue for a large enough distance past the fault intersection
 //this function assumes that the fault graph has already been split into the fault segments between intersections
-void GRAPH::RemoveSpurs(Graph& G, map_vertex_type& map, double minDist)
+void GRAPH::RemoveSpurs(graph_map<>& map, double minDist)
 {
 	cout << "Removing spurs" << endl;
-	point_int rmP;
+    Graph& G = map.get_graph();
+	point_type rmP;
 	vertex_type U ,u;
 
 	restart:
@@ -331,18 +337,18 @@ void GRAPH::RemoveSpurs(Graph& G, map_vertex_type& map, double minDist)
 				if (degree(U,G) == 0)
 				{
 // 					cout << "WARNING: Removing edge to vertex " << endl;
-					rmP.set<0>((long long)G[U].location.x());
-					rmP.set<1>((long long)G[U].location.y());
-					remove_vertex(U, G);
-					map.erase(rmP);
+// 					rmP.set<0>((long long).x());
+// 					rmP.set<1>((long long)G[U].location.y());
+// 					remove_vertex(U, G);
+					map.remove_vertex(G[U].location);
 				}
 				if (degree(u,G) == 0)
 				{
 // 					cout << "WARNING: Removing edge to vertex " << endl;
-					rmP.set<0>((long long)G[u].location.x());
-					rmP.set<1>((long long)G[u].location.y());
-					remove_vertex(u, G);
-					map.erase(rmP);
+// 					rmP.set<0>((long long).x());
+// 					rmP.set<1>((long long)G[u].location.y());
+// 					remove_vertex(u, G);
+					map.remove_vertex(G[u].location);
 				}
 				goto restart;
 			}
@@ -352,7 +358,8 @@ void GRAPH::RemoveSpurs(Graph& G, map_vertex_type& map, double minDist)
 	{
 		cout << "WARNING: Graph is non-planar!\n"
 			 << "Attempting to re-split edges with r = " << split_dist/2 << endl;
-		SplitFaults(G, map, split_dist/2); 
+		graph_map<> resplit_map = SplitFaults(map, split_dist/2);
+        map = resplit_map;
 		if (!boyer_myrvold_planarity_test(G))
 		{
 			cout << "ERROR: Could not construct planar graph" << endl;
@@ -376,12 +383,13 @@ AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distan
 }
 
 //take a graph and split the faults up into fault segments, according to where the faults intersect
-void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist)
+graph_map<> GRAPH::SplitFaults(graph_map<> &map, double minDist)
 {
+    Graph& graph = map.get_graph();
 	cout << "Splitting edges at intersection points" << endl;
 	split_dist = minDist;
-	Graph g;
-	map_vertex_type m; //the map translates physical coordinates and nodes in the graph.
+	graph_map<> split_map(map.get_dist()); //the map translates physical coordinates and nodes in the graph.
+    Graph &split_graph = split_map.get_graph();
 	GEOMETRIE geom;
 	long double Distance;
 	line_type fault, fault2;
@@ -437,7 +445,7 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist)
 		cross.push_back(make_tuple(geometry::length(fault), fault.back(), AttachPoint::middle));
 		
 		geom.SortDist(cross); //sort the vertices so that we get them in order of how far along the fault they appear (while taking into account that some intersection points appear off the fault line itself)
-		vertex_type prev_vertex = AddNewVertex(m, std::get<1>(cross.front()), g);
+		vertex_type prev_vertex = split_map.add_vertex(std::get<1>(cross.front()));
 		for (vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 		{
 			if (I == cross.begin()) continue;
@@ -445,14 +453,14 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist)
 			//bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
 			//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
 			//if (is_start || is_end) continue;
-			NewV = AddNewVertex(m, intersect, g);
+			NewV = split_map.add_vertex(intersect);
 			if (NewV == prev_vertex) continue;
 			
-			AddNewEdge(g, prev_vertex, NewV, geom.GetSegment(fault, g[prev_vertex].location, g[NewV].location), fault_length);//also remember the length of the original fault
+			AddNewEdge(split_graph, prev_vertex, NewV, geom.GetSegment(fault, split_graph[prev_vertex].location, split_graph[NewV].location), fault_length);//also remember the length of the original fault
 			
-			if(boost::edge(prev_vertex, NewV, g).second) //if an edge exists between prev_vertex and NewV
+			if(boost::edge(prev_vertex, NewV, split_graph).second) //if an edge exists between prev_vertex and NewV
 			{
-				auto e = boost::edge(prev_vertex, NewV, g).first; //edge descriptor of the above
+				auto e = boost::edge(prev_vertex, NewV, split_graph).first; //edge descriptor of the above
 				graph[e].FaultNb = N; //set the fault number
 			}
 			prev_vertex = NewV;
@@ -460,9 +468,10 @@ void GRAPH::SplitFaults(Graph& graph, map_vertex_type& map, double minDist)
 
 		cross.clear();
 	}
-	graph = g;
-	map = m;
+// 	graph = g;
+// 	map = m;
 	cout << " done \n" << endl;
+    return split_map;
 }
 
 void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes, int &II, int &IC, int &CC, int &NbB, double &totalLength, int &numK, double &Area)
@@ -677,7 +686,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
 //         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
         string save_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
 //         cout << "the resulting name is " << save_name << endl;
-		txtG = CreateGraphFileStream(save_name);
+		txtG = FGraph::CreateFileStream(save_name);
 		if (txtG.is_open())  
 		{ 
 			txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
@@ -802,18 +811,22 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
 }
   
 //find shortest path between source and target--------------------------
-Graph GRAPH::ShortPath(Graph G, map_vertex_type m, std::string in_filename, std::string out_filename)
+Graph GRAPH::ShortPath(graph_map<> m, std::string in_filename, std::string out_filename)
 { 
 	GEO Gref;
 	Graph shortP;
+    Graph &G = m.get_graph();
 	GEOMETRIE geom;
 	line_type SV , TV;
 	point_type source, target;
 	
 	Gref.Get_Source_Target(in_filename.c_str(), source, target);
 
-	vertex_type S = AddNewVertex(m, source, G);
-	vertex_type T = AddNewVertex(m, target, G);
+    bool added_source_vertex, added_target_vertex;
+    vertex_type S, T;
+    
+	std::tie(S, added_source_vertex) = m.add_vertex_isnew(source);
+	std::tie(T, added_target_vertex) = m.add_vertex_isnew(target);
 // 	BUFFER BS = geom.DefinePointBuffer(source, radius);
 // 	BUFFER BT = geom.DefinePointBuffer(target, radius);
     
@@ -889,7 +902,7 @@ Graph GRAPH::ShortPath(Graph G, map_vertex_type m, std::string in_filename, std:
 		auto ud = add_vertex(G[u_tmp], shortP);
 		auto vd = add_vertex(G[v_tmp], shortP);
         
-        cout << "Added vertices " << ud << " -> " << vd << endl;
+//         cout << "Added vertices " << ud << " -> " << vd << endl;
 
 		auto added_edge = add_edge(ud, vd, G[e_tmp], shortP); //<- this causes the segmentation fault //u_tmp and v_tmp are the same
 
@@ -908,19 +921,24 @@ Graph GRAPH::ShortPath(Graph G, map_vertex_type m, std::string in_filename, std:
             Gref.WriteSHP_lines(edges_shortPath, save_filename);
         }
 	}
+	
+	//remove the source and target vertices that we added earlier (if we added them)
+	if (added_source_vertex) m.remove_vertex(source);
+    if (added_target_vertex) m.remove_vertex(target);
+	
 	cout << " done " << endl;
 	return(shortP);
 }
 
 //create minimum spanning tree (backbone of network)--------------------
-Graph GRAPH::MinTree (Graph G, std::string filename)
+Graph GRAPH::MinTree (Graph G, double map_dist_threshold, std::string filename)
 {  
 	cout << "Generating minimum spanning tree" << endl;
 	Graph min_graph;
 	GEO Gref;  
 	int i = 0;
 	std::string line;
-	map_vertex_type map;
+	graph_map map(min_graph, map_dist_threshold);
 	line_type fault;
 	
 	std::vector<edge_type> spanning_tree;
@@ -932,8 +950,8 @@ Graph GRAPH::MinTree (Graph G, std::string filename)
 	{
 		vertex_type S = source(*ei, G);
 		vertex_type T = target(*ei, G);
-		AddNewVertex(map, G[S].location, min_graph); 
-		AddNewVertex(map, G[T].location, min_graph); 
+		map.add_vertex(G[S].location); 
+		map.add_vertex(G[T].location); 
 		add_edge(S, T, 
 				{geometry::length(G[*ei].trace)/1000, 
 					G[*ei].trace},
@@ -1392,7 +1410,7 @@ void AssignGrad(Graph G, float p1, float p2, bool vert)
 	delete raster.values;
 }
 
-void GRAPH::MaximumFlow_R(Graph G, map_vertex_type map, string st_filename, string capacity_type, std::string out_filename)
+void GRAPH::MaximumFlow_R(Graph G, string st_filename, string capacity_type, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
@@ -1411,7 +1429,7 @@ void GRAPH::MaximumFlow_R(Graph G, map_vertex_type map, string st_filename, stri
 	cout << " done \n" << endl;
 }
 
-void GRAPH::MaximumFlow_VG(Graph G, map_vertex_type map, string st_filename, float top, float bottom, string capacity_type, std::string out_filename)
+void GRAPH::MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
@@ -1431,7 +1449,7 @@ void GRAPH::MaximumFlow_VG(Graph G, map_vertex_type map, string st_filename, flo
 	cout << " done \n" << endl;
 }
 
-void GRAPH::MaximumFlow_HG(Graph G, map_vertex_type map, string st_filename, float left, float right, string capacity_type, std::string out_filename)
+void GRAPH::MaximumFlow_HG(Graph G, string st_filename, float left, float right, string capacity_type, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;

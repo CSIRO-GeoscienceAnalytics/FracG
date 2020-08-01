@@ -727,19 +727,18 @@ RASTER <T>ReadRaster(string in_filename)
 	return(raster);
 }
 
+//TODO: these are ints, and not descriptive. split seems to be the distance threshold for splitting the graph into fault segments, and spurs seems to be the distance threshold for removing spurs from the graph
 template<typename T> 
-Graph RasterGraph(VECTOR lines, int split, int spurs, RASTER<T> raster)
+graph_map<> RasterGraph(VECTOR lines, int split, int spurs, RASTER<T> raster, double distance_threshold)
 {
 	GRAPH g;
-	Graph raster_graph;
-	map_vertex_type map;
 	
 	cout << "Building graph for raster " << raster.name << endl;
-	g.ReadVEC4raster(raster_graph, raster.transform, map, lines.data);
-	g.SplitFaults(raster_graph, map, split); //split the faults in the graph into fault segments, according to the intersections of the faults
-	g.RemoveSpurs(raster_graph, map, spurs); //remove any spurs from the graph network
+	graph_map<> map = g.ReadVEC4raster(raster.transform, lines.data, distance_threshold);
+	graph_map<> split_map = g.SplitFaults(map, split); //split the faults in the graph into fault segments, according to the intersections of the faults
+	g.RemoveSpurs(split_map, spurs); //remove any spurs from the graph network
 	cout << "done" << endl;
-	return(raster_graph);
+	return split_map;
 }
 
 //write raster-augmented shapefile
@@ -1083,7 +1082,7 @@ template void GEO::AnalyseRaster<int>(VECTOR lines, int dist, RASTER<int> raster
 template void GEO::AnalyseRaster<float>(VECTOR lines, int dist, RASTER<float> raster);
 template void GEO::AnalyseRaster<double>(VECTOR lines, int dist, RASTER<double> raster);
 
-Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_filename)
+Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, double map_distance_threshold, string raster_filename)
 {
 	cout << "Generating graph linked to raster " << raster_filename << endl;
 	GRAPH G;
@@ -1122,7 +1121,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout	<< "byte (will not perform graph analysis)" << endl;
 			RASTER<char> R;
 			R = ReadRaster<char>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 		 
@@ -1131,7 +1131,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout << "uint16" << endl;
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1142,7 +1143,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout << "int16" << endl;
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1153,7 +1155,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout << "uint32" << endl;
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1164,7 +1167,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout << "int32" << endl;
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1175,7 +1179,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout << "Float32" << endl;
 			RASTER<float> R;
 			R = ReadRaster<float>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			AssignValuesGraph<float>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1186,7 +1191,8 @@ Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, string raster_fil
 			cout << "Float64" << endl;
 			RASTER<double> R;
 			R = ReadRaster<double>(raster_filename);
-			raster_graph = RasterGraph(lines, split, spur, R);
+            graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+			raster_graph = map.get_graph();
 			AssignValuesGraph<double>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1351,7 +1357,7 @@ void GEO::WriteRASTER_struc(RASTER<T> raster)
 
 	float *rowBuff = (float*) CPLMalloc(sizeof(float)*x);
 	cout << "Writing raster (struc) " << endl;
-	progress_display * show_progress =  new boost::progress_display(y * x);
+	progress_display* show_progress =  new boost::progress_display(y * x);
 	
 	for(int row = 0; row < y; row++) 
 	{
