@@ -1077,7 +1077,7 @@ double STATS::PointExtractor(point_type P, double radius, double Transform[8], d
 	return(M);
 }
  
-void STATS::RasterStatistics(VECTOR lines, int dist, std::string raster_filename)
+void STATS::RasterStatistics(VECTOR lines, double dist, std::string raster_filename)
 {
 	cout << "Generating raster statisics " << endl;
 	GEO georef;

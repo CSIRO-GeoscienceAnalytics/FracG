@@ -16,6 +16,8 @@ const char *DIST_THRESH="dist_thresh";
 const char *MAP_DIST_THRESH="map_dist_thesh";
 const char *SPLIT_DIST_THRESH="split_dist_thresh";
 const char *SPUR_DIST_THRESH="spur_dist_thresh";
+const char *CLASSIFY_LINEAMENTS_DIST="classify_lineaments_dist";
+const char *RASTER_STATS_DIST="raster_stats_dist";
 
 const char *RASTER_SPACING="raster_spacing";
 const char *ISECT_SEARCH_SIZE="isect_search_size";
@@ -24,9 +26,6 @@ const char *SCANLINE_COUNT="scanline_count";
 
 const char *PRINT_KMEANS="print_kmeans_progress";
 const char *GRAPH_MIN_BRANCHES="graph_min_branches";
-
-const char *CLASSIFY_LINEAMENTS_DIST="classify_lineaments_dist";
-const char *RASTER_STATS_DIST="raster_stats_dist";
 
 const char *MAX_FLOW_CAP_TYPE="max_flow_cap_type";
 
@@ -68,6 +67,8 @@ int main(int argc, char *argv[])
         (MAP_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to consider points to be the same in a point-indexed map")
         (SPLIT_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in splitting faults into segments, for considering nearby but separate faults to actually overlap")
         (SPUR_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in removing spurs, remove spurs which are shorter than this distance")
+        (CLASSIFY_LINEAMENTS_DIST, po::value<double>()->default_value(-1), "Distance used in ClassifyLineaments") //1
+        (RASTER_STATS_DIST, po::value<double>()->default_value(-1), "Distance used in RasterStatistics") //2
         
         (RASTER_SPACING, po::value<double>()->default_value(3000.0), "Pixel size of output raster maps")
         (ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
@@ -75,8 +76,6 @@ int main(int argc, char *argv[])
         (SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
         
         (GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
-        (CLASSIFY_LINEAMENTS_DIST, po::value<int>()->default_value(1), "Distance used in ClassifyLineaments")
-        (RASTER_STATS_DIST, po::value<int>()->default_value(2), "Distance used in RasterStatistics")
         
         (MAX_FLOW_CAP_TYPE, po::value<string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
         
@@ -136,8 +135,10 @@ int main(int argc, char *argv[])
     const int graph_min_branches = vm[GRAPH_MIN_BRANCHES].as<int>();
     
     //some of these distances are int's, maybe they should be doubles
-    const int classify_lineaments_dist = vm[CLASSIFY_LINEAMENTS_DIST].as<int>();
-    const int raster_stats_dist = vm[RASTER_STATS_DIST].as<int>();
+    double classify_lineaments_dist = vm[CLASSIFY_LINEAMENTS_DIST].as<double>();
+    if (classify_lineaments_dist < 0) classify_lineaments_dist = dist_threshold;
+    double raster_stats_dist = vm[RASTER_STATS_DIST].as<double>();
+    if (raster_stats_dist < 0) raster_stats_dist = dist_threshold;
     
     const string max_flow_cap_type = vm[MAX_FLOW_CAP_TYPE].as<string>();
     
@@ -212,7 +213,7 @@ int main(int argc, char *argv[])
 	
 	//create a intersection density map with circular sampling window.
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
-	G.IntersectionMap(graph, lines, raster_spacing, );//2000 2500 need to check what values to use here, also need to check the function itself
+	G.IntersectionMap(graph, lines, raster_spacing, isect_search_size);//2000 2500 need to check what values to use here, also need to check the function itself
 	
     fs::path mesh_dir = out_path / "mesh/";
     

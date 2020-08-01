@@ -745,7 +745,7 @@ graph_map<> RasterGraph(VECTOR lines, int split, int spurs, RASTER<T> raster, do
 //TODO: We should separate the calculates and writing into different functions
 //This doesn't use "dist"
 template<typename T>
-void WriteSHP_r(VECTOR lines, int dist, RASTER<T> raster, std::string save_name)
+void WriteSHP_r(VECTOR lines, double dist, RASTER<T> raster, std::string save_name)
 {
 	GEO georef;
 	FGraph::CreateDir(save_name);
@@ -921,7 +921,7 @@ CellSorter(point_type origin) { this->origin = origin; }
 };
 
 template<typename T>
-void WriteTXT(VECTOR lines, int dist, RASTER<T> raster, std::string tsv_filename)
+void WriteTXT(VECTOR lines, double dist, RASTER<T> raster, std::string tsv_filename)
 {
 	ofstream txtF = FGraph::CreateFileStream(tsv_filename);
 	
@@ -1062,7 +1062,7 @@ void WriteTXT(VECTOR lines, int dist, RASTER<T> raster, std::string tsv_filename
 }
 
 template<typename T>
-void GEO::AnalyseRaster(VECTOR lines, int dist, RASTER<T> raster)
+void GEO::AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster)
 {
 	
 	//two things are happening here:
@@ -1078,11 +1078,11 @@ void GEO::AnalyseRaster(VECTOR lines, int dist, RASTER<T> raster)
     std::string raster_tsv_filename = FGraph::add_prefix_suffix_subdirs(lines.out_path, {raster_subdir}, "raster_parallel_cross_profiles", ".tsv", true);
 	WriteTXT(lines, dist, raster, raster_tsv_filename);
  }
-template void GEO::AnalyseRaster<int>(VECTOR lines, int dist, RASTER<int> raster);
-template void GEO::AnalyseRaster<float>(VECTOR lines, int dist, RASTER<float> raster);
-template void GEO::AnalyseRaster<double>(VECTOR lines, int dist, RASTER<double> raster);
+template void GEO::AnalyseRaster<int>(VECTOR lines, double dist, RASTER<int> raster);
+template void GEO::AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
+template void GEO::AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-Graph GEO::BuildRasterGraph(VECTOR lines, int split, int spur, double map_distance_threshold, string raster_filename)
+Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, string raster_filename)
 {
 	cout << "Generating graph linked to raster " << raster_filename << endl;
 	GRAPH G;
