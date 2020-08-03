@@ -98,6 +98,6 @@ class STATS
 	int CheckGaussians(double angle);
 	void ScanLine(VECTOR lines, int nb_scanlines);
 	void KMCluster(bool output, VECTOR lines);
-	void RasterStatistics(VECTOR lines, int dist, std::string raster_filename);
+	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename);
 };
 #endif

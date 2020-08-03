@@ -13,14 +13,19 @@ const char *RASTER_FILE="raster_file";
 const char *OUT_DIR="out_dir";
 //const char *OUT_SUBDIR="out_subdir";
 const char *DIST_THRESH="dist_thresh";
-const char *SCANLINE_COUNT="scanline_count";
+const char *MAP_DIST_THRESH="map_dist_thesh";
+const char *SPLIT_DIST_THRESH="split_dist_thresh";
+const char *SPUR_DIST_THRESH="spur_dist_thresh";
+const char *CLASSIFY_LINEAMENTS_DIST="classify_lineaments_dist";
+const char *RASTER_STATS_DIST="raster_stats_dist";
+
 const char *RASTER_SPACING="raster_spacing";
+const char *ISECT_SEARCH_SIZE="isect_search_size";
+
+const char *SCANLINE_COUNT="scanline_count";
 
 const char *PRINT_KMEANS="print_kmeans_progress";
 const char *GRAPH_MIN_BRANCHES="graph_min_branches";
-
-const char *CLASSIFY_LINEAMENTS_DIST="classify_lineaments_dist";
-const char *RASTER_STATS_DIST="raster_stats_dist";
 
 const char *MAX_FLOW_CAP_TYPE="max_flow_cap_type";
 
@@ -59,11 +64,18 @@ int main(int argc, char *argv[])
         (OUT_DIR, po::value<string>()->default_value(""), "Write output to this directory")
         //(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
         (DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
-        (SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
+        (MAP_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to consider points to be the same in a point-indexed map")
+        (SPLIT_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in splitting faults into segments, for considering nearby but separate faults to actually overlap")
+        (SPUR_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in removing spurs, remove spurs which are shorter than this distance")
+        (CLASSIFY_LINEAMENTS_DIST, po::value<double>()->default_value(-1), "Distance used in ClassifyLineaments") //1
+        (RASTER_STATS_DIST, po::value<double>()->default_value(-1), "Distance used in RasterStatistics") //2
+        
         (RASTER_SPACING, po::value<double>()->default_value(3000.0), "Pixel size of output raster maps")
+        (ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
+        
+        (SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
+        
         (GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
-        (CLASSIFY_LINEAMENTS_DIST, po::value<int>()->default_value(1), "Distance used in ClassifyLineaments")
-        (RASTER_STATS_DIST, po::value<int>()->default_value(2), "Distance used in RasterStatistics")
         
         (MAX_FLOW_CAP_TYPE, po::value<string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
         
@@ -99,7 +111,6 @@ int main(int argc, char *argv[])
     }
     
 	Graph graph;			//graph data structure 
-	map_vertex_type map; //a map of the vertices in graph G, for quick retrieval of vertices by their location
 	
 	//TODO: Need to put in some variables here to control whether or not to do each of these functions
 	
@@ -109,14 +120,25 @@ int main(int argc, char *argv[])
 //     const string out_subdir = vm[OUT_SUBDIR].as<string>();
 	
 	const double dist_threshold = vm[DIST_THRESH].as<double>(); //NOTE: different things use different distance thresholds, we need to sort out whether or not they should be made consistent, or use separate thresholds
+    double map_dist_thresh = vm[MAP_DIST_THRESH].as<double>();
+    if (map_dist_thresh < 0) map_dist_thresh = dist_threshold; //if not separately specified, use the default distance threshold
+    double split_dist_thresh = vm[SPLIT_DIST_THRESH].as<double>();
+    if (split_dist_thresh < 0) split_dist_thresh = dist_threshold;
+    double spur_dist_thresh = vm[SPUR_DIST_THRESH].as<double>();
+    if (spur_dist_thresh < 0) spur_dist_thresh = dist_threshold;
+    
     const double raster_spacing = vm[RASTER_SPACING].as<double>();
+    double isect_search_size = vm[ISECT_SEARCH_SIZE].as<double>();
+    if (isect_search_size < 0) isect_search_size = raster_spacing;
     
     const int scanline_count = vm[SCANLINE_COUNT].as<int>();
     const int graph_min_branches = vm[GRAPH_MIN_BRANCHES].as<int>();
     
     //some of these distances are int's, maybe they should be doubles
-    const int classify_lineaments_dist = vm[CLASSIFY_LINEAMENTS_DIST].as<int>();
-    const int raster_stats_dist = vm[RASTER_STATS_DIST].as<int>();
+    double classify_lineaments_dist = vm[CLASSIFY_LINEAMENTS_DIST].as<double>();
+    if (classify_lineaments_dist < 0) classify_lineaments_dist = dist_threshold;
+    double raster_stats_dist = vm[RASTER_STATS_DIST].as<double>();
+    if (raster_stats_dist < 0) raster_stats_dist = dist_threshold;
     
     const string max_flow_cap_type = vm[MAX_FLOW_CAP_TYPE].as<string>();
     
@@ -163,15 +185,19 @@ int main(int argc, char *argv[])
 	geom.P_Maps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
 
 	//this creates a georeferences graph, analyses it, and writes two shp files containing edges and vertices of the graph
-	G.ReadVEC(graph, map, lines.data); 					  //convert the faults into a graph
-	G.SplitFaults(graph, map, dist_threshold);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
-	G.RemoveSpurs(graph, map, dist_threshold);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
+// 	map_vertex_type map;
+    graph_map<point_type, vertex_type, Graph> gm = G.ConvertLinesToGraph(lines.data, map_dist_thresh); 	  //convert the faults into a graph
+    graph = gm.get_graph();
+	graph_map<> split_map = G.SplitFaults(gm, split_dist_thresh);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
+	G.RemoveSpurs(split_map, spur_dist_thresh);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
+	graph = split_map.get_graph();
+	
 	G.GraphAnalysis(graph, lines, graph_min_branches, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
 	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	//simple graph algorithms
-	Graph m_tree = G.MinTree(graph, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
-	Graph s_path = G.ShortPath(graph, map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
+	Graph m_tree = G.MinTree(graph, map_dist_thresh, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
+	Graph s_path = G.ShortPath(split_map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
 	
 	//create a shp file with lineaments classified based on orientation (from KDE) and intersecions (from graph)
 	G.ClassifyLineaments(graph, lines, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
@@ -179,19 +205,19 @@ int main(int argc, char *argv[])
 	stats.RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
-	Graph r_graph = geo.BuildRasterGraph(lines, dist_threshold, dist_threshold, raster_name);//5 5, another distance threshold to check
+	Graph r_graph = geo.BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, raster_name);//5 5, another distance threshold to check
 	
-	G.MaximumFlow_R(r_graph, map, (source_dir / "S_T.shp").string(), max_flow_cap_type, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
-//	G.MaximumFlow_HG(graph, map, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
-//	G.MaximumFlow_VG(graph, map, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
+	G.MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
+//	G.MaximumFlow_HG(graph, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
+//	G.MaximumFlow_VG(graph, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
 	//create a intersection density map with circular sampling window.
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
-	G.IntersectionMap(graph, lines, raster_spacing, raster_spacing);//2000 2500 need to check what values to use here, also need to check the function itself
+	G.IntersectionMap(graph, lines, raster_spacing, isect_search_size);//2000 2500 need to check what values to use here, also need to check the function itself
 	
     fs::path mesh_dir = out_path / "mesh/";
     
 	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	m.SampleNetwork_2D(gmsh_sample_show_output, lines.data, gmsh_sample_cell_count, gmsh_sample_count, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	m.SampleNetwork_2D(gmsh_sample_show_output, lines.data, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
 	return EXIT_SUCCESS;
 } 
