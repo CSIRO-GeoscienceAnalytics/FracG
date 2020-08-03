@@ -133,7 +133,15 @@ private:
     GT graph_holder; //if the user doesn't supply a graph reference, use this to hold the data
     
 public:
-    graph_map(GT &graph_obj, double dist) : pm(dist), graph(graph_obj) { }
+    graph_map(GT &graph_obj, double dist) : pm(dist), graph(graph_obj)
+    {
+        typename GT::vertex_iterator vi, vend;
+        for (std::tie(vi, vend) = boost::vertices(graph); vi != vend; vi++)
+        {
+            typename graph_traits<GT>::vertex_descriptor v = *vi;
+            pm.add_value(graph[*vi].location, v, 0); //add vertices with a distance threshold, to ensure that the point map has all the vertices that are actually in the graph, even if they violate the distance threshold given here
+        }
+    }
     
     graph_map(double dist) : pm(dist), graph(graph_holder) { }
     
