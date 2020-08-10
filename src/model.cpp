@@ -303,8 +303,9 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename
   cout << "Created msh-file " << out_filename << endl << endl;
 }
 
-void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells, int nb_samples, double map_distance_threshold, string filename)
+void MODEL::SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string filename)
 {
+    vector<line_type> &faults = lines.data;
 	GRAPH g;
 // 	const char* dir = CreateDir(true);
 	vector <box> sampling_windows;
@@ -324,7 +325,7 @@ void MODEL::SampleNetwork_2D(bool output, vector<line_type> faults, int nb_cells
 
 		box AOI = sampling_windows.at(w);
 		cout << AOI.min_corner().get<0>() << endl;
-		Graph G = g.ReadVEC4MODEL(faults, AOI, map_distance_threshold);
+		Graph G = g.ReadVEC4MODEL(lines, AOI, map_distance_threshold);
 
 		if (num_edges(G) > 0)
 		{

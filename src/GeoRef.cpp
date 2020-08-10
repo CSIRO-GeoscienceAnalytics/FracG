@@ -614,7 +614,7 @@ VECTOR GEO::ReadVector(std::string in_filename, std::string out_directory)
 		cerr << "ERROR: no shape file definend" << endl;
 	
 	//set variable in FracG namespace
-	refWKT_shp = lineaments.refWKT; //TODO: store this in the local variables, not a global. or rather, read it from local varaibles
+// 	refWKT_shp = lineaments.refWKT; //TODO: store this in the local variables, not a global. or rather, read it from local varaibles
 	return(lineaments);
 }
 
@@ -654,7 +654,7 @@ template void GEO::AssignValuesGraph<float>(Graph& G, RASTER<float> raster);
 template void GEO::AssignValuesGraph<double>(Graph& G, RASTER<double> raster);
 
 template <typename T>
-RASTER <T>ReadRaster(string in_filename)
+RASTER <T>ReadRaster(string in_filename, const char *refWKT)
 {
 	
 	/*
@@ -690,7 +690,7 @@ RASTER <T>ReadRaster(string in_filename)
 				raster.refWKT = poDataset->GetProjectionRef() ;
 				
 				//check consitency of refernce system with shp file
-				CheckReferenceSystem(raster.refWKT, refWKT_shp);
+				CheckReferenceSystem(raster.refWKT, refWKT);
 				
 			if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None )
 				memcpy ( &raster.transform, &adfGeoTransform, sizeof(adfGeoTransform) );
@@ -734,7 +734,7 @@ graph_map<> RasterGraph(VECTOR lines, int split, int spurs, RASTER<T> raster, do
 	GRAPH g;
 	
 	cout << "Building graph for raster " << raster.name << endl;
-	graph_map<> map = g.ReadVEC4raster(raster.transform, lines.data, distance_threshold);
+	graph_map<> map = g.ReadVEC4raster(raster.transform, lines, distance_threshold);
 	graph_map<> split_map = g.SplitFaults(map, split); //split the faults in the graph into fault segments, according to the intersections of the faults
 	g.RemoveSpurs(split_map, spurs); //remove any spurs from the graph network
 	cout << "done" << endl;
@@ -1071,7 +1071,7 @@ void GEO::AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster)
 	GEO georef;
 	GEOMETRIE geom;
 	string filename = raster.name;
-	raster = ReadRaster<T>(raster.name);
+	raster = ReadRaster<T>(raster.name, lines.refWKT);
     std::string raster_shp_filename = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"raster_shp"}, "raster_augmented_shapefile", ".shp", true);
 	WriteSHP_r<T>(lines, dist, raster, raster_shp_filename);
     
@@ -1120,7 +1120,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout	<< "byte (will not perform graph analysis)" << endl;
 			RASTER<char> R;
-			R = ReadRaster<char>(raster_filename);
+			R = ReadRaster<char>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1130,7 +1130,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout << "uint16" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(raster_filename);
+			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
@@ -1142,7 +1142,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout << "int16" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(raster_filename);
+			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
@@ -1154,7 +1154,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout << "uint32" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(raster_filename);
+			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
@@ -1166,7 +1166,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout << "int32" << endl;
 			RASTER<int> R;
-			R = ReadRaster<int>(raster_filename);
+			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
@@ -1178,7 +1178,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout << "Float32" << endl;
 			RASTER<float> R;
-			R = ReadRaster<float>(raster_filename);
+			R = ReadRaster<float>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<float>(raster_graph, R);
@@ -1190,7 +1190,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 		{
 			cout << "Float64" << endl;
 			RASTER<double> R;
-			R = ReadRaster<double>(raster_filename);
+			R = ReadRaster<double>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<double>(raster_graph, R);
@@ -1421,7 +1421,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 	GDALClose( (GDALDatasetH) poDstDS );
 	chdir(cur_path);
 }
-  void GEO::WriteSHP_lines(vector<line_type>lineaments, string name)
+  void GEO::WriteSHP_lines(vector<line_type>lineaments, const char* refWKT, string name)
  {
  	const char *pszDriverName = "ESRI Shapefile";
     GDALDriver *poDriver;
@@ -1433,7 +1433,6 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
     name = FGraph::add_prefix_suffix(name, "", ".shp");
     FGraph::CreateDir(name);
     const char* Name = name.c_str();
-    const char* refWKT = refWKT_shp;
     
 	OGRSpatialReference oSRS;
     oSRS.importFromWkt(&refWKT);
@@ -1494,7 +1493,9 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
     GDALClose( poDS );
  }
  
- void GEO::WRITE_SHP(VECTOR lineaments, string name)
+ //write vector data to disk
+ //TODO: this can write gauss parameter-associated values, but is only called before those values are calculated
+ void GEO::WRITE_SHP(VECTOR &lineaments, gauss_params &angle_dist, string name)
  {
 	STATS stats;
 	GDALAllRegister();
@@ -1560,7 +1561,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 		exit( 1 );
 	}
 	
-	if (gauss_params.size() != 0)
+	if (angle_dist.size() != 0)
 	{
 		OGRFieldDefn oField2( "Set", OFTInteger );
 		oField1.SetWidth(10);
@@ -1588,8 +1589,8 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 		poFeature->SetField( "ID", id );
 		poFeature->SetField( "Length", L);
 		poFeature->SetField( "Angle", strike);
-		if (gauss_params.size() != 0)
-			poFeature->SetField( "Set", stats.CheckGaussians(strike));
+		if (angle_dist.size() != 0)
+			poFeature->SetField( "Set", stats.CheckGaussians(angle_dist, strike));
 
 		BOOST_FOREACH(point_type P, line) 
 			l.addPoint(P.x(), P.y());
@@ -1889,7 +1890,7 @@ void WriteSHP_g_lines_R(Graph G, char *refWKT, const char* Name)
 		GDALClose( poDS );
 }
 
-void GEO::WriteSHP_maxFlow(DGraph G, string name)
+void GEO::WriteSHP_maxFlow(DGraph G, const char* refWKT, string name)
 {
 	const char *pszDriverName = "ESRI Shapefile";
     GDALDriver *poDriver;
@@ -1901,7 +1902,6 @@ void GEO::WriteSHP_maxFlow(DGraph G, string name)
     name = FGraph::add_prefix_suffix(name, "", ".shp");
     FGraph::CreateDir(name);
     const char* Name = name.c_str();
-    const char* refWKT = refWKT_shp;
     
 	OGRSpatialReference oSRS;
     oSRS.importFromWkt(&refWKT);

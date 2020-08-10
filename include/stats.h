@@ -89,15 +89,15 @@ class STATS
 		~STATS()
 		{}
 
-	void CreateStats(VECTOR lines);
+	void CreateStats(VECTOR &lines, gauss_params &angle_dist);
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
 	StatsModelData GetLengthDist(VECTOR lines);
 	void DoBoxCount(VECTOR lines);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	void KDE_estimation_strikes(VECTOR &lines, bool set);
-	int CheckGaussians(double angle);
-	void ScanLine(VECTOR lines, int nb_scanlines);
-	void KMCluster(bool output, VECTOR lines);
+	gauss_params KDE_estimation_strikes(VECTOR &lines);
+	int CheckGaussians(gauss_params &angle_dist, double angle);
+	void ScanLine(VECTOR &lines, int nb_scanlines, gauss_params &angle_dist);
+	void KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist);
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename);
 };
 #endif

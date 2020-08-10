@@ -1403,7 +1403,7 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 }
 
 //fit the gaussians, using a set of initial values, the data values to fit against (pdf) and the angle the data is evaluated at
-vector<std::tuple<double, double, double>> fit_gaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle)
+gauss_params fit_gaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle)
 {
 	const int nData = pdf.size();
 	const int nGaussians = initial_positions.size();
@@ -1501,7 +1501,7 @@ double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gaussia
 }
 
 //fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const int max_gaussians = 10)
+gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const int max_gaussians = 10)
 {
 // 	cout << "starting gaussian fit" << endl;
 	arma::vec pdf(KDE.size());
@@ -1528,7 +1528,7 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 	
 	arma::vec residual(KDE.size()); //residuals, used to calculate the error
 	
-	vector<std::tuple<double, double, double>> results, previous_results;
+	gauss_params results, previous_results;
 	
 	vector<std::pair<double, decltype(results)>> ic; //information criteria - used to chosse the number of gaussians
 	
@@ -1608,7 +1608,7 @@ vector<std::tuple<double, double, double>> fit_gaussians_wraparound(vector<std::
 }
 
 
-void STATS::KDE_estimation_strikes(VECTOR &lines, bool set)
+gauss_params STATS::KDE_estimation_strikes(VECTOR &lines)
 {
 	vector<line_type> &lineaments = lines.data;
     std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
@@ -1675,8 +1675,7 @@ void STATS::KDE_estimation_strikes(VECTOR &lines, bool set)
 		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << evaluate_gaussian_sum(gauss_p, GAUSS[i].first) <<  endl;   
 	txtF << endl;
 	//set namespace variable if true
-	if (set)
-		gauss_params = gauss_p;
+	return gauss_p;
 }
 
 vector<double> BootStrapping(vector<double>data)
@@ -1728,18 +1727,19 @@ vector<double> PearsonCorrelation(vector<double>data1, vector<double>data2, size
     return(BootsTrapping_Cor);
 }
 
-int STATS::CheckGaussians(double angle)
+//what does this do?
+int STATS::CheckGaussians(gauss_params &angle_dist, double angle)
 {
 	vector<pair<int, double>> p_classes;
 	double pi = boost::math::constants::pi<double>();
 	
-	if (gauss_params.size() > 1)
+	if (angle_dist.size() > 1)
 	{
 		int g;
 		double P = 0;
-		for (int i = 0; i < gauss_params.size(); i++)
+		for (int i = 0; i < angle_dist.size(); i++)
 		{
-			std::tuple<double, double, double> params1 = gauss_params.at(i);
+			std::tuple<double, double, double> params1 = angle_dist.at(i);
 			double P = 1 / (std::get<1>(params1)* 2* pi ) * exp(- (  pow(angle - std::get<2>(params1), 2)) / (2 * std::get<1>(params1))  );
 			p_classes.push_back(make_pair(i, P));
 		}
@@ -1814,85 +1814,85 @@ line_type RandomLine(box AOI, polygon_type t_AOI, double angle)
 	return(r_line);
 }
 
-void STATS::ScanLine(VECTOR lines, int nb_scanlines)
+void STATS::ScanLine(VECTOR &lines, int nb_scanlines, gauss_params &angle_dist)
 {
-	if (gauss_params.size() != 0)
+	if (angle_dist.size() <= 0)
 	{
-		vector <double> density;
-		vector<pair<int, double>> direc_nb;
-		ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
-		txtF << lines.name << endl;
-
-		for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
-		{
-			float frac = std::ceil((std::get<0>(*it) - 0.05) * 10.0) / 10.0; 
-			if (frac > 0)
-				direc_nb.push_back(make_pair(frac * nb_scanlines, std::get<2>(*it)));
-		}
-		cout << "Scanline analysis for " << direc_nb.size() << " orientations " << endl;
-		txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< endl;
-		GEOMETRIE geom;
-
-		polygon_type t_AOI = geom.Return_tigth_AOI(lines.data);
-		box AOI = geom.ReturnAOI(lines.data);
-	
-		int g = 0;
-		for (auto it = direc_nb.begin(); it < direc_nb.end(); it++)
-		{
-			for (int i = 0; i < it->first;)
-			{
-				line_type scanline = RandomLine(AOI, t_AOI, it->second);
-				std::vector<point_type> output;
-				for (auto l = lines.data.begin(); l < lines.data.end(); l++)
-				{
-					line_type line = *l;
-					geometry::intersection(*l, scanline, output);
-				}
-				if (output.size() > 0)
-				{
-					density.push_back(output.size() / geometry::length(scanline));
-					txtF 	<< g << "\t" << setprecision(25)	<< scanline.front().x() << ", " 
-							<< scanline.front().y()		<< "\t" << scanline.back().x() 
-							<< ", " << scanline.back().y() << "\t" << setprecision(10)
-							<< geometry::length(scanline) << "\t" << output.size() << "\t"
-							<< output.size()/geometry::length(scanline) <<"\t";
-					
-					if (output.size() > 1)
-					{
-						vector<pair<point_type, double>> distances;
-						for (auto cross = output.begin(); cross <output.end(); cross++)
-							distances.push_back(make_pair(*cross, geometry::distance(scanline.front(), *cross)));
-							
-						std::sort(distances.begin(), distances.end(), [](const std::pair<point_type,double> &left, const std::pair<point_type, double> &right) {
-							return left.second < right.second;});
-							
-						
-						double spaceing = 0;
-						for (auto d = distances.begin(); d < distances.end()-1;d++)
-						{
-							auto nx = std::next(d, 1);
-							point_type p = d->first;
-							point_type pp = nx->first;
-							spaceing += geometry::distance(p, pp);
-						}
-						txtF << spaceing/(distances.size()-1) << endl;
-					}
-					else 	
-						txtF << " " << endl;
-				i++;
-				}
-			}
-			g++;
-		}
-	}
-	else
 		cout << "Cannot set scan line orientations (no data on prinipal orientations)" << endl;
+        return;
+	}
+    vector <double> density;
+    vector<pair<int, double>> direc_nb;
+    ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
+    txtF << lines.name << endl;
+
+    for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
+    {
+        float frac = std::ceil((std::get<0>(*it) - 0.05) * 10.0) / 10.0; 
+        if (frac > 0)
+            direc_nb.push_back(make_pair(frac * nb_scanlines, std::get<2>(*it)));
+    }
+    cout << "Scanline analysis for " << direc_nb.size() << " orientations " << endl;
+    txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< endl;
+    GEOMETRIE geom;
+
+    polygon_type t_AOI = geom.Return_tigth_AOI(lines.data);
+    box AOI = geom.ReturnAOI(lines.data);
+
+    int g = 0;
+    for (auto it = direc_nb.begin(); it < direc_nb.end(); it++)
+    {
+        for (int i = 0; i < it->first;)
+        {
+            line_type scanline = RandomLine(AOI, t_AOI, it->second);
+            std::vector<point_type> output;
+            for (auto l = lines.data.begin(); l < lines.data.end(); l++)
+            {
+                line_type line = *l;
+                geometry::intersection(*l, scanline, output);
+            }
+            if (output.size() > 0)
+            {
+                density.push_back(output.size() / geometry::length(scanline));
+                txtF 	<< g << "\t" << setprecision(25)	<< scanline.front().x() << ", " 
+                        << scanline.front().y()		<< "\t" << scanline.back().x() 
+                        << ", " << scanline.back().y() << "\t" << setprecision(10)
+                        << geometry::length(scanline) << "\t" << output.size() << "\t"
+                        << output.size()/geometry::length(scanline) <<"\t";
+                
+                if (output.size() > 1)
+                {
+                    vector<pair<point_type, double>> distances;
+                    for (auto cross = output.begin(); cross <output.end(); cross++)
+                        distances.push_back(make_pair(*cross, geometry::distance(scanline.front(), *cross)));
+                        
+                    std::sort(distances.begin(), distances.end(), [](const std::pair<point_type,double> &left, const std::pair<point_type, double> &right) {
+                        return left.second < right.second;});
+                        
+                    
+                    double spaceing = 0;
+                    for (auto d = distances.begin(); d < distances.end()-1;d++)
+                    {
+                        auto nx = std::next(d, 1);
+                        point_type p = d->first;
+                        point_type pp = nx->first;
+                        spaceing += geometry::distance(p, pp);
+                    }
+                    txtF << spaceing/(distances.size()-1) << endl;
+                }
+                else 	
+                    txtF << " " << endl;
+            i++;
+            }
+        }
+        g++;
+    }
 		
 	cout << "Analysed " << nb_scanlines << " scalines \n" << endl;
 }
 
 //create statisics from input file--------------------------------------
-void STATS::CreateStats(VECTOR lines)
+void STATS::CreateStats(VECTOR &lines, gauss_params &angle_dist)
 {
 	GEO georef;
 	int FaultNumber = lines.data.size();
@@ -1965,11 +1965,11 @@ void STATS::CreateStats(VECTOR lines)
 //write data to file----------------------------------------------------
 	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.tsv"));//statistics
 	txtF << lines.name <<endl;
-	if (gauss_params.size() > 0)
+	if (angle_dist.size() > 0)
 	{
 		int i = 0;
 		txtF << "No \t Amplitude \t Stddev \t Mean" << endl;
-		for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
+		for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
 		{
 			txtF << i << "\t" << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			i++;
@@ -1981,7 +1981,7 @@ void STATS::CreateStats(VECTOR lines)
 	size_t curPos = 0;
 	for (int i = 0; i< lines.data.size(); i++)
 	{
-		txtF << i << "\t" << Angle.at(i) << "\t" <<  Length.at(i) << "\t" << Sinuosity.at(i) << "\t" << CheckGaussians(Angle.at(i)) << "\t";
+		txtF << i << "\t" << Angle.at(i) << "\t" <<  Length.at(i) << "\t" << Sinuosity.at(i) << "\t" << CheckGaussians(angle_dist, Angle.at(i)) << "\t";
 		if (lines.data.size() != 1)
 		{
 			 txtF << closest[curPos].second  << "\t" << geometry::distance(points[curPos].first, closest[curPos].first) << "\t"
@@ -2050,12 +2050,10 @@ int GetCluster(pair<double, double> point, vector<pair<double,double>> clusters)
 }
 
 
-void STATS::KMCluster(bool output, VECTOR lines)
+void STATS::KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist)
 {
-	if (gauss_params.size() == 0)
-		KDE_estimation_strikes(lines,true); 
 		
-	int No = gauss_params.size();
+	int No = angle_dist.size();
 	if (No > 1)
 	{
 		cout <<"k-means clustering of geometric properties" << endl;
@@ -2093,7 +2091,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and length" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
+			for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			vector<pair<double, double>> clusters;
@@ -2122,7 +2120,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
+			for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			
@@ -2152,7 +2150,7 @@ void STATS::KMCluster(bool output, VECTOR lines)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of length and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = gauss_params.begin(); it < gauss_params.end(); it++)
+			for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			vector<pair<double, double>> clusters;
