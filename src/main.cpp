@@ -1,6 +1,14 @@
 #include <boost/program_options.hpp>
 
-#include "../include/FracG.h"
+
+#include "../include/graph.h"
+#include "../include/GeoRef.h" 
+#include "../include/geometrie.h"
+#include "../include/fracg.h"
+#include "../include/stats.h"
+#include "../include/fracg.h"
+#include "../include/model.h"
+#include "../include/util.h"
 
 using namespace FGraph;
 
@@ -166,19 +174,28 @@ int main(int argc, char *argv[])
     
     if (raster_name == "") raster_name = (source_dir/"DEM.tif").string();
     
+    //TODO:these need to be replaces by namespaces
+	GEO geo;
+	GRAPH G;
+	STATS stats;
+	GEOMETRIE geom;
+	MODEL m;
+    
 	// this is the correction of the network
 	VECTOR lines = geo.ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	geo.CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
 
-	geo.WRITE_SHP(lines, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction
-
 	// the following functions analyse staatistical properties of the network
  	stats.GetLengthDist(lines); 							     // test for three distributions of length 
  	stats.DoBoxCount(lines); 								    // Boxcounting algorithm 
- 	stats.CreateStats(lines); 								   // statistical analysis of network
- 	stats.KDE_estimation_strikes(lines, save_kde_params); 				  //kernel density estimation of orientations (fits gaussians to the data; boolean whether to write in namespace variable)
- 	stats.KMCluster(print_kmeans, lines);							 // KM clustering
- 	stats.ScanLine(lines, scanline_count);								// sanline analysis of density and spacing (number is number of scalines to generate)
+ 	gauss_params angle_distribution = stats.KDE_estimation_strikes(lines); 				  //kernel density estimation
+
+	geo.WRITE_SHP(lines, angle_distribution, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
+	
+ 	stats.CreateStats(lines, angle_distribution); 								   // statistical analysis of network
+ 	
+ 	stats.KMCluster(print_kmeans, lines, angle_distribution);							 // KM clustering
+ 	stats.ScanLine(lines, scanline_count, angle_distribution);								// sanline analysis of density and spacing (number is number of scalines to generate)
  
  	// Here we create some raster files that characterize the spatial arangement
 	geom.CentreDistanceMap(lines, raster_spacing);   //fault centre to fault centre distance (second argument is the pixel resolution)
@@ -186,7 +203,7 @@ int main(int argc, char *argv[])
 
 	//this creates a georeferences graph, analyses it, and writes two shp files containing edges and vertices of the graph
 // 	map_vertex_type map;
-    graph_map<point_type, vertex_type, Graph> gm = G.ConvertLinesToGraph(lines.data, map_dist_thresh); 	  //convert the faults into a graph
+    graph_map<point_type, vertex_type, Graph> gm = G.ConvertLinesToGraph(lines.data, lines.refWKT, map_dist_thresh); 	  //convert the faults into a graph
     graph = gm.get_graph();
 	graph_map<> split_map = G.SplitFaults(gm, split_dist_thresh);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
 	G.RemoveSpurs(split_map, spur_dist_thresh);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
@@ -196,18 +213,18 @@ int main(int argc, char *argv[])
 	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	//simple graph algorithms
-	Graph m_tree = G.MinTree(graph, map_dist_thresh, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
+	Graph m_tree = G.MinTree(split_map, map_dist_thresh, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
 	Graph s_path = G.ShortPath(split_map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
 	
 	//create a shp file with lineaments classified based on orientation (from KDE) and intersecions (from graph)
-	G.ClassifyLineaments(graph, lines, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
+	G.ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
 
 	stats.RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
 	Graph r_graph = geo.BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, raster_name);//5 5, another distance threshold to check
 	
-	G.MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
+	G.MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
 //	G.MaximumFlow_HG(graph, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
 //	G.MaximumFlow_VG(graph, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
@@ -218,6 +235,6 @@ int main(int argc, char *argv[])
     fs::path mesh_dir = out_path / "mesh/";
     
 	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	m.SampleNetwork_2D(gmsh_sample_show_output, lines.data, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	m.SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
 	return EXIT_SUCCESS;
 } 

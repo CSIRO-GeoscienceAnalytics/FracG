@@ -140,9 +140,9 @@ bool GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSe
 }
 
 //read vector data into graph------------------------------------------
-graph_map<point_type, vertex_type, Graph> GRAPH::ConvertLinesToGraph(std::vector<line_type> &faults, double distance_threshold)
+graph_map<point_type, vertex_type, Graph> GRAPH::ConvertLinesToGraph(std::vector<line_type> &faults, const char *refWKT, double distance_threshold)
 {
-    graph_map<point_type, vertex_type, Graph> map(distance_threshold);
+    graph_map<point_type, vertex_type, Graph> map(distance_threshold, refWKT);
     Graph &graph = map.get_graph();
 	vertex_type VA, VB;
 
@@ -168,11 +168,12 @@ graph_map<point_type, vertex_type, Graph> GRAPH::ConvertLinesToGraph(std::vector
 }
 
 
-graph_map<> GRAPH::ReadVEC4raster(double transform[8], std::vector<line_type> &faults, double map_distance_threshold)
+graph_map<> GRAPH::ReadVEC4raster(double transform[8], VECTOR &lines, double map_distance_threshold)
 {
+    std::vector<line_type> &faults = lines.data;
 	GEO g;
 	GEOMETRIE geom;
-    graph_map<> map(map_distance_threshold);
+    graph_map<> map(map_distance_threshold, lines.refWKT);
     Graph& graph = map.get_graph();
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
@@ -238,12 +239,13 @@ graph_map<> GRAPH::ReadVEC4raster(double transform[8], std::vector<line_type> &f
     return map;
 }
 
-Graph GRAPH::ReadVEC4MODEL(std::vector<line_type> faults, box bx, double map_distance_threshold)
+Graph GRAPH::ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold)
 {
+    std::vector<line_type> &faults = lines.data;
 	GEO g;
 	Graph graph;
 	GEOMETRIE geom;
-	graph_map map(graph, map_distance_threshold);
+	graph_map map(graph, map_distance_threshold, lines.refWKT);
 	
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >> G;
@@ -354,18 +356,19 @@ void GRAPH::RemoveSpurs(graph_map<>& map, double minDist)
 			}
 		}
 	}
-	if (!boyer_myrvold_planarity_test(G))
-	{
-		cout << "WARNING: Graph is non-planar!\n"
-			 << "Attempting to re-split edges with r = " << split_dist/2 << endl;
-		graph_map<> resplit_map = SplitFaults(map, split_dist/2);
-        map = resplit_map;
-		if (!boyer_myrvold_planarity_test(G))
-		{
-			cout << "ERROR: Could not construct planar graph" << endl;
-			exit(EXIT_FAILURE);
-		}
-	}
+	//taking this out entirely. the graph *should* be planar. if it isn't, we should fix what is wrong witht he code.
+// 	if (!boyer_myrvold_planarity_test(G))
+// 	{
+// 		cout << "WARNING: Graph is non-planar!\n"
+// 			 << "Attempting to re-split edges with r = " << split_dist/2 << endl;
+// 		graph_map<> resplit_map = SplitFaults(map, split_dist/2);
+//         map = resplit_map;
+// 		if (!boyer_myrvold_planarity_test(G))
+// 		{
+// 			cout << "ERROR: Could not construct planar graph" << endl;
+// 			exit(EXIT_FAILURE);
+// 		}
+// 	}
 	cout << " done \n" << endl;
 }
 
@@ -387,8 +390,7 @@ graph_map<> GRAPH::SplitFaults(graph_map<> &map, double minDist)
 {
     Graph& graph = map.get_graph();
 	cout << "Splitting edges at intersection points" << endl;
-	split_dist = minDist;
-	graph_map<> split_map(map.get_dist()); //the map translates physical coordinates and nodes in the graph.
+	graph_map<> split_map(map.get_dist(), map.get_refWKT()); //the map translates physical coordinates and nodes in the graph.
     Graph &split_graph = split_map.get_graph();
 	GEOMETRIE geom;
 	long double Distance;
@@ -782,7 +784,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
                     comp_Lineamants.in_path = lines.in_path;
 					STATS stats;
 					stats.GetLengthDist(comp_Lineamants);
-					stats.KDE_estimation_strikes(comp_Lineamants, false);
+					stats.KDE_estimation_strikes(comp_Lineamants);
 
 					txtG<< "COMPONENT NO." << "\t" << i << "\n"
 						<< "Branches:" << "\t" << NbB << "\n" 
@@ -918,7 +920,7 @@ Graph GRAPH::ShortPath(graph_map<> m, std::string in_filename, std::string out_f
         if (out_filename != "")
         {
             std::string save_filename = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir});
-            Gref.WriteSHP_lines(edges_shortPath, save_filename);
+            Gref.WriteSHP_lines(edges_shortPath, m.get_refWKT(), save_filename);
         }
 	}
 	
@@ -931,9 +933,10 @@ Graph GRAPH::ShortPath(graph_map<> m, std::string in_filename, std::string out_f
 }
 
 //create minimum spanning tree (backbone of network)--------------------
-Graph GRAPH::MinTree (Graph G, double map_dist_threshold, std::string filename)
+Graph GRAPH::MinTree (graph_map<> gm, double map_dist_threshold, std::string filename)
 {  
 	cout << "Generating minimum spanning tree" << endl;
+    Graph &G = gm.get_graph();
 	Graph min_graph;
 	GEO Gref;  
 	int i = 0;
@@ -966,7 +969,7 @@ Graph GRAPH::MinTree (Graph G, double map_dist_threshold, std::string filename)
 	if (filename != "")
     {
         std::string save_filename = FGraph::add_prefix_suffix_subdirs(filename, {graph_subdir});
-        Gref.WriteSHP_lines(edges_minTree, save_filename);
+        Gref.WriteSHP_lines(edges_minTree, gm.get_refWKT(), save_filename);
     }
     
 	cout << " done \n" << endl;
@@ -1111,7 +1114,7 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 	cout << " done \n" << endl;
 }
 
-void GRAPH::ClassifyLineaments(Graph G, VECTOR lines, float dist, string name)
+void GRAPH::ClassifyLineaments(Graph G, VECTOR &lines, gauss_params &angle_dist, float dist, string name)
 {
 	cout << "Classifying line set based on orientation and intersections" << endl;
 	std::clock_t startcputime = std::clock();
@@ -1233,7 +1236,7 @@ void GRAPH::ClassifyLineaments(Graph G, VECTOR lines, float dist, string name)
 		exit( 1 );
 	}
 	
-	if (gauss_params.size() != 0)
+	if (angle_dist.size() != 0)
 	{
 		OGRFieldDefn oField2( "Set", OFTInteger );
 		oField1.SetWidth(10);
@@ -1295,8 +1298,8 @@ void GRAPH::ClassifyLineaments(Graph G, VECTOR lines, float dist, string name)
 		poFeature->SetField( "Length", L);
 		poFeature->SetField( "Angle", strike);
 		
-		if (gauss_params.size() != 0)
-			poFeature->SetField( "Set", stats.CheckGaussians(strike));
+		if (angle_dist.size() != 0)
+			poFeature->SetField( "Set", stats.CheckGaussians(angle_dist, strike));
 		
 		poFeature->SetField( "I",  std::get<1>(*it));
 		poFeature->SetField( "Y",  std::get<2>(*it));
@@ -1320,7 +1323,7 @@ void GRAPH::ClassifyLineaments(Graph G, VECTOR lines, float dist, string name)
 }
 
 //parameters: graph, pressure1 , pressure2, adn bool whether vertical or horizontal gradient (vertical if true)
-void AssignGrad(Graph G, float p1, float p2, bool vert)
+void AssignGrad(Graph G, float p1, float p2, bool vert, const char *refWKT)
 {
 	//creating a gradient raster with a buffer of 5 cell sizes around the AOI
 	GEO georef;
@@ -1365,7 +1368,7 @@ void AssignGrad(Graph G, float p1, float p2, bool vert)
 	raster.transform[7] = y_dim;
 	
 	//set reference to teh one of the shp file
-	raster.refWKT = refWKT_shp;
+	raster.refWKT = refWKT;
 	
 	float change;
 	if (p1 > p2)
@@ -1410,7 +1413,7 @@ void AssignGrad(Graph G, float p1, float p2, bool vert)
 	delete raster.values;
 }
 
-void GRAPH::MaximumFlow_R(Graph G, string st_filename, string capacity_type, std::string out_filename)
+void GRAPH::MaximumFlow_R(Graph G, string st_filename, string capacity_type, const char *refWKT, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
@@ -1424,18 +1427,18 @@ void GRAPH::MaximumFlow_R(Graph G, string st_filename, string capacity_type, std
 	if (out_filename != "")
     {
         std::string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_R_");//
-        georef.WriteSHP_maxFlow(dg, name.c_str());
+        georef.WriteSHP_maxFlow(dg, refWKT, name.c_str());
     }
 	cout << " done \n" << endl;
 }
 
-void GRAPH::MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, std::string out_filename)
+void GRAPH::MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, const char *refWKT, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
 	georef.Get_Source_Target(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << endl;  
-	AssignGrad(G, top, bottom, false);
+	AssignGrad(G, top, bottom, false, refWKT);
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
 	georef.setup_maximum_flow(dg, capacity_type);
@@ -1444,18 +1447,18 @@ void GRAPH::MaximumFlow_VG(Graph G, string st_filename, float top, float bottom,
     if (out_filename != "")
     {
         std::string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_VG_");
-        georef.WriteSHP_maxFlow(dg, name.c_str());
+        georef.WriteSHP_maxFlow(dg, refWKT, name.c_str());
     }
 	cout << " done \n" << endl;
 }
 
-void GRAPH::MaximumFlow_HG(Graph G, string st_filename, float left, float right, string capacity_type, std::string out_filename)
+void GRAPH::MaximumFlow_HG(Graph G, string st_filename, float left, float right, string capacity_type, const char *refWKT, std::string out_filename)
 {
 	GEO georef;
 	point_type s, t;
 	georef.Get_Source_Target(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << endl;  
-	AssignGrad(G, left, right, false);
+	AssignGrad(G, left, right, false, refWKT);
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
 	georef.setup_maximum_flow(dg, capacity_type);
@@ -1463,7 +1466,7 @@ void GRAPH::MaximumFlow_HG(Graph G, string st_filename, float left, float right,
     if (out_filename != "")
     {
         string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_HG_");
-        georef.WriteSHP_maxFlow(dg, name.c_str());
+        georef.WriteSHP_maxFlow(dg, refWKT, name.c_str());
     }
 	cout << " done \n" << endl;
 }

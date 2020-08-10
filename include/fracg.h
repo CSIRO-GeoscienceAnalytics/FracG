@@ -100,9 +100,9 @@ using namespace std;
 
 namespace FGraph
 {
-	extern vector<std::tuple<double, double, double>> gauss_params;		// orientations obtained from KDE
-	extern double split_dist;											//splitting distance fro graph
-	extern const char* refWKT_shp;										//reference system of shp file
+// 	extern vector<std::tuple<double, double, double>> gauss_params;		// orientations obtained from KDE
+// 	extern double split_dist;											//splitting distance fro graph
+// 	extern const char* refWKT_shp;										//reference system of shp file
 	//======================GEOMETRY======================================== 
 	//typedef geometry::model::point<double, 2, geometry::cs::geographic <geometry::degree>> point_type;  
 	typedef geometry::model::d2::point_xy<long double>  point_type;
@@ -250,5 +250,8 @@ namespace FGraph
 
 	typedef geometry::index::rtree<p_index, geometry::index::rstar<16> > p_tree;
 	typedef geometry::index::rtree<pl_index, geometry::index::rstar<16> > pl_tree;
+    
+    typedef std::tuple<double, double, double> gauss_param; //the parameters are amplitude, width/sigma, and finally angle
+    typedef std::vector<gauss_param> gauss_params; //these represent a sum of gaussians
 
 }

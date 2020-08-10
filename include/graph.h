@@ -131,9 +131,10 @@ private:
     point_map<VT, PT> pm; //map to associate points (locations) with vertices in the graph
     GT &graph; //graph object to which the vertices belong
     GT graph_holder; //if the user doesn't supply a graph reference, use this to hold the data
+    std::string reference_wkt; //well-known-text which describes the 
     
 public:
-    graph_map(GT &graph_obj, double dist) : pm(dist), graph(graph_obj)
+    graph_map(GT &graph_obj, double dist, std::string ref_str="") : pm(dist), graph(graph_obj), reference_wkt(ref_str)
     {
         typename GT::vertex_iterator vi, vend;
         for (std::tie(vi, vend) = boost::vertices(graph); vi != vend; vi++)
@@ -143,9 +144,9 @@ public:
         }
     }
     
-    graph_map(double dist) : pm(dist), graph(graph_holder) { }
+    graph_map(double dist, std::string ref_str="") : pm(dist), graph(graph_holder), reference_wkt(ref_str) { }
     
-    graph_map(const graph_map<PT, VT, GT> &other) : pm(other.pm), graph(other.graph), graph_holder(other.graph_holder) { }
+    graph_map(const graph_map<PT, VT, GT> &other) : pm(other.pm), graph(other.graph), graph_holder(other.graph_holder), reference_wkt(other.reference_wkt) { }
     
     graph_map<PT, VT, GT>& operator=(const graph_map<PT, VT, GT> &other)
     {
@@ -190,6 +191,7 @@ public:
     
     double get_dist() {return pm.get_dist();}
     
+    const char *get_refWKT() { return reference_wkt.c_str(); }
 };
 
 class GRAPH
@@ -211,24 +213,24 @@ class GRAPH
 	vertex_type GetVertex(map_vertex_type& map, point_type const& key, Graph& graph);
 	bool AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg);
 	bool AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg, double FaultLength);
-	graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, double distance_threshold);
+	graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, const char *refWKT, double distance_threshold);
 	
-	graph_map<> ReadVEC4raster(double transform[8], std::vector<line_type> &faults, double distance_threshold);
+	graph_map<> ReadVEC4raster(double transform[8], VECTOR &lines, double distance_threshold);
 	
-	Graph ReadVEC4MODEL(std::vector<line_type> faults, box bx, double map_distance_threshold);
+	Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
 	graph_map<> SplitFaults(graph_map<>& map, double minDist );
 	void GraphAnalysis(Graph& G, VECTOR lines, int nb, string name);
 
 	VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
 	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);
-	void ClassifyLineaments(Graph G, VECTOR lines, float dist, string name);
+	void ClassifyLineaments(Graph G, VECTOR &lines, gauss_params &angle_dist, float dist, string name);
 	
-	Graph MinTree (Graph G, double map_dist_threshold, std::string out_filename="");
+	Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
 	Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 	
-	void MaximumFlow_R(Graph G, string st_filename, string type, std::string out_filename);
-	void MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, std::string out_filename);
-	void MaximumFlow_HG(Graph G, string st_filename, float left, float rigth, string capacity_type, std::string out_filename);
+	void MaximumFlow_R(Graph G, string st_filename, string type, const char *refWKT, std::string out_filename);
+	void MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, const char *refWKT, std::string out_filename);
+	void MaximumFlow_HG(Graph G, string st_filename, float left, float rigth, string capacity_type, const char *refWKT, std::string out_filename);
 };
 #endif
