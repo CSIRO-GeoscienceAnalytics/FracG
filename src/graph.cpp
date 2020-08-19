@@ -154,7 +154,7 @@ graph_map<point_type, vertex_type, Graph> GRAPH::ConvertLinesToGraph(std::vector
 		VB = map.add_vertex(f.back());
 
 		AddNewEdge(graph, VA, VB, f);
-        std::cout <<" Adding edge from " << VA << " to " << VB << ", there are now " << num_edges(graph) << " in the graph" << std::endl;
+//         std::cout <<" Adding edge from " << VA << " to " << VB << ", there are now " << num_edges(graph) << " in the graph" << std::endl;
 		
 		if (boost::edge(VA,VB, graph).second)
 		{
@@ -607,7 +607,7 @@ void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes,
 }
 
 //Topolgy analysis of graph---------------------------------------------
-void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
+void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, string out_filename)
 {
 	assert (num_vertices(G) != 0 && num_edges(G) != 0);
 	cout<< "GRAPH'S ANALYSIS OF NETWORK" << endl;
@@ -784,7 +784,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, string out_filename)
                     comp_Lineamants.in_path = lines.in_path;
 					STATS stats;
 					stats.GetLengthDist(comp_Lineamants);
-					stats.KDE_estimation_strikes(comp_Lineamants);
+					stats.KDE_estimation_strikes(comp_Lineamants, angle_param_penalty);
 
 					txtG<< "COMPONENT NO." << "\t" << i << "\n"
 						<< "Branches:" << "\t" << NbB << "\n" 

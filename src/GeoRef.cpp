@@ -1082,7 +1082,7 @@ template void GEO::AnalyseRaster<int>(VECTOR lines, double dist, RASTER<int> ras
 template void GEO::AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
 template void GEO::AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, string raster_filename)
+Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, const double angle_param_penalty, string raster_filename)
 {
 	cout << "Generating graph linked to raster " << raster_filename << endl;
 	GRAPH G;
@@ -1134,7 +1134,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
+			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1146,7 +1146,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
+			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1158,7 +1158,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
+			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1170,7 +1170,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<int>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
+			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 		
@@ -1182,7 +1182,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<float>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
+			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 			
@@ -1194,7 +1194,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 			raster_graph = map.get_graph();
 			AssignValuesGraph<double>(raster_graph, R);
-			G.GraphAnalysis(raster_graph, lines, 10, raster_filename);
+			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
 
 		} break;

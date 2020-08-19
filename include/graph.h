@@ -220,7 +220,7 @@ class GRAPH
 	Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold);
 	void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
 	graph_map<> SplitFaults(graph_map<>& map, double minDist );
-	void GraphAnalysis(Graph& G, VECTOR lines, int nb, string name);
+	void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, string name);
 
 	VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
 	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);

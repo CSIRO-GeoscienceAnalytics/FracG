@@ -65,7 +65,7 @@ class GEO
 	polygon_type BoundingBox(double transform[8], double buffer);
 	template<typename T> void AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster);
 	
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, string name);
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, const double angle_param_penalty, string name);
 	template<typename T> T** RasterConvert(int rows, int cols, T **M);
 	template<typename T> void AssignValuesGraph(Graph& G, RASTER<T> raster);
 	template<typename T> T getValue(point_type p, double transform[8], T** values);
