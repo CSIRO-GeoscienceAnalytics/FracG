@@ -1363,7 +1363,7 @@ int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 			      double pos = gsl_vector_get(params, PPG*g + 2); //position
 			pos = fmod(fmod(pos, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
 			const double d1 = data->angle[i] - pos;
-			//this does: d2 = d1 + 180, or d1 - 180, whichever results in a value that is in the range (-180, 180) and has teh opposite sign of d1
+			//this does: d2 = d1 + 180, or d1 - 180, whichever results in a value that is in the range (-180, 180) and has the opposite sign of d1
 			const double d2 = d1 - std::copysign(180, d1); //make sure that if d1 is positive, then d2 is negative, and vice versa
 			const double z1 = d1/sig;
 			const double z2 = d2/sig;
@@ -1384,6 +1384,7 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 	{
 		for (int j = 0; j < data->nGauss; j++)
 		{
+            const bool is_neg = false;//gsl_vector_get(params, PPG*j) < 0;
 			const double amp = gsl_vector_get(params, PPG*j    );
 			const double sig = gsl_vector_get(params, PPG*j + 1);
 			      double pos = gsl_vector_get(params, PPG*j + 2);
@@ -1394,7 +1395,7 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 			const double z2 = d2/sig;
 			const double exp1 = std::exp(-0.5 * z1 * z1);
 			const double exp2 = std::exp(-0.5 * z2 * z2);
-			gsl_matrix_set(jac, i, PPG*j    , exp1 + exp2); //d/d amplitude
+			gsl_matrix_set(jac, i, PPG*j    , (exp1 + exp2) * (is_neg ? -1 : 1)); //d/d amplitude
 			gsl_matrix_set(jac, i, PPG*j + 1, (amp / (sig * sig * sig)) * (d1 * d1 * exp1 + d2 * d2 * exp2)); //d/d sigma
 			gsl_matrix_set(jac, i, PPG*j + 2, (amp / (sig * sig      )) * (d1 *      exp1 + d2 *      exp2)); //d/d position
 		}
@@ -1410,7 +1411,7 @@ gauss_params fit_gaussians(vector<crossing_location_type> &initial_positions, ar
 	const int nParams = PPG * nGaussians; //each gaussian has an amplitude, sigma, and location
 	
 	struct gauss_data data(nData, nGaussians, angle, pdf);
-	
+    
 	//set initial values
 	gsl_vector *initial_guess = gsl_vector_alloc(nParams);
 // 	cout << "initial guess:" << endl;
@@ -1467,7 +1468,7 @@ gauss_params fit_gaussians(vector<crossing_location_type> &initial_positions, ar
 	vector<std::tuple<double, double, double>> out_params(nGaussians);
 	for (int i = 0; i < nGaussians; i++)
 	{
-		const double amp =            gsl_vector_get(w->x, PPG*i    );
+		const double amp  =           gsl_vector_get(w->x, PPG*i    );
 		const double size =  std::abs(gsl_vector_get(w->x, PPG*i + 1));
 		const double pos  = fmod(fmod(gsl_vector_get(w->x, PPG*i + 2), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
 		const double p = amp * std::sqrt(2*M_PI) * size;
@@ -1501,7 +1502,7 @@ double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gaussia
 }
 
 //fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const int max_gaussians = 10)
+gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
 {
 // 	cout << "starting gaussian fit" << endl;
 	arma::vec pdf(KDE.size());
@@ -1595,20 +1596,22 @@ gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, ve
 		int nParams = PPG * nGaussians; //number of free parameters
 		//2*nParams + 2 * std::log(err);// - 2 * llikelihood;
 		//(corrected) akaike information criterion
-		double aicc = 2*nParams /*+ (2*nParams*(nParams + 1)) / (double)(PPG*fault_angles.size() - nParams - 1)*/ - 2*llikelihood;
-// 		
-//  		cout << "At ng " << nGaussians << " the error is " << err << " with AICC = " << aicc << endl;
+		double aicc = param_penalty*nParams /*+ (2*nParams*(nParams + 1)) / (double)(PPG*fault_angles.size() - nParams - 1)*/ - 2*llikelihood;
 		bool has_negative = false;
 		for (auto it = results.begin(); it < results.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
+ 		cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", has neg: " << has_negative << endl;
+// 		 //error err
+//         has_negative = false; //debug
 		if (!std::isnan(aicc) && !has_negative) ic.push_back(std::make_pair(aicc, results));
 		
 	}
+// 	return ic[5-1].second; //debug
 	decltype(ic)::iterator result_it = std::min_element(ic.begin(), ic.end()); //get the set of Gaussians with the minimum aicc value
 	return result_it->second; //previous_results
 }
 
 
-gauss_params STATS::KDE_estimation_strikes(VECTOR &lines)
+gauss_params STATS::KDE_estimation_strikes(VECTOR &lines, const double param_penalty)
 {
 	vector<line_type> &lineaments = lines.data;
     std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
@@ -1658,7 +1661,7 @@ gauss_params STATS::KDE_estimation_strikes(VECTOR &lines)
 	}
 	
 	vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
-	vector<std::tuple<double, double, double>> gauss_p = fit_gaussians_wraparound(GAUSS, angles_vector);
+	vector<std::tuple<double, double, double>> gauss_p = fit_gaussians_wraparound(GAUSS, angles_vector, param_penalty);
 
 	txtF << "Amplitude\tSigma\tMean" << endl;
 	cout << "We fit " << gauss_p.size() << " gaussians to the angle data, with parameters:" << endl << "Amplitude\tSigma\tMean" << endl;

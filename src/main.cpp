@@ -32,6 +32,8 @@ const char *ISECT_SEARCH_SIZE="isect_search_size";
 
 const char *SCANLINE_COUNT="scanline_count";
 
+const char *ANGLE_PARAM_PENALTY="angle_param_penalty";
+
 const char *PRINT_KMEANS="print_kmeans_progress";
 const char *GRAPH_MIN_BRANCHES="graph_min_branches";
 
@@ -82,6 +84,8 @@ int main(int argc, char *argv[])
         (ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
         
         (SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
+        
+        (ANGLE_PARAM_PENALTY, po::value<double>()->default_value(2), "Penalty per parameter, when fitting Gaussians to the angle distribution")
         
         (GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
         
@@ -140,6 +144,9 @@ int main(int argc, char *argv[])
     if (isect_search_size < 0) isect_search_size = raster_spacing;
     
     const int scanline_count = vm[SCANLINE_COUNT].as<int>();
+    
+    const double angle_param_penalty = vm[ANGLE_PARAM_PENALTY].as<double>();
+    
     const int graph_min_branches = vm[GRAPH_MIN_BRANCHES].as<int>();
     
     //some of these distances are int's, maybe they should be doubles
@@ -188,7 +195,7 @@ int main(int argc, char *argv[])
 	// the following functions analyse staatistical properties of the network
  	stats.GetLengthDist(lines); 							     // test for three distributions of length 
  	stats.DoBoxCount(lines); 								    // Boxcounting algorithm 
- 	gauss_params angle_distribution = stats.KDE_estimation_strikes(lines); 				  //kernel density estimation
+ 	gauss_params angle_distribution = stats.KDE_estimation_strikes(lines, angle_param_penalty); 				  //kernel density estimation
 
 	geo.WRITE_SHP(lines, angle_distribution, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
 	
@@ -209,7 +216,7 @@ int main(int argc, char *argv[])
 	G.RemoveSpurs(split_map, spur_dist_thresh);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
 	graph = split_map.get_graph();
 	
-	G.GraphAnalysis(graph, lines, graph_min_branches, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
+	G.GraphAnalysis(graph, lines, graph_min_branches, angle_param_penalty, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
 	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	//simple graph algorithms
@@ -222,7 +229,7 @@ int main(int argc, char *argv[])
 	stats.RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
-	Graph r_graph = geo.BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, raster_name);//5 5, another distance threshold to check
+	Graph r_graph = geo.BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, angle_param_penalty, raster_name);//5 5, another distance threshold to check
 	
 	G.MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
 //	G.MaximumFlow_HG(graph, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
