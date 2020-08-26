@@ -1495,7 +1495,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
  
  //write vector data to disk
  //TODO: this can write gauss parameter-associated values, but is only called before those values are calculated
- void GEO::WRITE_SHP(VECTOR &lineaments, gauss_params &angle_dist, string name)
+ void GEO::WRITE_SHP(VECTOR &lineaments, AngleDistribution &angle_dist, string name)
  {
 	STATS stats;
 	GDALAllRegister();
@@ -1561,7 +1561,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 		exit( 1 );
 	}
 	
-	if (angle_dist.size() != 0)
+	if (angle_dist.gaussians.size() != 0)
 	{
 		OGRFieldDefn oField2( "Set", OFTInteger );
 		oField1.SetWidth(10);
@@ -1589,7 +1589,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
 		poFeature->SetField( "ID", id );
 		poFeature->SetField( "Length", L);
 		poFeature->SetField( "Angle", strike);
-		if (angle_dist.size() != 0)
+		if (angle_dist.gaussians.size() != 0)
 			poFeature->SetField( "Set", stats.CheckGaussians(angle_dist, strike));
 
 		BOOST_FOREACH(point_type P, line) 

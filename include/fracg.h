@@ -251,7 +251,6 @@ namespace FGraph
 	typedef geometry::index::rtree<p_index, geometry::index::rstar<16> > p_tree;
 	typedef geometry::index::rtree<pl_index, geometry::index::rstar<16> > pl_tree;
     
-    typedef std::tuple<double, double, double> gauss_param; //the parameters are amplitude, width/sigma, and finally angle
-    typedef std::vector<gauss_param> gauss_params; //these represent a sum of gaussians
+    
 
 }

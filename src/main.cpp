@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
 	// the following functions analyse staatistical properties of the network
  	stats.GetLengthDist(lines); 							     // test for three distributions of length 
  	stats.DoBoxCount(lines); 								    // Boxcounting algorithm 
- 	gauss_params angle_distribution = stats.KDE_estimation_strikes(lines, angle_param_penalty); 				  //kernel density estimation
+ 	AngleDistribution angle_distribution = stats.KDE_estimation_strikes(lines, angle_param_penalty); 				  //kernel density estimation
 
 	geo.WRITE_SHP(lines, angle_distribution, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
 	

@@ -1,6 +1,7 @@
 #ifndef _geo_h
 #define _geo_h
 #include "../include/fracg.h"
+#include "../include/stats.h"
 
 #include <boost/filesystem.hpp>
 
@@ -54,7 +55,7 @@ class GEO
 	void Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double max_len);
 	void Point_Tree3(vector<p_index> points,  vector<p_index>& closest, int nb);
 
-	void WRITE_SHP(VECTOR &lineaments, gauss_params &angle_dist, string name);
+	void WRITE_SHP(VECTOR &lineaments, AngleDistribution &angle_dist, string name);
 	void CorrectNetwork(vector<line_type>&F, double dist);
 	
 	void WriteSHP_lines(vector<line_type>lineaments, const char* refWKT, string name);

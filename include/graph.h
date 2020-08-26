@@ -2,6 +2,7 @@
 #define _GRAPH_h
 #include <type_traits>
 #include "../include/fracg.h"
+#include "../include/stats.h"
 
 
 
@@ -224,7 +225,7 @@ class GRAPH
 
 	VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
 	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);
-	void ClassifyLineaments(Graph G, VECTOR &lines, gauss_params &angle_dist, float dist, string name);
+	void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, string name);
 	
 	Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
 	Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");

@@ -1341,7 +1341,8 @@ struct gauss_data{
 	int nGauss;
 	arma::vec &angle;
 	arma::vec &pdf;
-	gauss_data(int nd, int ng, arma::vec &a, arma::vec &p) : nData(nd), nGauss(ng), angle(a), pdf(p) {};
+    bool use_horizontal;
+	gauss_data(int nd, int ng, arma::vec &a, arma::vec &p, bool use_horiz) : nData(nd), nGauss(ng), angle(a), pdf(p), use_horizontal(use_horiz) {};
 };
 
 //evaluate the gaussian functions for a particular parameter set
@@ -1358,7 +1359,7 @@ int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 	{
 		double sum = 0;
 		for (int g = 0; g < data->nGauss; g++){
-			const double amp = gsl_vector_get(params, PPG*g    ); //amplitude
+			const double amp = std::abs(gsl_vector_get(params, PPG*g    )); //amplitude
 			const double sig = gsl_vector_get(params, PPG*g + 1); //sigma
 			      double pos = gsl_vector_get(params, PPG*g + 2); //position
 			pos = fmod(fmod(pos, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
@@ -1370,7 +1371,9 @@ int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 			sum += amp * exp(-0.5 * z1 * z1);
 			sum += amp * exp(-0.5 * z2 * z2);
 		}
-		gsl_vector_set(diff, i, sum - data->pdf[i]);
+		if (data->use_horizontal) sum += (std::sin(gsl_vector_get(params, PPG * data->nGauss)) + 1)/2;
+		gsl_vector_set(diff, i, sum - data->pdf[i]); //wrap the uniform level in a sine, to map (-inf, inf) to (0,1)
+		//TODO: change scaling from [0,1] to [0,1/MAX_ANGLE]
 	}
 	return GSL_SUCCESS;
 }
@@ -1384,8 +1387,8 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 	{
 		for (int j = 0; j < data->nGauss; j++)
 		{
-            const bool is_neg = false;//gsl_vector_get(params, PPG*j) < 0;
-			const double amp = gsl_vector_get(params, PPG*j    );
+            const bool is_neg = gsl_vector_get(params, PPG*j) < 0;//false;//
+			const double amp = std::abs(gsl_vector_get(params, PPG*j    ));
 			const double sig = gsl_vector_get(params, PPG*j + 1);
 			      double pos = gsl_vector_get(params, PPG*j + 2);
 			pos = fmod(fmod(pos, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
@@ -1399,18 +1402,19 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 			gsl_matrix_set(jac, i, PPG*j + 1, (amp / (sig * sig * sig)) * (d1 * d1 * exp1 + d2 * d2 * exp2)); //d/d sigma
 			gsl_matrix_set(jac, i, PPG*j + 2, (amp / (sig * sig      )) * (d1 *      exp1 + d2 *      exp2)); //d/d position
 		}
+		if (data->use_horizontal) gsl_matrix_set(jac, i, PPG * data->nGauss, std::cos(gsl_vector_get(params, PPG*data->nGauss))/2);
 	}
 	return GSL_SUCCESS;
 }
 
 //fit the gaussians, using a set of initial values, the data values to fit against (pdf) and the angle the data is evaluated at
-gauss_params fit_gaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle)
+AngleDistribution fit_gaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle, bool use_horizontal)
 {
 	const int nData = pdf.size();
 	const int nGaussians = initial_positions.size();
-	const int nParams = PPG * nGaussians; //each gaussian has an amplitude, sigma, and location
+	const int nParams = PPG * nGaussians + (use_horizontal ? 1 : 0); //each gaussian has an amplitude, sigma, and location
 	
-	struct gauss_data data(nData, nGaussians, angle, pdf);
+	struct gauss_data data(nData, nGaussians, angle, pdf, use_horizontal);
     
 	//set initial values
 	gsl_vector *initial_guess = gsl_vector_alloc(nParams);
@@ -1437,6 +1441,8 @@ gauss_params fit_gaussians(vector<crossing_location_type> &initial_positions, ar
 		gsl_vector_set(initial_guess, PPG*i+2,  pos);
 // 		cout << a1 << ", " << a2 << " -> amp = " << amp << ", size = " << size << ", pos = " << pos << endl;
 	}
+	//if using a horizontal line, the initial guess is the minimum value of the pdf
+	if (use_horizontal) gsl_vector_set(initial_guess, nParams - 1, std::asin(2*pdf.min() - 1));
 	
 	gsl_multifit_nlinear_fdf fdf;
 	fdf.f = gauss_sum_func;
@@ -1468,41 +1474,39 @@ gauss_params fit_gaussians(vector<crossing_location_type> &initial_positions, ar
 	vector<std::tuple<double, double, double>> out_params(nGaussians);
 	for (int i = 0; i < nGaussians; i++)
 	{
-		const double amp  =           gsl_vector_get(w->x, PPG*i    );
+		const double amp  =  std::abs(gsl_vector_get(w->x, PPG*i    ));
 		const double size =  std::abs(gsl_vector_get(w->x, PPG*i + 1));
 		const double pos  = fmod(fmod(gsl_vector_get(w->x, PPG*i + 2), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
 		const double p = amp * std::sqrt(2*M_PI) * size;
 		out_params[i] = std::make_tuple(p, size, pos);
 	}
 	
+	AngleDistribution return_value;
+	
+    if (use_horizontal)
+    {
+        const double uniform_prob = MAX_ANGLE * (std::sin(gsl_vector_get(w->x, nParams - 1)) + 1)/2;
+        return_value =  AngleDistribution(uniform_prob, out_params);
+    } else {
+        return_value = AngleDistribution(out_params);
+    }
+	
 	gsl_vector_free(initial_guess);
 	gsl_multifit_nlinear_free(w);
-	
-	return out_params;
+    
+	return return_value;
 }
 
 //evaluate the sum of gaussians model at a particular angle
 double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gaussians, double x)
 {
-	double sum = 0;
-	for (auto it = gaussians.begin(); it < gaussians.end(); it++)
-	{
-		const double amp   = std::get<0>(*it);
-		const double size  = std::get<1>(*it);
-		const double pos   = fmod(fmod(std::get<2>(*it), MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE);
-		const double dist1 = x - pos;
-		const double dist2 = dist1 - std::copysign(180, dist1);
-		const double z1    = dist1 / size;
-		const double z2    = dist2 / size;
-		const double amp_eff = amp / (std::sqrt(2*M_PI) * size);
-		sum += amp_eff * std::exp(-0.5 * z1 * z1);
-		sum += amp_eff * std::exp(-0.5 * z2 * z2);
-	}
-	return sum;
+//     return -1; //filler until I replace everywhere this function is used
+    AngleDistribution ad(gaussians);
+    return ad.evaluate_distribution(x);
 }
 
 //fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
+AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
 {
 // 	cout << "starting gaussian fit" << endl;
 	arma::vec pdf(KDE.size());
@@ -1529,7 +1533,7 @@ gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, ve
 	
 	arma::vec residual(KDE.size()); //residuals, used to calculate the error
 	
-	gauss_params results, previous_results;
+	AngleDistribution results, results_unif, previous_results;
 	
 	vector<std::pair<double, decltype(results)>> ic; //information criteria - used to chosse the number of gaussians
 	
@@ -1579,39 +1583,47 @@ gauss_params fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, ve
 //  		}
 //  		cout << endl;
 		
-		results = fit_gaussians(positions, pdf, angle);
+		results = fit_gaussians(positions, pdf, angle, false);
+        results_unif = fit_gaussians(positions, pdf, angle, true);
 		
-		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - evaluate_gaussian_sum(results, angle[i]);
+		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - results.evaluate_distribution(angle[i]);
 		double rss = 0;
 		for (int i = 0; i < (int)residual.size(); i++) rss += residual[i]*residual[i];
 //  		double err = arma::norm(residual, 2);
 		if (nGaussians >= max_peaks) ft = arma::fft(residual); //If there aren't any more peaks to find, use the residuals of the fit with the current data
 		
 		double llikelihood = 1; //calculate the log likelihood
+		double llikelihood_unif = 1;
 		for (auto it = fault_angles.begin(); it < fault_angles.end(); it++)
 		{
-			double likelihood = evaluate_gaussian_sum(results, *it);
+			double likelihood = results.evaluate_distribution(*it);
 			llikelihood += likelihood > 0 ? std::log(likelihood) : 0;
+            llikelihood_unif += std::log(results_unif.evaluate_distribution(*it));
 		}
 		int nParams = PPG * nGaussians; //number of free parameters
+		int nParams_unif = nParams + 1;
 		//2*nParams + 2 * std::log(err);// - 2 * llikelihood;
 		//(corrected) akaike information criterion
 		double aicc = param_penalty*nParams /*+ (2*nParams*(nParams + 1)) / (double)(PPG*fault_angles.size() - nParams - 1)*/ - 2*llikelihood;
+        double aicc_unif = param_penalty * nParams_unif - 2 * llikelihood_unif;
 		bool has_negative = false;
-		for (auto it = results.begin(); it < results.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
- 		cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", has neg: " << has_negative << endl;
+		for (auto it = results.gaussians.begin(); it < results.gaussians.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
+ 		cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", unif ll is " << llikelihood_unif << ", unif aicc = " << aicc_unif << ", has neg: " << has_negative << endl;
+        
 // 		 //error err
 //         has_negative = false; //debug
 		if (!std::isnan(aicc) && !has_negative) ic.push_back(std::make_pair(aicc, results));
+        if (!std::isnan(aicc_unif)) ic.push_back(std::make_pair(aicc_unif, results_unif));
 		
 	}
 // 	return ic[5-1].second; //debug
-	decltype(ic)::iterator result_it = std::min_element(ic.begin(), ic.end()); //get the set of Gaussians with the minimum aicc value
+	decltype(ic)::iterator result_it = std::min_element(ic.begin(), ic.end(),
+        [](const decltype(ic)::value_type &a, const decltype(ic)::value_type &b){ return a.first < b.first;}); //get the set of Gaussians with the minimum aicc value
 	return result_it->second; //previous_results
 }
 
 
-gauss_params STATS::KDE_estimation_strikes(VECTOR &lines, const double param_penalty)
+AngleDistribution STATS::KDE_estimation_strikes(VECTOR &lines, const double param_penalty)
 {
 	vector<line_type> &lineaments = lines.data;
     std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
@@ -1631,7 +1643,7 @@ gauss_params STATS::KDE_estimation_strikes(VECTOR &lines, const double param_pen
 	//KDE estimation of orientation to obtain number of lineament sets------
 	sort(ANGLE.begin(), ANGLE.end());
 
-	vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10);
+	vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) pairs
 	arma::vec est_pdf = angle_kde_fill_array(MAX_ANGLE * 10, ANGLE, 10);
 	for (unsigned int i = 0; i < est_pdf.size(); i++)
 	{
@@ -1661,7 +1673,8 @@ gauss_params STATS::KDE_estimation_strikes(VECTOR &lines, const double param_pen
 	}
 	
 	vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
-	vector<std::tuple<double, double, double>> gauss_p = fit_gaussians_wraparound(GAUSS, angles_vector, param_penalty);
+	AngleDistribution angle_dist = fit_gaussians_wraparound(GAUSS, angles_vector, param_penalty);
+    gauss_params gauss_p = angle_dist.gaussians;
 
 	txtF << "Amplitude\tSigma\tMean" << endl;
 	cout << "We fit " << gauss_p.size() << " gaussians to the angle data, with parameters:" << endl << "Amplitude\tSigma\tMean" << endl;
@@ -1670,15 +1683,18 @@ gauss_params STATS::KDE_estimation_strikes(VECTOR &lines, const double param_pen
 		txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 		cout << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 	}
+    
+    std::cout << "Uniform Level:\t" << angle_dist.uniform_prob << std::endl;
+    txtF      << "Uniform Level:\t" << angle_dist.uniform_prob << std::endl;
 	cout << endl;
 
 	txtF << "Fault sets:" << "\t" << gauss_p.size() << endl;
 	txtF << "Angle \t Density \t Smoothed Density" << endl;
 	for(unsigned int i =0; i < GAUSS.size(); i++)
-		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << evaluate_gaussian_sum(gauss_p, GAUSS[i].first) <<  endl;   
+		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.evaluate_distribution(GAUSS[i].first) <<  endl;   
 	txtF << endl;
 	//set namespace variable if true
-	return gauss_p;
+	return AngleDistribution(gauss_p);
 }
 
 vector<double> BootStrapping(vector<double>data)
@@ -1730,26 +1746,28 @@ vector<double> PearsonCorrelation(vector<double>data1, vector<double>data2, size
     return(BootsTrapping_Cor);
 }
 
-//what does this do?
-int STATS::CheckGaussians(gauss_params &angle_dist, double angle)
+//what does this do? //I think the chooses the id of the gaussians that 
+int STATS::CheckGaussians(AngleDistribution &angle_dist, double angle)
 {
 	vector<pair<int, double>> p_classes;
 	double pi = boost::math::constants::pi<double>();
 	
-	if (angle_dist.size() > 1)
+	if (angle_dist.gaussians.size() > 1)
 	{
 		int g;
 		double P = 0;
-		for (int i = 0; i < angle_dist.size(); i++)
+		for (int i = 0; i < angle_dist.gaussians.size(); i++)
 		{
-			std::tuple<double, double, double> params1 = angle_dist.at(i);
-			double P = 1 / (std::get<1>(params1)* 2* pi ) * exp(- (  pow(angle - std::get<2>(params1), 2)) / (2 * std::get<1>(params1))  );
+// 			std::tuple<double, double, double> params1 = angle_dist.gaussians.at(i);
+// 			double P = 1 / (std::get<1>(params1)* 2* pi ) * exp(- (  pow(angle - std::get<2>(params1), 2)) / (2 * std::get<1>(params1))  );
+            double P = AngleDistribution::evaluate_gaussian(angle_dist.gaussians.at(i), angle);
 			p_classes.push_back(make_pair(i, P));
 		}
 		std:: pair<int, double> G = *max_element(p_classes.begin(), p_classes.end(), [](const auto& p1, const auto& p2) 
 		{ 
 			return p1.second < p2.second; 
 		});
+        if (angle_dist.with_uniform && angle_dist.uniform_prob > G.second) return -1; //the the most likely class is the uniform distrubution
 		return(G.first);
 	}
 	else
@@ -1817,9 +1835,9 @@ line_type RandomLine(box AOI, polygon_type t_AOI, double angle)
 	return(r_line);
 }
 
-void STATS::ScanLine(VECTOR &lines, int nb_scanlines, gauss_params &angle_dist)
+void STATS::ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist)
 {
-	if (angle_dist.size() <= 0)
+	if (angle_dist.gaussians.size() <= 0)
 	{
 		cout << "Cannot set scan line orientations (no data on prinipal orientations)" << endl;
         return;
@@ -1829,7 +1847,7 @@ void STATS::ScanLine(VECTOR &lines, int nb_scanlines, gauss_params &angle_dist)
     ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
     txtF << lines.name << endl;
 
-    for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
+    for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
     {
         float frac = std::ceil((std::get<0>(*it) - 0.05) * 10.0) / 10.0; 
         if (frac > 0)
@@ -1895,7 +1913,7 @@ void STATS::ScanLine(VECTOR &lines, int nb_scanlines, gauss_params &angle_dist)
 }
 
 //create statisics from input file--------------------------------------
-void STATS::CreateStats(VECTOR &lines, gauss_params &angle_dist)
+void STATS::CreateStats(VECTOR &lines, AngleDistribution &angle_dist)
 {
 	GEO georef;
 	int FaultNumber = lines.data.size();
@@ -1968,11 +1986,11 @@ void STATS::CreateStats(VECTOR &lines, gauss_params &angle_dist)
 //write data to file----------------------------------------------------
 	ofstream txtF = FGraph::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.tsv"));//statistics
 	txtF << lines.name <<endl;
-	if (angle_dist.size() > 0)
+	if (angle_dist.gaussians.size() > 0)
 	{
 		int i = 0;
 		txtF << "No \t Amplitude \t Stddev \t Mean" << endl;
-		for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
+		for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
 		{
 			txtF << i << "\t" << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			i++;
@@ -2053,10 +2071,10 @@ int GetCluster(pair<double, double> point, vector<pair<double,double>> clusters)
 }
 
 
-void STATS::KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist)
+void STATS::KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist)
 {
-		
-	int No = angle_dist.size();
+    gauss_params &gaussians = angle_dist.gaussians;
+	int No = gaussians.size();
 	if (No > 1)
 	{
 		cout <<"k-means clustering of geometric properties" << endl;
@@ -2094,7 +2112,7 @@ void STATS::KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and length" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
+			for (auto it = gaussians.begin(); it < gaussians.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			vector<pair<double, double>> clusters;
@@ -2123,7 +2141,7 @@ void STATS::KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
+			for (auto it = gaussians.begin(); it < gaussians.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			
@@ -2153,7 +2171,7 @@ void STATS::KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of length and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = angle_dist.begin(); it < angle_dist.end(); it++)
+			for (auto it = gaussians.begin(); it < gaussians.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			vector<pair<double, double>> clusters;
