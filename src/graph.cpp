@@ -1114,7 +1114,7 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 	cout << " done \n" << endl;
 }
 
-void GRAPH::ClassifyLineaments(Graph G, VECTOR &lines, gauss_params &angle_dist, float dist, string name)
+void GRAPH::ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, string name)
 {
 	cout << "Classifying line set based on orientation and intersections" << endl;
 	std::clock_t startcputime = std::clock();
@@ -1236,7 +1236,7 @@ void GRAPH::ClassifyLineaments(Graph G, VECTOR &lines, gauss_params &angle_dist,
 		exit( 1 );
 	}
 	
-	if (angle_dist.size() != 0)
+	if (angle_dist.gaussians.size() != 0)
 	{
 		OGRFieldDefn oField2( "Set", OFTInteger );
 		oField1.SetWidth(10);
@@ -1298,7 +1298,7 @@ void GRAPH::ClassifyLineaments(Graph G, VECTOR &lines, gauss_params &angle_dist,
 		poFeature->SetField( "Length", L);
 		poFeature->SetField( "Angle", strike);
 		
-		if (angle_dist.size() != 0)
+		if (angle_dist.gaussians.size() != 0)
 			poFeature->SetField( "Set", stats.CheckGaussians(angle_dist, strike));
 		
 		poFeature->SetField( "I",  std::get<1>(*it));

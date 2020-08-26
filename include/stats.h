@@ -70,6 +70,73 @@ struct WeibullParams
 
 typedef boost::variant<DistStats<PowerLawParams>, DistStats<ExponentialParams>, DistStats<LogNormParams>, DistStats<WeibullParams>> DistStatsType;
 
+
+typedef std::tuple<double, double, double> gauss_param; //the parameters are amplitude, width/sigma, and finally angle
+typedef std::vector<gauss_param> gauss_params; //these represent a sum of gaussians
+    
+
+//this class represents a probability distribution of angles/orientations
+//it has one or more gaussians, and potentially a uniform distribution
+class AngleDistribution
+{
+private:
+    //evaluate a single Gaussian.
+    //have this as separate function, to only have to correct the angle when necessary
+    static double evaluate_single_gaussian(const gauss_param &gauss, double corrected_angle)
+    {
+        const double amp   = std::get<0>(gauss);
+		const double size  = std::get<1>(gauss);
+		const double pos   = std::get<2>(gauss);
+		const double dist1 = corrected_angle - pos;
+		const double dist2 = dist1 - std::copysign(180, dist1); //two differences in angle, to accound for how the angle values wrap around at 180 degrees
+		const double z1    = dist1 / size;
+		const double z2    = dist2 / size;
+		const double amp_eff = amp / (std::sqrt(2*M_PI) * size);
+        
+        const double sum1 = amp_eff * std::exp(-0.5 * z1 * z1);
+        const double sum2 = amp_eff * std::exp(-0.5 * z2 * z2);
+        
+        return sum1 + sum2;
+    }
+    
+    
+public:
+
+    bool with_uniform = false; //true iff we are using a uniform distribution component
+    double uniform_prob = 0; //the probability of the uniform components
+    gauss_params gaussians; //the set of gaussians
+    
+    AngleDistribution() {};
+    AngleDistribution(const gauss_params &gausses) : gaussians(gausses) {};
+    AngleDistribution(const double unif, const gauss_params gausses) : with_uniform(true), uniform_prob(unif), gaussians(gausses) {};
+    
+    static double correct_angle(const double angle)
+    {
+        return fmod(fmod(angle, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE); //angle is now between 0 and 180 degrees
+    }
+    
+    //evaluate a single gaussian, at a particular angle
+    static double evaluate_gaussian(const gauss_param &gauss, const double angle)
+    {
+        const double corrected_angle = correct_angle(angle);
+        return evaluate_single_gaussian(gauss, corrected_angle);
+    }
+    
+    //get the pdf value of the distribution at a particular angle
+    double evaluate_distribution(const double angle)
+    {
+        const double corrected_angle = correct_angle(angle);
+        double sum = 0;
+        for (auto it = gaussians.begin(); it < gaussians.end(); it++)
+        {
+            sum += evaluate_single_gaussian(*it, corrected_angle);
+        }
+        if (with_uniform) sum += uniform_prob / MAX_ANGLE;
+        
+        return sum;
+    }
+};
+
 struct StatsModelData
 {
 	//parameters for each model
@@ -89,15 +156,15 @@ class STATS
 		~STATS()
 		{}
 
-	void CreateStats(VECTOR &lines, gauss_params &angle_dist);
+	void CreateStats(VECTOR &lines, AngleDistribution &angle_dist);
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
 	StatsModelData GetLengthDist(VECTOR lines);
 	void DoBoxCount(VECTOR lines);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	gauss_params KDE_estimation_strikes(VECTOR &lines, const double param_penalty = 2);
-	int CheckGaussians(gauss_params &angle_dist, double angle);
-	void ScanLine(VECTOR &lines, int nb_scanlines, gauss_params &angle_dist);
-	void KMCluster(bool output, VECTOR &lines, gauss_params &angle_dist);
+	AngleDistribution KDE_estimation_strikes(VECTOR &lines, const double param_penalty = 2);
+	int CheckGaussians(AngleDistribution &angle_dist, double angle);
+	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist);
+	void KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist);
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename);
 };
 #endif
