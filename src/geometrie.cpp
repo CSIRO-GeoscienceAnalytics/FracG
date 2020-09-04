@@ -75,8 +75,6 @@ double GEOMETRIE::minSpacing(line_type Trace)
 	return len;
 }
 
-
-
 line_type GEOMETRIE::ShortestLine(vector <line_type> Set)
 {
 	double dist = std::numeric_limits<double>::max();
