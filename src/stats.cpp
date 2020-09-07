@@ -1996,8 +1996,8 @@ void STATS::CreateStats(VECTOR &lines, AngleDistribution &angle_dist)
 			i++;
 		}
 	}
-	txtF << "index \t strike \t length \t sinuosity \t Generation \t nearest fault" 
-		 <<"\t distance to nearest line \t nearest larger line \t distance to nearest larger line" << endl;
+	txtF << "index \t strike \t length \t sinuosity \t Generation \t nearest line" 
+		 <<"\t distance to nearest line \t nearest larger line \t distance to nearest larger line \t coodinates" << endl;
 	
 	size_t curPos = 0;
 	for (int i = 0; i< lines.data.size(); i++)
@@ -2015,12 +2015,11 @@ void STATS::CreateStats(VECTOR &lines, AngleDistribution &angle_dist)
 			txtF << "\t"  << "\t" << "\t" << "\t" << endl;
 		curPos++;
 	}
-	
-	txtF << "Mean:     " << "\t" << arma::mean(arma::vec(Angle)) 		<< "\t" << arma::mean(arma::vec(Length))			<< "\t" << arma::mean(arma::vec (Sinuosity)) 	 	 << "\t" << "\t" << arma::mean(distance) 		  << "\t" << "\t" << arma::mean(distance2)   		<< "\n"
-		 << "Median:   " << "\t" << arma::median(arma::vec(Angle)) 	<< "\t" << arma::median(arma::vec(Length))		<< "\t" << arma::median(arma::vec (Sinuosity)) 	 	 << "\t" << "\t" << arma::median(distance)	  << "\t" << "\t" << arma::median(distance2) 		<< "\n"
-		 << "Stddev:   " << "\t" << arma::stddev(arma::vec(Angle)) 	<< "\t" << arma::stddev(arma::vec(Length))		<< "\t" << arma::stddev(arma::vec (Sinuosity)) 	 	 << "\t" << "\t" << arma::stddev(distance) 	  << "\t" << "\t" << arma::stddev(distance2) 		<< "\n"
-		 << "Variance: " << "\t" << arma::var(arma::vec(Angle))  		<< "\t" << arma::var(arma::vec(Length))			<< "\t" << arma::var(arma::vec (Sinuosity))  		 << "\t" << "\t" << arma::var(distance)		  << "\t" << "\t" << arma::var(distance2)			<< "\n"
-		 << "Range:    " << "\t" << arma::range(arma::vec(Angle))<< "\t" << arma::range(arma::vec(Length))	<< "\t" << arma::range(arma::vec (Sinuosity))<< "\t" << "\t" << arma::range(distance) << "\t" << "\t" << arma::range(distance2)	<< "\n"
+	txtF << "Mean:     " << "\t" << arma::mean(arma::vec(Angle)) 	<< "\t" << arma::mean(arma::vec(Length))	<< "\t" << arma::mean(arma::vec (Sinuosity)) 	<< "\t" << "\t" << "\t" << arma::mean(distance) 	<< "\t" << "\t" << arma::mean(distance2)   		<< "\n"
+		 << "Median:   " << "\t" << arma::median(arma::vec(Angle)) 	<< "\t" << arma::median(arma::vec(Length))	<< "\t" << arma::median(arma::vec (Sinuosity)) 	<< "\t" << "\t" << "\t" << arma::median(distance)	<< "\t" << "\t" << arma::median(distance2) 		<< "\n"
+		 << "Stddev:   " << "\t" << arma::stddev(arma::vec(Angle)) 	<< "\t" << arma::stddev(arma::vec(Length))	<< "\t" << arma::stddev(arma::vec (Sinuosity)) 	<< "\t" << "\t" << "\t" << arma::stddev(distance) 	<< "\t" << "\t" << arma::stddev(distance2) 		<< "\n"
+		 << "Variance: " << "\t" << arma::var(arma::vec(Angle))  	<< "\t" << arma::var(arma::vec(Length))		<< "\t" << arma::var(arma::vec (Sinuosity))  	<< "\t" << "\t" << "\t" << arma::var(distance)		<< "\t" << "\t" << arma::var(distance2)			<< "\n"
+		 << "Range:    " << "\t" << arma::range(arma::vec(Angle))	<< "\t" << arma::range(arma::vec(Length))	<< "\t" << arma::range(arma::vec (Sinuosity))	<< "\t" << "\t" << "\t" << arma::range(distance)	<< "\t" << "\t" << arma::range(distance2)	<< "\n"
 		 << endl;
 	txtF.close(); 
 		 
@@ -2053,13 +2052,13 @@ txtF << "\n Linear correlations "
 
 int GetCluster(pair<double, double> point, vector<pair<double,double>> clusters)
 {
-	//checking the euclidian distance between the data pint and every centroid
+	//checking the euclidian distance between the data point and every centroid
 	int  n = 0, c;
 	double d = std::numeric_limits<double>::max();
 
 	for (auto i : clusters)
 	{
-		double D = sqrt( pow(point.first - i.first ,2) + pow(point.second - i.second ,2));
+		double D = sqrt( pow((point.first - i.first) ,2) + pow((point.second - i.second) ,2));
 		if ( D < d)
 		{
 			d = D; 
@@ -2073,8 +2072,7 @@ int GetCluster(pair<double, double> point, vector<pair<double,double>> clusters)
 
 void STATS::KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist)
 {
-    gauss_params &gaussians = angle_dist.gaussians;
-	int No = gaussians.size();
+	int No = angle_dist.gaussians.size();
 	if (No > 1)
 	{
 		cout <<"k-means clustering of geometric properties" << endl;
@@ -2112,7 +2110,7 @@ void STATS::KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and length" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = gaussians.begin(); it < gaussians.end(); it++)
+			for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			vector<pair<double, double>> clusters;
@@ -2141,7 +2139,7 @@ void STATS::KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of orientation and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = gaussians.begin(); it < gaussians.end(); it++)
+			for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			
@@ -2171,7 +2169,7 @@ void STATS::KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist)
 			txtF << lines.name << endl;
 			txtF << "km-means clustering of length and sinuosity" << endl;
 			txtF << "Amplitude\tSigma\tMean" << endl;
-			for (auto it = gaussians.begin(); it < gaussians.end(); it++)
+			for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
 				txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
 			txtF << "Cluster centroids" << endl;
 			vector<pair<double, double>> clusters;
