@@ -53,7 +53,6 @@ public:
         rtree = decltype(rtree)();
     }
     
-    
     //copy constructor
     point_map(const point_map<VT, PT> &ref):rtree(ref.rtree), default_dist(ref.default_dist) {};
     
@@ -65,7 +64,7 @@ public:
     }
     
     //get the nearest element that is within the specified distance of the given point
-    std::optional<element> get_nearest_element(PT &point, double dist=-1)
+    std::optional<element> GetNearestElement(PT &point, double dist=-1)
     {
         std::vector<element> results;
         int values_found = rtree.query(bgi::nearest(point, 1), std::back_inserter(results));
@@ -73,23 +72,23 @@ public:
     }
     
     //get the nearest value to the given point, if it is within the specified distance
-    std::optional<VT> get_value(PT &point, double dist = -1)
+    std::optional<VT> GetValue(PT &point, double dist = -1)
     {
 //         if (values_found < 1)
 //         {
 //             //found no points
 //             return std::nullopt;
 //         }
-        std::optional<element> nearest = get_nearest_element(point, dist);
+        std::optional<element> nearest = GetNearestElement(point, dist);
         if (!nearest) return std::nullopt;
         return nearest->second;
     }
     
     //add a value, and return either the given value or the value that is already in place
     //the second value is true iff the value is new
-    std::pair<VT, bool> add_value(PT &point, VT &value, double dist = -1)
+    std::pair<VT, bool> AddValue(PT &point, VT &value, double dist = -1)
     {
-        std::optional<VT> result = get_value(point, dist);
+        std::optional<VT> result = GetValue(point, dist);
         if (result) return std::pair(*result, false);// if a value exists, return it
         element el(point, value);
         rtree.insert(el);
@@ -98,9 +97,9 @@ public:
     
     //set this value to the location, replacing an existing value if it exists
     //return true iff the value is new (ie, there is no existing point within that distance)
-    bool set_value(PT &point, VT &value, double dist = -1)
+    bool SetValue(PT &point, VT &value, double dist = -1)
     {
-        std::optional<element> nearest = get_nearest_element(point, dist);
+        std::optional<element> nearest = GetNearestElement(point, dist);
         element new_element = std::pair(point, value);
         bool is_new = true;
         if (nearest)
@@ -114,15 +113,16 @@ public:
     }
     
     //remove a particular value from the map, returning the associated value if it exists
-    std::optional<VT> remove_value(PT &point, double dist = -1)
+    std::optional<VT> RemoveValue(PT &point, double dist = -1)
     {
-        std::optional<element> candidate = get_nearest_element(point, dist);
+        std::optional<element> candidate = GetNearestElement(point, dist);
         if (!candidate) return std::nullopt; //no candidate found, nothing to remove
         rtree.remove(*candidate);
         return candidate->second;
     }
     
-    double get_dist() {return default_dist;}
+    //return the (default) distance threshold used by this point map
+    double GetDist() {return default_dist;}
 };
 
 //class that stores vertices in a graph by their point location
@@ -141,7 +141,7 @@ public:
         for (std::tie(vi, vend) = boost::vertices(graph); vi != vend; vi++)
         {
             typename graph_traits<GT>::vertex_descriptor v = *vi;
-            pm.add_value(graph[*vi].location, v, 0); //add vertices with a distance threshold, to ensure that the point map has all the vertices that are actually in the graph, even if they violate the distance threshold given here
+            pm.AddValue(graph[*vi].location, v, 0); //add vertices with a distance threshold, to ensure that the point map has all the vertices that are actually in the graph, even if they violate the distance threshold given here
         }
     }
     
@@ -157,42 +157,49 @@ public:
         return *this;
     }
     
-    std::optional<VT> get_vertex(PT &point, double dist = -1)
+    //return an (optional) vertex for the given point, if a vertex exists within the distance threshold from that point
+    std::optional<VT> GetVertex(PT &point, double dist = -1)
     {
-        pm.get_value(point, dist);
+        pm.GetValue(point, dist);
     }
     
-    std::pair<VT, bool> add_vertex_isnew(PT &point, double dist = -1)
+    //Add a vertex to the graph at a particular point, or return an existing vertex if one already exists within the distance threshold of the given point
+    VT AddVertex(PT &point, double dist = -1)
     {
-        std::optional<VT> existing = pm.get_value(point, dist);
+        VT vertex;
+        bool is_new;
+        std::tie(vertex, is_new) = AddVertexIsNew(point, dist);
+        return vertex;
+    }
+    
+    //add a new vertex, or return an existing vertex if one is within the distance threshold of the given point, and also return a boolean stating whether or not the returned vertex is newly created
+    std::pair<VT, bool> AddVertexIsNew(PT &point, double dist = -1)
+    {
+        std::optional<VT> existing = pm.GetValue(point, dist);
         if (existing) return std::pair(*existing, false);
         VT new_vertex = boost::add_vertex(FVertex<PT>(point), graph);
-        std::pair<VT, bool> added_value = pm.add_value(point, new_vertex, dist);
+        std::pair<VT, bool> added_value = pm.AddValue(point, new_vertex, dist);
 //         if (!added_value->second) std::cerr << "Error: Added a vertex at " << point.x << ", " << point.y << " which was not present at the first check, but did exist at when it was added to the map: " << added_value.first << std::endl;
         return std::pair(added_value.first, true);
     }
     
-    VT add_vertex(PT &point, double dist = -1)
+    //remove a vertex from the graph and point map, if a vertex exists within the distance threshold if the given point
+    std::optional<VT> RemoveVertex(PT &point, double dist = -1)
     {
-        VT vertex;
-        bool is_new;
-        std::tie(vertex, is_new) = add_vertex_isnew(point, dist);
-        return vertex;
-    }
-    
-    std::optional<VT> remove_vertex(PT &point, double dist = -1)
-    {
-        std::optional<VT> candidate = pm.remove_value(point, dist);
+        std::optional<VT> candidate = pm.RemoveValue(point, dist);
         if (!candidate) return std::nullopt;
         boost::remove_vertex(*candidate, graph);
         return *candidate;
     }
     
-    GT &get_graph() { return graph; }
+    //return the underlying graph object
+    GT &GetGraph() { return graph; }
     
-    double get_dist() {return pm.get_dist();}
+    //return the (default) distance threshold used by this point map
+    double GetDist() {return pm.GetDist();}
     
-    const char *get_refWKT() { return reference_wkt.c_str(); }
+    //get the Well Known Text which reference information for this graph
+    const char *GetRefWKT() { return reference_wkt.c_str(); }
 };
 
 class GRAPH

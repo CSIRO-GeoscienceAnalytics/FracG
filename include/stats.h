@@ -82,7 +82,7 @@ class AngleDistribution
 private:
     //evaluate a single Gaussian.
     //have this as separate function, to only have to correct the angle when necessary
-    static double evaluate_single_gaussian(const gauss_param &gauss, double corrected_angle)
+    static double EvaluateSingleGaussian(const gauss_param &gauss, double corrected_angle)
     {
         const double amp   = std::get<0>(gauss);
 		const double size  = std::get<1>(gauss);
@@ -110,26 +110,26 @@ public:
     AngleDistribution(const gauss_params &gausses) : gaussians(gausses) {};
     AngleDistribution(const double unif, const gauss_params gausses) : with_uniform(true), uniform_prob(unif), gaussians(gausses) {};
     
-    static double correct_angle(const double angle)
+    static double CorrectAngle(const double angle)
     {
         return fmod(fmod(angle, MAX_ANGLE) + MAX_ANGLE, MAX_ANGLE); //angle is now between 0 and 180 degrees
     }
     
     //evaluate a single gaussian, at a particular angle
-    static double evaluate_gaussian(const gauss_param &gauss, const double angle)
+    static double EvaluateGaussian(const gauss_param &gauss, const double angle)
     {
-        const double corrected_angle = correct_angle(angle);
-        return evaluate_single_gaussian(gauss, corrected_angle);
+        const double corrected_angle = CorrectAngle(angle);
+        return EvaluateSingleGaussian(gauss, corrected_angle);
     }
     
     //get the pdf value of the distribution at a particular angle
-    double evaluate_distribution(const double angle)
+    double EvaluateDistribution(const double angle)
     {
-        const double corrected_angle = correct_angle(angle);
+        const double corrected_angle = CorrectAngle(angle);
         double sum = 0;
         for (auto it = gaussians.begin(); it < gaussians.end(); it++)
         {
-            sum += evaluate_single_gaussian(*it, corrected_angle);
+            sum += EvaluateSingleGaussian(*it, corrected_angle);
         }
         if (with_uniform) sum += uniform_prob / MAX_ANGLE;
         
@@ -161,7 +161,7 @@ class STATS
 	StatsModelData GetLengthDist(VECTOR lines);
 	void DoBoxCount(VECTOR lines);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	AngleDistribution KDE_estimation_strikes(VECTOR &lines, const double param_penalty = 2);
+	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty = 2);
 	int CheckGaussians(AngleDistribution &angle_dist, double angle);
 	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist);
 	void KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist);

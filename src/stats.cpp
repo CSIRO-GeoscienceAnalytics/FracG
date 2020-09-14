@@ -714,7 +714,7 @@ void PrintBest2File(const StatsModelData dists, const vector<double> values, ofs
 }
 
 template<typename T1, typename T2>
-std::tuple<double, double> log_likelihood_ratio(const ModelHolder<T1> &model1, const T1 &params1, const ModelHolder<T2> &model2, const T2 params2, const std::vector<double> &values, const std::vector<double>::const_iterator &xmin1, const std::vector<double>::const_iterator &xmin2)
+std::tuple<double, double> LogLikelihoodRatio(const ModelHolder<T1> &model1, const T1 &params1, const ModelHolder<T2> &model2, const T2 params2, const std::vector<double> &values, const std::vector<double>::const_iterator &xmin1, const std::vector<double>::const_iterator &xmin2)
 {
 	std::vector<double>::const_iterator xmin = std::max(xmin1, xmin2); //use the range of data values where both models are valid
 	const int N = values.end() - xmin;
@@ -847,7 +847,7 @@ void DecideBestModel(StatsModelData &model_data, const vector<double> &values, c
 			int ind2 = it2 - models.begin();
 			std::string name2 = boost::apply_visitor([](auto &x){return x.name;}, *it2);
 			std::tuple<double, double> comparison_result = boost::apply_visitor(
-				[&](auto &x1, auto &x2)->std::tuple<double, double>{return log_likelihood_ratio(x1.model, x1.params, x2.model, x2.params, values, xmin1, std::next(values.begin(), x2.xmin_ind));}
+				[&](auto &x1, auto &x2)->std::tuple<double, double>{return LogLikelihoodRatio(x1.model, x1.params, x2.model, x2.params, values, xmin1, std::next(values.begin(), x2.xmin_ind));}
 				, *it1, *it2);
 			double R, p;
 			std::tie(R, p) = comparison_result;
@@ -1215,7 +1215,7 @@ void MA_filter(vector< std::pair<double,double>> &KDE, int window)
 
 //evaluate the kernel density esimation, with an gaussian kernel, at an arbitrary point
 //angles is the array of angles in degrees, smooth is a smoothing factor (>0), and x is the point to be evaluated at
-double evaluate_angle_kde(arma::vec &angles, const double smooth, double x)
+double EvaluateAngleKde(arma::vec &angles, const double smooth, double x)
 {
 	x = std::fmod(x, MAX_ANGLE);
 	double sum = 0;
@@ -1234,19 +1234,19 @@ double evaluate_angle_kde(arma::vec &angles, const double smooth, double x)
 
 //return an evenly-sampled array of the kde that represents the given values and smoothing factor
 //and scale them to sum to 1, to be a probability distribution function
-arma::vec angle_kde_fill_array(int nsamples, arma::vec &angles, const double smooth)
+arma::vec AngleKdeFillArray(int nsamples, arma::vec &angles, const double smooth)
 {
 	const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
 	arma::vec sampled(nsamples);
 	for (int i = 0; i < nsamples; i++){
-		sampled[i] = evaluate_angle_kde(angles, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
+		sampled[i] = EvaluateAngleKde(angles, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
 	}
 	return sampled;
 }
 
 
 //perform a moving average of the KDE, that wraps around
-void moving_average_filter_wraparound(vector< std::pair<double,double>> &KDE, int window_size)
+void MovingAverageFilterWraparound(vector< std::pair<double,double>> &KDE, int window_size)
 {
 	window_size |= 1; //make the window_size odd-sized
 	const unsigned int hw = window_size / 2;
@@ -1285,7 +1285,7 @@ void moving_average_filter_wraparound(vector< std::pair<double,double>> &KDE, in
 typedef std::pair<int, bool> crossing_type; //crossing position, whether the crossing is rising or falling
 typedef std::pair<int, int> crossing_location_type; //the falling and rising edges of a gaussian candidate location
 //find zero-crossings, from a fourier-domain representation of the data
-vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
+vector<crossing_type> FindZerocrossings(arma::cx_vec &fd, arma::vec &freqs)
 {
 	arma::cx_vec d2(fd.size());
 	for (unsigned int i = 0; i < fd.size(); i++) d2[i] = -freqs[i]*freqs[i]*fd[i];
@@ -1309,7 +1309,7 @@ vector<crossing_type> find_zero_crossings(arma::cx_vec &fd, arma::vec &freqs)
 
 
 //a simpler matching algorithm, that finds gaussian locations by matching leading edges to the next falling edge
-vector<crossing_location_type> simple_location_detection(vector<crossing_type> &crossings)
+vector<crossing_location_type> SimpleLocationDetection(vector<crossing_type> &crossings)
 {
 	vector<bool> used(crossings.size(), false);
 	const int nGauss = crossings.size() / 2;
@@ -1346,7 +1346,7 @@ struct gauss_data{
 };
 
 //evaluate the gaussian functions for a particular parameter set
-int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
+int GaussSumFunc(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 {
 	struct gauss_data *data = (struct gauss_data *) data_ptr;
 	
@@ -1379,7 +1379,7 @@ int gauss_sum_func(const gsl_vector *params, void *data_ptr, gsl_vector *diff)
 }
 
 //evaluate the derivative of the gaussian functions for a particular parameter set
-int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *jac)
+int GaussSumDerivFunc(const gsl_vector *params, void *data_ptr, gsl_matrix *jac)
 {
 	struct gauss_data *data = (struct gauss_data *) data_ptr;
 	//set jac[data index][parameter index] to be d(data i)/d(parameter j)
@@ -1408,7 +1408,7 @@ int gauss_sum_deriv_func(const gsl_vector *params, void *data_ptr, gsl_matrix *j
 }
 
 //fit the gaussians, using a set of initial values, the data values to fit against (pdf) and the angle the data is evaluated at
-AngleDistribution fit_gaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle, bool use_horizontal)
+AngleDistribution FitGaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle, bool use_horizontal)
 {
 	const int nData = pdf.size();
 	const int nGaussians = initial_positions.size();
@@ -1445,8 +1445,8 @@ AngleDistribution fit_gaussians(vector<crossing_location_type> &initial_position
 	if (use_horizontal) gsl_vector_set(initial_guess, nParams - 1, std::asin(2*pdf.min() - 1));
 	
 	gsl_multifit_nlinear_fdf fdf;
-	fdf.f = gauss_sum_func;
-	fdf.df = gauss_sum_deriv_func;
+	fdf.f = GaussSumFunc;
+	fdf.df = GaussSumDerivFunc;
 	fdf.fvv = NULL;
 	fdf.n = nData;
 	fdf.p = nParams;
@@ -1498,15 +1498,15 @@ AngleDistribution fit_gaussians(vector<crossing_location_type> &initial_position
 }
 
 //evaluate the sum of gaussians model at a particular angle
-double evaluate_gaussian_sum(vector<std::tuple<double, double, double>> &gaussians, double x)
+double EvaluateGaussianSum(vector<std::tuple<double, double, double>> &gaussians, double x)
 {
 //     return -1; //filler until I replace everywhere this function is used
     AngleDistribution ad(gaussians);
-    return ad.evaluate_distribution(x);
+    return ad.EvaluateDistribution(x);
 }
 
 //fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
+AngleDistribution FitGaussiansWraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
 {
 // 	cout << "starting gaussian fit" << endl;
 	arma::vec pdf(KDE.size());
@@ -1541,7 +1541,7 @@ AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KD
 	{
 		nGaussians += 1;
 		
-		vector<crossing_type> base_crossings = find_zero_crossings(ft, freqs);
+		vector<crossing_type> base_crossings = FindZerocrossings(ft, freqs);
 		
 		//now make scale image
 		const int max_peaks = base_crossings.size() / 2;
@@ -1557,7 +1557,7 @@ AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KD
 			{
 				arma::cx_vec scaled_ft(ft.size());
 				for (unsigned int i = 0; i < scaled_ft.size(); i++) scaled_ft[i] = ft[i] * std::sqrt(M_PI * next_scale) * std::exp(-M_PI * M_PI * freqs[i] * freqs[i] * next_scale);
-				vector<crossing_type> next_crossings = find_zero_crossings(scaled_ft, freqs);
+				vector<crossing_type> next_crossings = FindZerocrossings(scaled_ft, freqs);
 				int this_peaks = next_crossings.size() / 2;
 // 				cout << "At scale " << next_scale << " there are " << this_peaks << " peaks, diff = " << peak_count - this_peaks << endl;
 				if (peak_count - this_peaks <= 1){
@@ -1573,7 +1573,7 @@ AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KD
 		//now follow scale image back to original scale
 		vector<crossing_location_type> positions;
 	//	positions = follow_scale_image(scale_image, KDE.size(), nGaussians);
-	 	positions = simple_location_detection(scale_image.back());//base_crossings
+	 	positions = SimpleLocationDetection(scale_image.back());//base_crossings
 		
 		//now use the initial values to fit the (sum of) gaussians properly
 		//debug output
@@ -1583,10 +1583,10 @@ AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KD
 //  		}
 //  		cout << endl;
 		
-		results = fit_gaussians(positions, pdf, angle, false);
-        results_unif = fit_gaussians(positions, pdf, angle, true);
+		results = FitGaussians(positions, pdf, angle, false);
+        results_unif = FitGaussians(positions, pdf, angle, true);
 		
-		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - results.evaluate_distribution(angle[i]);
+		for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - results.EvaluateDistribution(angle[i]);
 		double rss = 0;
 		for (int i = 0; i < (int)residual.size(); i++) rss += residual[i]*residual[i];
 //  		double err = arma::norm(residual, 2);
@@ -1596,9 +1596,9 @@ AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KD
 		double llikelihood_unif = 1;
 		for (auto it = fault_angles.begin(); it < fault_angles.end(); it++)
 		{
-			double likelihood = results.evaluate_distribution(*it);
+			double likelihood = results.EvaluateDistribution(*it);
 			llikelihood += likelihood > 0 ? std::log(likelihood) : 0;
-            llikelihood_unif += std::log(results_unif.evaluate_distribution(*it));
+            llikelihood_unif += std::log(results_unif.EvaluateDistribution(*it));
 		}
 		int nParams = PPG * nGaussians; //number of free parameters
 		int nParams_unif = nParams + 1;
@@ -1623,10 +1623,10 @@ AngleDistribution fit_gaussians_wraparound(vector<std::pair<double, double>> &KD
 }
 
 
-AngleDistribution STATS::KDE_estimation_strikes(VECTOR &lines, const double param_penalty)
+AngleDistribution STATS::KdeEstimationStrikes(VECTOR &lines, const double param_penalty)
 {
 	vector<line_type> &lineaments = lines.data;
-    std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
+    std::string out_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
 	ofstream txtF = FGraph::CreateFileStream(out_name);
 	int index = 0 ;
 	vec ANGLE(lineaments.size(),fill::zeros);
@@ -1644,14 +1644,14 @@ AngleDistribution STATS::KDE_estimation_strikes(VECTOR &lines, const double para
 	sort(ANGLE.begin(), ANGLE.end());
 
 	vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) pairs
-	arma::vec est_pdf = angle_kde_fill_array(MAX_ANGLE * 10, ANGLE, 10);
+	arma::vec est_pdf = AngleKdeFillArray(MAX_ANGLE * 10, ANGLE, 10);
 	for (unsigned int i = 0; i < est_pdf.size(); i++)
 	{
 		GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
 	}
 	vector< std::pair<double, double>> Maximas;
 
-	moving_average_filter_wraparound(GAUSS, 5);
+	MovingAverageFilterWraparound(GAUSS, 5);
 
 	for (unsigned int i = 0; i < GAUSS.size(); i++)
 	{
@@ -1673,7 +1673,7 @@ AngleDistribution STATS::KDE_estimation_strikes(VECTOR &lines, const double para
 	}
 	
 	vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
-	AngleDistribution angle_dist = fit_gaussians_wraparound(GAUSS, angles_vector, param_penalty);
+	AngleDistribution angle_dist = FitGaussiansWraparound(GAUSS, angles_vector, param_penalty);
     gauss_params gauss_p = angle_dist.gaussians;
 
 	txtF << "Amplitude\tSigma\tMean" << endl;
@@ -1691,7 +1691,7 @@ AngleDistribution STATS::KDE_estimation_strikes(VECTOR &lines, const double para
 	txtF << "Fault sets:" << "\t" << gauss_p.size() << endl;
 	txtF << "Angle \t Density \t Smoothed Density" << endl;
 	for(unsigned int i =0; i < GAUSS.size(); i++)
-		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.evaluate_distribution(GAUSS[i].first) <<  endl;   
+		txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.EvaluateDistribution(GAUSS[i].first) <<  endl;   
 	txtF << endl;
 	//set namespace variable if true
 	return AngleDistribution(gauss_p);
@@ -1760,7 +1760,7 @@ int STATS::CheckGaussians(AngleDistribution &angle_dist, double angle)
 		{
 // 			std::tuple<double, double, double> params1 = angle_dist.gaussians.at(i);
 // 			double P = 1 / (std::get<1>(params1)* 2* pi ) * exp(- (  pow(angle - std::get<2>(params1), 2)) / (2 * std::get<1>(params1))  );
-            double P = AngleDistribution::evaluate_gaussian(angle_dist.gaussians.at(i), angle);
+            double P = AngleDistribution::EvaluateGaussian(angle_dist.gaussians.at(i), angle);
 			p_classes.push_back(make_pair(i, P));
 		}
 		std:: pair<int, double> G = *max_element(p_classes.begin(), p_classes.end(), [](const auto& p1, const auto& p2) 
@@ -1857,7 +1857,7 @@ void STATS::ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_d
     txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< endl;
     GEOMETRIE geom;
 
-    polygon_type t_AOI = geom.Return_tigth_AOI(lines.data);
+    polygon_type t_AOI = geom.ReturnTightAOI(lines.data);
     box AOI = geom.ReturnAOI(lines.data);
 
     int g = 0;
@@ -1975,12 +1975,12 @@ void STATS::CreateStats(VECTOR &lines, AngleDistribution &angle_dist)
 ***********************************************************************/
 //fault centre to  centre distance--------------------------------------
 	vector<p_index> closest;
-	georef.Point_Tree(points, closest);
+	georef.PointTree(points, closest);
 	vec distance(points.size(),fill::zeros);
 	
 //fault centre to centre distance to larger larger fault----------------------
 	vector<pl_index> closest2;
-	georef.Point_Tree2(points2, closest2, floor(arma::vec(Length).max()*1000));
+	georef.PointTree2(points2, closest2, floor(arma::vec(Length).max()*1000));
 	vec distance2(points.size(),fill::zeros);
 
 //write data to file----------------------------------------------------

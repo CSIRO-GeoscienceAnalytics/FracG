@@ -62,7 +62,7 @@ BUFFER GEOMETRIE::DefineLineBuffer(line_type fault, const double Bdistance)
 }
 
 //find minimum spacing between point in  a linestring------------------ 
-double GEOMETRIE::minSpacing(line_type Trace)
+double GEOMETRIE::MinSpacing(line_type Trace)
 {
 	double len = 0;
 	point_type first = Trace.front();
@@ -101,7 +101,7 @@ box GEOMETRIE::ReturnAOI(vector<line_type> lines)
 	return(AOI);
 }
 
-polygon_type GEOMETRIE::Return_tigth_AOI(vector<line_type> lines)
+polygon_type GEOMETRIE::ReturnTightAOI(vector<line_type> lines)
 {
 	polygon_type hull;
 	polygon_type multiL;
@@ -114,7 +114,7 @@ polygon_type GEOMETRIE::Return_tigth_AOI(vector<line_type> lines)
 
 //return the segment of a line that is the closest to the given point
 //the returned iterator points to the linsestring point that is *after* the given point
-line_type::iterator get_closest_segment(line_type &Trace, point_type point)
+line_type::iterator GetClosestSegment(line_type &Trace, point_type point)
 {
 	 double best_distance = std::numeric_limits<double>::infinity();
 	 line_type::iterator best_index = Trace.begin();
@@ -147,8 +147,8 @@ line_type GEOMETRIE::GetSegment(line_type Trace, point_type Junction, point_type
 	point_type first, last;
 	
 	//determine which line segment each point is located on
-	line_type::iterator jit = get_closest_segment(Trace, Junction);
-	line_type::iterator bit = get_closest_segment(Trace, Begin);
+	line_type::iterator jit = GetClosestSegment(Trace, Junction);
+	line_type::iterator bit = GetClosestSegment(Trace, Begin);
 	
 	//sort them so that the next part works no matter which order the points are in, relative to the line
 	line_type::iterator first_segment, last_segment;
@@ -246,7 +246,7 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 //around the features adn the size of the smallest feature--------------
 
 	box AOI = ReturnAOI(lines.data);
-	polygon_type t_AOI = Return_tigth_AOI(lines.data);
+	polygon_type t_AOI = ReturnTightAOI(lines.data);
 	
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -294,12 +294,12 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 //write the raster file---------------------------------------------
 
 
-    std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
+    std::string out_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
 	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
 	cout << " done \n" << endl;
 }
 
-void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
+void GEOMETRIE::PMaps(VECTOR lines, float box_size)
 {
 	GEO georef;
 	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
@@ -308,7 +308,7 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
 //now we nedd to create a georefernece system based on the bounding box
 
 	box AOI = ReturnAOI(lines.data);
-	polygon_type t_AOI = Return_tigth_AOI(lines.data);
+	polygon_type t_AOI = ReturnTightAOI(lines.data);
 	
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -392,10 +392,10 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
 		cur_x += box_size;
 	}
 //write the raster files---------------------------------------------
-    std::string p20_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "P20_map", ".tif");
+    std::string p20_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P20_map", ".tif");
 	georef.WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, p20_name);
     
-    std::string p21_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "P21_map", ".tif");
+    std::string p21_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P21_map", ".tif");
 	georef.WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, p21_name);
 	cout << "done \n" << endl;
 }

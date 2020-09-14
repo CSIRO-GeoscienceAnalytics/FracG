@@ -143,15 +143,15 @@ bool GRAPH::AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSe
 graph_map<point_type, vertex_type, Graph> GRAPH::ConvertLinesToGraph(std::vector<line_type> &faults, const char *refWKT, double distance_threshold)
 {
     graph_map<point_type, vertex_type, Graph> map(distance_threshold, refWKT);
-    Graph &graph = map.get_graph();
+    Graph &graph = map.GetGraph();
 	vertex_type VA, VB;
 
 	//create edges and nodes for faults in the graph-------------------------
 	int nb = 0;
 	BOOST_FOREACH(line_type f, faults)
 	{
-		VA = map.add_vertex(f.front());
-		VB = map.add_vertex(f.back());
+		VA = map.AddVertex(f.front());
+		VB = map.AddVertex(f.back());
 
 		AddNewEdge(graph, VA, VB, f);
 //         std::cout <<" Adding edge from " << VA << " to " << VB << ", there are now " << num_edges(graph) << " in the graph" << std::endl;
@@ -174,7 +174,7 @@ graph_map<> GRAPH::ReadVEC4raster(double transform[8], VECTOR &lines, double map
 	GEO g;
 	GEOMETRIE geom;
     graph_map<> map(map_distance_threshold, lines.refWKT);
-    Graph& graph = map.get_graph();
+    Graph& graph = map.GetGraph();
 	geometry::model::multi_linestring<line_type> intersection;
 	vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
 	std::pair <point_type, point_type> NODES;
@@ -221,8 +221,8 @@ graph_map<> GRAPH::ReadVEC4raster(double transform[8], VECTOR &lines, double map
 		type  = get<2> (*it);
 		const double fault_length = get<3>(*it);
 		
-		VA = map.add_vertex(NODES.first);
-		VB = map.add_vertex(NODES.second);
+		VA = map.AddVertex(NODES.first);
+		VB = map.AddVertex(NODES.second);
 
 		//if( (degree(VA, graph) == 0) && (degree(VB, graph) == 0) )
 		AddNewEdge(graph, VA, VB, TRACE, fault_length);
@@ -289,8 +289,8 @@ Graph GRAPH::ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold)
 		type  = get<2> (*it);
 		nb = get<3> (*it);
 
-		VA = map.add_vertex(NODES.first);
-		VB = map.add_vertex(NODES.second);
+		VA = map.AddVertex(NODES.first);
+		VB = map.AddVertex(NODES.second);
 
 		AddNewEdge(graph, VA, VB, TRACE);
 				
@@ -320,7 +320,7 @@ Graph GRAPH::ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold)
 void GRAPH::RemoveSpurs(graph_map<>& map, double minDist)
 {
 	cout << "Removing spurs" << endl;
-    Graph& G = map.get_graph();
+    Graph& G = map.GetGraph();
 	point_type rmP;
 	vertex_type U ,u;
 
@@ -342,7 +342,7 @@ void GRAPH::RemoveSpurs(graph_map<>& map, double minDist)
 // 					rmP.set<0>((long long).x());
 // 					rmP.set<1>((long long)G[U].location.y());
 // 					remove_vertex(U, G);
-					map.remove_vertex(G[U].location);
+					map.RemoveVertex(G[U].location);
 				}
 				if (degree(u,G) == 0)
 				{
@@ -350,7 +350,7 @@ void GRAPH::RemoveSpurs(graph_map<>& map, double minDist)
 // 					rmP.set<0>((long long).x());
 // 					rmP.set<1>((long long)G[u].location.y());
 // 					remove_vertex(u, G);
-					map.remove_vertex(G[u].location);
+					map.RemoveVertex(G[u].location);
 				}
 				goto restart;
 			}
@@ -388,10 +388,10 @@ AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distan
 //take a graph and split the faults up into fault segments, according to where the faults intersect
 graph_map<> GRAPH::SplitFaults(graph_map<> &map, double minDist)
 {
-    Graph& graph = map.get_graph();
+    Graph& graph = map.GetGraph();
 	cout << "Splitting edges at intersection points" << endl;
-	graph_map<> split_map(map.get_dist(), map.get_refWKT()); //the map translates physical coordinates and nodes in the graph.
-    Graph &split_graph = split_map.get_graph();
+	graph_map<> split_map(map.GetDist(), map.GetRefWKT()); //the map translates physical coordinates and nodes in the graph.
+    Graph &split_graph = split_map.GetGraph();
 	GEOMETRIE geom;
 	long double Distance;
 	line_type fault, fault2;
@@ -447,7 +447,7 @@ graph_map<> GRAPH::SplitFaults(graph_map<> &map, double minDist)
 		cross.push_back(make_tuple(geometry::length(fault), fault.back(), AttachPoint::middle));
 		
 		geom.SortDist(cross); //sort the vertices so that we get them in order of how far along the fault they appear (while taking into account that some intersection points appear off the fault line itself)
-		vertex_type prev_vertex = split_map.add_vertex(std::get<1>(cross.front()));
+		vertex_type prev_vertex = split_map.AddVertex(std::get<1>(cross.front()));
 		for (vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 		{
 			if (I == cross.begin()) continue;
@@ -455,7 +455,7 @@ graph_map<> GRAPH::SplitFaults(graph_map<> &map, double minDist)
 			//bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
 			//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
 			//if (is_start || is_end) continue;
-			NewV = split_map.add_vertex(intersect);
+			NewV = split_map.AddVertex(intersect);
 			if (NewV == prev_vertex) continue;
 			
 			AddNewEdge(split_graph, prev_vertex, NewV, geom.GetSegment(fault, split_graph[prev_vertex].location, split_graph[NewV].location), fault_length);//also remember the length of the original fault
@@ -686,7 +686,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_par
 //write results---------------------------------------------------------
 		//string graphFile =  + ;
 //         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-        string save_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
+        string save_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
 //         cout << "the resulting name is " << save_name << endl;
 		txtG = FGraph::CreateFileStream(save_name);
 		if (txtG.is_open())  
@@ -784,7 +784,7 @@ void GRAPH::GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_par
                     comp_Lineamants.in_path = lines.in_path;
 					STATS stats;
 					stats.GetLengthDist(comp_Lineamants);
-					stats.KDE_estimation_strikes(comp_Lineamants, angle_param_penalty);
+					stats.KdeEstimationStrikes(comp_Lineamants, angle_param_penalty);
 
 					txtG<< "COMPONENT NO." << "\t" << i << "\n"
 						<< "Branches:" << "\t" << NbB << "\n" 
@@ -817,18 +817,18 @@ Graph GRAPH::ShortPath(graph_map<> m, std::string in_filename, std::string out_f
 { 
 	GEO Gref;
 	Graph shortP;
-    Graph &G = m.get_graph();
+    Graph &G = m.GetGraph();
 	GEOMETRIE geom;
 	line_type SV , TV;
 	point_type source, target;
 	
-	Gref.Get_Source_Target(in_filename.c_str(), source, target);
+	Gref.GetSourceTarget(in_filename.c_str(), source, target);
 
     bool added_source_vertex, added_target_vertex;
     vertex_type S, T;
     
-	std::tie(S, added_source_vertex) = m.add_vertex_isnew(source);
-	std::tie(T, added_target_vertex) = m.add_vertex_isnew(target);
+	std::tie(S, added_source_vertex) = m.AddVertexIsNew(source);
+	std::tie(T, added_target_vertex) = m.AddVertexIsNew(target);
 // 	BUFFER BS = geom.DefinePointBuffer(source, radius);
 // 	BUFFER BT = geom.DefinePointBuffer(target, radius);
     
@@ -919,14 +919,14 @@ Graph GRAPH::ShortPath(graph_map<> m, std::string in_filename, std::string out_f
 			edges_shortPath.push_back(shortP[Eg].trace);
         if (out_filename != "")
         {
-            std::string save_filename = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir});
-            Gref.WriteSHP_lines(edges_shortPath, m.get_refWKT(), save_filename);
+            std::string save_filename = FGraph::AddPrefixSuffixSubdirs(out_filename, {graph_subdir});
+            Gref.WriteSHP_lines(edges_shortPath, m.GetRefWKT(), save_filename);
         }
 	}
 	
 	//remove the source and target vertices that we added earlier (if we added them)
-	if (added_source_vertex) m.remove_vertex(source);
-    if (added_target_vertex) m.remove_vertex(target);
+	if (added_source_vertex) m.RemoveVertex(source);
+    if (added_target_vertex) m.RemoveVertex(target);
 	
 	cout << " done " << endl;
 	return(shortP);
@@ -936,7 +936,7 @@ Graph GRAPH::ShortPath(graph_map<> m, std::string in_filename, std::string out_f
 Graph GRAPH::MinTree (graph_map<> gm, double map_dist_threshold, std::string filename)
 {  
 	cout << "Generating minimum spanning tree" << endl;
-    Graph &G = gm.get_graph();
+    Graph &G = gm.GetGraph();
 	Graph min_graph;
 	GEO Gref;  
 	int i = 0;
@@ -953,8 +953,8 @@ Graph GRAPH::MinTree (graph_map<> gm, double map_dist_threshold, std::string fil
 	{
 		vertex_type S = source(*ei, G);
 		vertex_type T = target(*ei, G);
-		map.add_vertex(G[S].location); 
-		map.add_vertex(G[T].location); 
+		map.AddVertex(G[S].location); 
+		map.AddVertex(G[T].location); 
 		add_edge(S, T, 
 				{geometry::length(G[*ei].trace)/1000, 
 					G[*ei].trace},
@@ -968,8 +968,8 @@ Graph GRAPH::MinTree (graph_map<> gm, double map_dist_threshold, std::string fil
     
 	if (filename != "")
     {
-        std::string save_filename = FGraph::add_prefix_suffix_subdirs(filename, {graph_subdir});
-        Gref.WriteSHP_lines(edges_minTree, gm.get_refWKT(), save_filename);
+        std::string save_filename = FGraph::AddPrefixSuffixSubdirs(filename, {graph_subdir});
+        Gref.WriteSHP_lines(edges_minTree, gm.GetRefWKT(), save_filename);
     }
     
 	cout << " done \n" << endl;
@@ -1019,7 +1019,7 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 	vector<pair<point_type, int>> graph_vertices;
 
 	box AOI = geom.ReturnAOI(lines.data);
-	polygon_type t_AOI = geom.Return_tigth_AOI(lines.data);
+	polygon_type t_AOI = geom.ReturnTightAOI(lines.data);
 	
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -1106,10 +1106,10 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 		}
 
 //write the raster file---------------------------------------------
-    std::string isec_dens_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "intersection_density", ".tif");
+    std::string isec_dens_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density", ".tif");
 	georef.WriteRASTER(vec,  lines.refWKT, newGeoTransform, lines, isec_dens_name);
     
-    std::string isec_intens_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
+    std::string isec_intens_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
 	georef.WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, isec_intens_name);
 	cout << " done \n" << endl;
 }
@@ -1403,7 +1403,7 @@ void AssignGrad(Graph G, float p1, float p2, bool vert, const char *refWKT)
 	}
 	for (auto Ve : boost::make_iterator_range(vertices(G)))
 	{
-		G[Ve].data = georef.getValue(G[Ve].location, raster.transform, raster.values);
+		G[Ve].data = georef.GetRasterValue(G[Ve].location, raster.transform, raster.values);
 		if (std::isnan(G[Ve].data)) 
 		{
 			cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
@@ -1417,16 +1417,16 @@ void GRAPH::MaximumFlow_R(Graph G, string st_filename, string capacity_type, con
 {
 	GEO georef;
 	point_type s, t;
-	georef.Get_Source_Target(st_filename.c_str(), s, t);
+	georef.GetSourceTarget(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with raster data." << endl;
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
-	georef.setup_maximum_flow(dg, capacity_type);
-	double mf =  georef.maximum_flow(dg, s, t);
+	georef.SetupMaximumFlow(dg, capacity_type);
+	double mf =  georef.MaximumFlow(dg, s, t);
 	cout << "maximum flow is: " << mf << endl;
 	if (out_filename != "")
     {
-        std::string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_R_");//
+        std::string name = FGraph::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
         georef.WriteSHP_maxFlow(dg, refWKT, name.c_str());
     }
 	cout << " done \n" << endl;
@@ -1436,17 +1436,17 @@ void GRAPH::MaximumFlow_VG(Graph G, string st_filename, float top, float bottom,
 {
 	GEO georef;
 	point_type s, t;
-	georef.Get_Source_Target(st_filename.c_str(), s, t);
+	georef.GetSourceTarget(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << endl;  
 	AssignGrad(G, top, bottom, false, refWKT);
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
-	georef.setup_maximum_flow(dg, capacity_type);
-	double mf =  georef.maximum_flow(dg, s, t);
+	georef.SetupMaximumFlow(dg, capacity_type);
+	double mf =  georef.MaximumFlow(dg, s, t);
 	cout << "maximum flow is: " << mf << endl;
     if (out_filename != "")
     {
-        std::string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_VG_");
+        std::string name = FGraph::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_VG_");
         georef.WriteSHP_maxFlow(dg, refWKT, name.c_str());
     }
 	cout << " done \n" << endl;
@@ -1456,16 +1456,16 @@ void GRAPH::MaximumFlow_HG(Graph G, string st_filename, float left, float right,
 {
 	GEO georef;
 	point_type s, t;
-	georef.Get_Source_Target(st_filename.c_str(), s, t);
+	georef.GetSourceTarget(st_filename.c_str(), s, t);
 	cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << endl;  
 	AssignGrad(G, left, right, false, refWKT);
 	
 	DGraph dg = georef.MakeDirectedGraph(G);
-	georef.setup_maximum_flow(dg, capacity_type);
-	double mf =  georef.maximum_flow(dg, s, t);
+	georef.SetupMaximumFlow(dg, capacity_type);
+	double mf =  georef.MaximumFlow(dg, s, t);
     if (out_filename != "")
     {
-        string name = FGraph::add_prefix_suffix_subdirs(out_filename, {graph_subdir}, "max_flow_HG_");
+        string name = FGraph::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
         georef.WriteSHP_maxFlow(dg, refWKT, name.c_str());
     }
 	cout << " done \n" << endl;

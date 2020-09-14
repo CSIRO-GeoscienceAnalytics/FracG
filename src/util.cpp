@@ -13,7 +13,7 @@ namespace FGraph
     //prepend a prefix string to a path name, while preserving the parent directory
     //append a suffix to a filename string, if that string does not already end with that suffix
     //optionally remove the existing file extension
-    std::string add_prefix_suffix(fs::path path, std::string prefix, std::string suffix, bool remove_extension)
+    std::string AddPrefixSuffix(fs::path path, std::string prefix, std::string suffix, bool remove_extension)
     {
 //         std::cout << "add_ps: path " << path << ", pfx: " << prefix << ", sfx " << suffix << ", re? " << remove_extension;
         if (remove_extension)
@@ -34,25 +34,25 @@ namespace FGraph
     }
     
     //as above, but also with an optional list of subdirectories to add
-    std::string add_prefix_suffix_subdirs(fs::path path, std::initializer_list<std::string> subdirs, std::string prefix, std::string suffix, bool remove_extension)
+    std::string AddPrefixSuffixSubdirs(fs::path path, std::initializer_list<std::string> subdirs, std::string prefix, std::string suffix, bool remove_extension)
     {
         fs::path parent_dir = fs::is_directory(path) ? path : path.parent_path();
         for (auto subdir : subdirs) parent_dir = parent_dir / subdir;
         fs::path new_path = parent_dir / path.filename();
-        return add_prefix_suffix(new_path, prefix, suffix, remove_extension);
+        return AddPrefixSuffix(new_path, prefix, suffix, remove_extension);
     }
     
     //as above, but with a string input
-    std::string add_prefix_suffix(std::string filename, std::string prefix, std::string suffix, bool remove_extension)
+    std::string AddPrefixSuffix(std::string filename, std::string prefix, std::string suffix, bool remove_extension)
     {
         fs::path path(filename);
-        return add_prefix_suffix(path, prefix, suffix, remove_extension);
+        return AddPrefixSuffix(path, prefix, suffix, remove_extension);
     }
     
-    std::string add_prefix_suffix_subdirs(std::string filename, std::initializer_list<std::string> subdirs, std::string prefix, std::string suffix, bool remove_extension)
+    std::string AddPrefixSuffixSubdirs(std::string filename, std::initializer_list<std::string> subdirs, std::string prefix, std::string suffix, bool remove_extension)
     {
         fs::path path(filename);
-        return add_prefix_suffix_subdirs(path, subdirs, prefix, suffix, remove_extension);
+        return AddPrefixSuffixSubdirs(path, subdirs, prefix, suffix, remove_extension);
     }
     
     

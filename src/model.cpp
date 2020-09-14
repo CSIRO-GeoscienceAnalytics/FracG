@@ -119,9 +119,9 @@ void MangeIntersections_bb(int &l_tag, int nb_bb_pts, vector< vector<pair<int, i
 void EmbedLineaments_all(Graph G, vector< vector<pair<int, int>>> fused_lines, vector<int> intersec, int nb_bb_pts, string name)
 {
 	ofstream ss_names, lowD_ss_name, interface_ss_name;
-	string full_path  = FGraph::add_prefix_suffix(name, "", ".txt", true);
-	string full_path2 = FGraph::add_prefix_suffix(name, "", "_lowD.txt", true);
-	string full_path3 = FGraph::add_prefix_suffix(name, "", "_interface.txt", true);
+	string full_path  = FGraph::AddPrefixSuffix(name, "", ".txt", true);
+	string full_path2 = FGraph::AddPrefixSuffix(name, "", "_lowD.txt", true);
+	string full_path3 = FGraph::AddPrefixSuffix(name, "", "_interface.txt", true);
 	ss_names.open (full_path); 
 	lowD_ss_name.open (full_path2); 
 	interface_ss_name.open (full_path3); 
@@ -176,7 +176,7 @@ vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
 	
 	//create the bounding box for the entire set
 	box AOI = geom.ReturnAOI(lines);
-	polygon_type t_AOI = geom.Return_tigth_AOI(lines);
+	polygon_type t_AOI = geom.ReturnTightAOI(lines);
 	double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 	double min_y = geometry::get<geometry::min_corner, 1>(AOI);
 	double max_x = geometry::get<geometry::max_corner, 0>(AOI);
@@ -217,7 +217,7 @@ void MODEL::BuildPointTree(Graph G)
 	}
 }
 
-void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc)
+void MODEL::AddLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc)
 {
 	int deg = 0; //TODO: deg needs to be set properly, this line only avoids undefined values
 	int init_p_tag = p_tag + 1;
@@ -264,11 +264,11 @@ void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int
 	factory::addSpline(spline_points, ++l_tag);
 }
 
-void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename)
+void MODEL::WriteGmsh2D(bool output, Graph G, int nb_cells, string out_filename)
 {
   cout << "creating 2D mesh for lineament set" << endl;
   BuildPointTree(G);
-  out_filename = FGraph::add_prefix_suffix(out_filename, "", ".msh");
+  out_filename = FGraph::AddPrefixSuffix(out_filename, "", ".msh");
   FGraph::CreateDir(out_filename);
   
   float lc;
@@ -288,11 +288,11 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename
   nb_bb_pts = p_tag;
   
   for (auto Eg : make_iterator_range(edges(G)))
-	 addLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
+	 AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
 	 
   MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
   NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::add_prefix_suffix(out_filename, "", "_SideSet_names", true));
+  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::AddPrefixSuffix(out_filename, "", "_SideSet_names", true));
   
   factory::synchronize();
   model::mesh::generate(2);
@@ -303,7 +303,7 @@ void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename
   cout << "Created msh-file " << out_filename << endl << endl;
 }
 
-void MODEL::SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string filename)
+void MODEL::SampleNetwork2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string filename)
 {
     vector<line_type> &faults = lines.data;
 	GRAPH g;
@@ -329,7 +329,7 @@ void MODEL::SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_sa
 
 		if (num_edges(G) > 0)
 		{
-			string output_filename = FGraph::add_prefix_suffix(filename, "", "_sample_" + to_string(w) +  ".msh");
+			string output_filename = FGraph::AddPrefixSuffix(filename, "", "_sample_" + to_string(w) +  ".msh");
             FGraph::CreateDir(output_filename);
 			gmsh::initialize();
 			model::add(output_filename);
@@ -355,7 +355,7 @@ void MODEL::SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_sa
 			nb_bb_pts = p_tag;
 
 			for (auto Eg : make_iterator_range(edges(G)))
-				addLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
+				AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
 		 
 			MangeIntersections_bb(l_tag,  nb_bb_pts, fused_lines);
 			NameBoundingBox(nb_bb_pts, fused_lines, intersec);

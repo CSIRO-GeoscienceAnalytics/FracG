@@ -195,9 +195,9 @@ int main(int argc, char *argv[])
 	// the following functions analyse staatistical properties of the network
  	stats.GetLengthDist(lines); 							     // test for three distributions of length 
  	stats.DoBoxCount(lines); 								    // Boxcounting algorithm 
- 	AngleDistribution angle_distribution = stats.KDE_estimation_strikes(lines, angle_param_penalty); 				  //kernel density estimation
+ 	AngleDistribution angle_distribution = stats.KdeEstimationStrikes(lines, angle_param_penalty); 				  //kernel density estimation
 
-	geo.WRITE_SHP(lines, angle_distribution, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
+	geo.WriteShapefile(lines, angle_distribution, FGraph::AddPrefixSuffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
 	
  	stats.CreateStats(lines, angle_distribution); 								   // statistical analysis of network
  	
@@ -206,15 +206,15 @@ int main(int argc, char *argv[])
  
  	// Here we create some raster files that characterize the spatial arangement
 	geom.CentreDistanceMap(lines, raster_spacing);   //fault centre to fault centre distance (second argument is the pixel resolution)
-	geom.P_Maps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
+	geom.PMaps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
 
 	//this creates a georeferences graph, analyses it, and writes two shp files containing edges and vertices of the graph
 // 	map_vertex_type map;
     graph_map<point_type, vertex_type, Graph> gm = G.ConvertLinesToGraph(lines.data, lines.refWKT, map_dist_thresh); 	  //convert the faults into a graph
-    graph = gm.get_graph();
+    graph = gm.GetGraph();
 	graph_map<> split_map = G.SplitFaults(gm, split_dist_thresh);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
 	G.RemoveSpurs(split_map, spur_dist_thresh);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
-	graph = split_map.get_graph();
+	graph = split_map.GetGraph();
 	
 	G.GraphAnalysis(graph, lines, graph_min_branches, angle_param_penalty, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
 	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
 	
     fs::path mesh_dir = out_path / "mesh/";
     
-	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	m.SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	m.WriteGmsh2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+	m.SampleNetwork2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
 	return EXIT_SUCCESS;
 } 

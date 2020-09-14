@@ -79,16 +79,16 @@ class GEOMETRIE
 	BUFFER DefineSquareBuffer(point_type POINT, const double Bdistance );
 	BUFFER DefinePointBuffer(point_type POINT, const double Bdistance );
 	BUFFER DefineLineBuffer(line_type fault, const double Bdistance);
-	double minSpacing(line_type Trace);
+	double MinSpacing(line_type Trace);
 	line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
 	void SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross);
 	
 	void CentreDistanceMap (VECTOR lines, float cell_size);
-	void P_Maps(VECTOR lines, float cell_size);
+	void PMaps(VECTOR lines, float cell_size);
 	
 	
 	box ReturnAOI(vector<line_type> lines);
-	polygon_type Return_tigth_AOI(vector<line_type> lines);
+	polygon_type ReturnTightAOI(vector<line_type> lines);
 	line_type ShortestLine(vector <line_type> Set);
 
 };

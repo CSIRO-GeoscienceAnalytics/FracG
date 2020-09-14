@@ -40,7 +40,7 @@ string CreateDir(VECTOR &input_file, std::initializer_list<string> folders)
 }
 
 //read vector data from shp file---------------------------------------
-void read_shp(std::string const& filename, VECTOR& data)
+void ReadShapefile(std::string const& filename, VECTOR& data)
 {
 	point_type P;
 	line_type Line;
@@ -189,7 +189,7 @@ template <typename T>double GEO::LineExtractor(line_type L, RASTER<T> raster)
 			point.set<1>(raster.transform[3] + y * raster.transform[5]);
 
 			if (!geometry::disjoint(point, envelop) && geometry::within(point, pl))
-				D.push_back((double)getValue(point, raster.transform, raster.values));
+				D.push_back((double)GetRasterValue(point, raster.transform, raster.values));
 		}
 	}
 
@@ -227,8 +227,8 @@ template <typename T>double GEO::LineExtractor(line_type L, RASTER<T> raster)
 
 	if (!geometry::disjoint(p1, pl) && !geometry::disjoint(p2, pl))
 	{	
-		double p_v1 = (double)getValue(p1, raster.transform, raster.values);
-		double p_v2 = (double)getValue(p2, raster.transform, raster.values);
+		double p_v1 = (double)GetRasterValue(p1, raster.transform, raster.values);
+		double p_v2 = (double)GetRasterValue(p2, raster.transform, raster.values);
 		return(abs(p_v1 - p_v2)/len);
 	}
 	else
@@ -251,8 +251,8 @@ double GEO::CrossGradient(line_type F, RASTER<T> raster)
 	{
 		if (geometry::within(cross.front(), pl) && geometry::within(cross.back(),pl))
 		{
-			double v2 = (double) getValue(cross.front(), raster.transform, raster.values);
-			double v1 = (double) getValue(cross.back(), raster.transform, raster.values);
+			double v2 = (double) GetRasterValue(cross.front(), raster.transform, raster.values);
+			double v1 = (double) GetRasterValue(cross.back(), raster.transform, raster.values);
 			D.push_back(abs(v1-v2)/geometry::length(cross));
 		}
 	}
@@ -271,8 +271,8 @@ double GEO::ParallelGradient(line_type F, RASTER<T> raster)
 	
 	if (geometry::within(F.front(), pl) && geometry::within(F.back(), pl))
 	{
-		double v2 = (double) getValue(F.front(), raster.transform, raster.values);
-		double v1 = (double) getValue(F.back(), raster.transform, raster.values);
+		double v2 = (double) GetRasterValue(F.front(), raster.transform, raster.values);
+		double v1 = (double) GetRasterValue(F.back(), raster.transform, raster.values);
 		return( abs(v1-v2) / geometry::length(F));
 	}
 	else
@@ -324,7 +324,7 @@ DGraph GEO::MakeDirectedGraph(Graph &g)
 }
 
 //setting the capacity
-double length_capacity(DEdge de)
+double LengthCapacity(DEdge de)
 {
 	/*we set matrix permeability(p_m) to 0.5 and fracture permeability (p_f) to 1
 	* fracture flow capcaity is calucalted as:
@@ -338,7 +338,7 @@ double length_capacity(DEdge de)
 	return(flow);
 }
 
-double orientation_capacity(DEdge de, float sig1)
+double OrientationCapacity(DEdge de, float sig1)
 {
 	//we assume a guassian function for capacity depnding on roentation
 	double angle = (float)(atan2(de.trace.front().x() - de.trace.back().x(), de.trace.front().y() - de.trace.back().y())) 
@@ -354,7 +354,7 @@ double orientation_capacity(DEdge de, float sig1)
 	return(flow);
 }
 
-double length_orientation_capacity(DEdge de, float sig1)
+double LengthOrientationCapacity(DEdge de, float sig1)
 {
 	/*we set matrix permeability(p_m) to 0.5 and fracture permeability (p_f) to 1
 	* fracture flow capcaity is calucalted as:
@@ -380,7 +380,7 @@ double length_orientation_capacity(DEdge de, float sig1)
 }
 
 //the capacity values for the maximum flow algorithm
-void GEO::setup_maximum_flow(DGraph &dg, string cap_type)
+void GEO::SetupMaximumFlow(DGraph &dg, string cap_type)
 {
 	float sig1;
 	enum {ERROR, l, lo, o};
@@ -416,17 +416,17 @@ void GEO::setup_maximum_flow(DGraph &dg, string cap_type)
 		{
 			case l:
 			{
-				flow = length_capacity(dg[*e]);
+				flow = LengthCapacity(dg[*e]);
 			} break;
 			
 			case lo:
 			{
-				flow = length_orientation_capacity(dg[*e], sig1);
+				flow = LengthOrientationCapacity(dg[*e], sig1);
 			} break;
 			
 			case o:
 			{
-				flow =  orientation_capacity(dg[*e], sig1);
+				flow =  OrientationCapacity(dg[*e], sig1);
 			} break;
 			
 			default: 
@@ -442,7 +442,8 @@ void GEO::setup_maximum_flow(DGraph &dg, string cap_type)
 
 
 //calculate the maximum flow from source s to sink/target t
-double c_maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t)
+//sets up the parameters needed for boost's max flow algorithm, and executes it
+double CaalculateMaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t)
 {
 	auto capacity_map = boost::get(&DEdge::capacity, dg);
 	auto res_cap_map  = boost::get(&DEdge::residual_capacity, dg);
@@ -457,7 +458,7 @@ double c_maximum_flow(DGraph &dg, dvertex_type s, dvertex_type t)
 }
 
 //perform the maximum flow from the source location to the target location
-double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
+double GEO::MaximumFlow(DGraph &dg, point_type source, point_type target)
 {
 // 	DGraph::edge_iterator e, eend, eprev;
 // 	boost::tie(e, eend) = boost::edges(dg);
@@ -521,7 +522,7 @@ double GEO::maximum_flow(DGraph &dg, point_type source, point_type target)
 // 	e++;
 // 	eprev = e;
 // 	t = boost::target(*eprev, dg);
-	double max_flow = c_maximum_flow(dg, s, t);
+	double max_flow = CaalculateMaximumFlow(dg, s, t);
 	//now restore capacities
 	//or don't restore capacities, and instead use them to mark the faults as unusuable
 // 	for (auto p = saved_capacities.begin(); p != saved_capacities.end(); p++)
@@ -609,7 +610,7 @@ VECTOR GEO::ReadVector(std::string in_filename, std::string out_directory)
 
 	//read information from the vector file
 	if (ext == ".shp")
-		read_shp(in_filename, lineaments);
+		ReadShapefile(in_filename, lineaments);
 	else
 		cerr << "ERROR: no shape file definend" << endl;
 	
@@ -631,7 +632,7 @@ void GEO::AssignValuesGraph(Graph& G, RASTER<T> raster)
 	
 	for (auto Ve : boost::make_iterator_range(vertices(G)))
 	{
-		G[Ve].data = getValue(G[Ve].location, raster.transform, raster.values);
+		G[Ve].data = GetRasterValue(G[Ve].location, raster.transform, raster.values);
 		if (std::isnan(G[Ve].data)) cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
 	}
 
@@ -640,7 +641,7 @@ void GEO::AssignValuesGraph(Graph& G, RASTER<T> raster)
 		curEdge = G[Eg].trace;
 		geometry::centroid(G[Eg].trace, centre);
 
-		G[Eg].Centre     = getValue(centre, raster.transform, raster.values);
+		G[Eg].Centre     = GetRasterValue(centre, raster.transform, raster.values);
 		G[Eg].MeanValue  = LineExtractor<T>(G[Eg].trace, raster) ;
 		G[Eg].CentreGrad = CentreGradient(G[Eg].trace, raster);
 		G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, raster);
@@ -868,7 +869,7 @@ void WriteSHP_r(VECTOR lines, double dist, RASTER<T> raster, std::string save_na
 			
 		point_type cent; 
 		geometry::centroid(line, cent);
-		double c_val   = (double) georef.getValue<T>(cent, raster.transform, raster.values);
+		double c_val   = (double) georef.GetRasterValue<T>(cent, raster.transform, raster.values);
 		double mean_v  = (double) georef.LineExtractor<T>(line, raster);
 		double grad_c  = (double) georef.CentreGradient<T>(line, raster);
 		double grad_cc = (double) georef.CrossGradient<T>(line, raster);
@@ -955,7 +956,7 @@ void WriteTXT(VECTOR lines, double dist, RASTER<T> raster, std::string tsv_filen
 			geometry::set<geometry::max_corner, 0>(cur_box, cur_x + x_res); 
 			geometry::set<geometry::max_corner, 1>(cur_box, cur_y);
 			geometry::centroid(cur_box, value);
-			rtree.insert(std::make_pair(cur_box, georef.getValue(value, raster.transform, raster.values)));
+			rtree.insert(std::make_pair(cur_box, georef.GetRasterValue(value, raster.transform, raster.values)));
 			cur_y += y_res;
 		}
 		cur_x += x_res;
@@ -1072,10 +1073,10 @@ void GEO::AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster)
 	GEOMETRIE geom;
 	string filename = raster.name;
 	raster = ReadRaster<T>(raster.name, lines.refWKT);
-    std::string raster_shp_filename = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"raster_shp"}, "raster_augmented_shapefile", ".shp", true);
+    std::string raster_shp_filename = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {"raster_shp"}, "raster_augmented_shapefile", ".shp", true);
 	WriteSHP_r<T>(lines, dist, raster, raster_shp_filename);
     
-    std::string raster_tsv_filename = FGraph::add_prefix_suffix_subdirs(lines.out_path, {raster_subdir}, "raster_parallel_cross_profiles", ".tsv", true);
+    std::string raster_tsv_filename = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {raster_subdir}, "raster_parallel_cross_profiles", ".tsv", true);
 	WriteTXT(lines, dist, raster, raster_tsv_filename);
  }
 template void GEO::AnalyseRaster<int>(VECTOR lines, double dist, RASTER<int> raster);
@@ -1122,7 +1123,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<char> R;
 			R = ReadRaster<char>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			WriteGraph_R(raster_graph, lines, "raster");
 		} break;
 		 
@@ -1132,7 +1133,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1144,7 +1145,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1156,7 +1157,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1168,7 +1169,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<int> R;
 			R = ReadRaster<int>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			AssignValuesGraph<int>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1180,7 +1181,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<float> R;
 			R = ReadRaster<float>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			AssignValuesGraph<float>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1192,7 +1193,7 @@ Graph GEO::BuildRasterGraph(VECTOR lines, double split, double spur, double map_
 			RASTER<double> R;
 			R = ReadRaster<double>(raster_filename, lines.refWKT);
             graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-			raster_graph = map.get_graph();
+			raster_graph = map.GetGraph();
 			AssignValuesGraph<double>(raster_graph, R);
 			G.GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 			WriteGraph_R(raster_graph, lines, "raster");
@@ -1308,9 +1309,9 @@ void GEO::ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_
 		cout << " ERROR: inconsitent point number in source - target file" << endl;
 }
 
-//read a value from teh raster at a point-------------------------------
+//read a value from the raster at a point-------------------------------
 template <typename T>
-T GEO::getValue(point_type p, double transform[8], T** values)
+T GEO::GetRasterValue(point_type p, double transform[8], T** values)
 {
 	polygon_type pl = BoundingBox(transform, 0);
 	if(geometry::within(p,pl))
@@ -1325,10 +1326,10 @@ T GEO::getValue(point_type p, double transform[8], T** values)
 		return std::numeric_limits<T>::quiet_NaN();
 }
 
-//this is a function to write a raster file from teh datastructure RASTER
-//mainly for debug purposes but migth be useful
+//this is a function to write a raster file from the datastructure RASTER
+//mainly for debug purposes but might be useful
 template<typename T>
-void GEO::WriteRASTER_struc(RASTER<T> raster)
+void GEO::WriteRasterStruct(RASTER<T> raster)
 {
 	GDALDataset *poDstDS;
 	GDALDriver *poDriver;
@@ -1372,9 +1373,9 @@ void GEO::WriteRASTER_struc(RASTER<T> raster)
 	GDALClose( (GDALDatasetH) poDstDS );
 	cout << " done \n" << endl;
 }
-template void GEO::WriteRASTER_struc<int>(RASTER<int> raster);
-template void GEO::WriteRASTER_struc<float>(RASTER<float> raster);
-template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
+template void GEO::WriteRasterStruct<int>(RASTER<int> raster);
+template void GEO::WriteRasterStruct<float>(RASTER<float> raster);
+template void GEO::WriteRasterStruct<double>(RASTER<double> raster);
 
  void GEO::WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string out_filename)
 {
@@ -1430,7 +1431,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    name = FGraph::add_prefix_suffix(name, "", ".shp");
+    name = FGraph::AddPrefixSuffix(name, "", ".shp");
     FGraph::CreateDir(name);
     const char* Name = name.c_str();
     
@@ -1495,7 +1496,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
  
  //write vector data to disk
  //TODO: this can write gauss parameter-associated values, but is only called before those values are calculated
- void GEO::WRITE_SHP(VECTOR &lineaments, AngleDistribution &angle_dist, string name)
+ void GEO::WriteShapefile(VECTOR &lineaments, AngleDistribution &angle_dist, string name)
  {
 	STATS stats;
 	GDALAllRegister();
@@ -1505,7 +1506,7 @@ template void GEO::WriteRASTER_struc<double>(RASTER<double> raster);
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    name = FGraph::add_prefix_suffix(name, "", ".shp");
+    name = FGraph::AddPrefixSuffix(name, "", ".shp");
     const char* Name = name.c_str();
 
     OGRSpatialReference oSRS;
@@ -1899,7 +1900,7 @@ void GEO::WriteSHP_maxFlow(DGraph G, const char* refWKT, string name)
     GDALDataset *poDS;
     OGRLayer *poLayer;
     
-    name = FGraph::add_prefix_suffix(name, "", ".shp");
+    name = FGraph::AddPrefixSuffix(name, "", ".shp");
     FGraph::CreateDir(name);
     const char* Name = name.c_str();
     
@@ -2117,11 +2118,11 @@ void GEO::WriteGraph(Graph G, VECTOR lines, string subF)
 	char* reference = lines.refWKT;
 	getcwd(cur_path, 255);
 	
-    string subdir_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+    string subdir_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
     FGraph::CreateDir(subdir_name);
 	
-	string n_b =  FGraph::add_prefix_suffix(subdir_name, "graph_branches", ".shp");
-	string n_v =  FGraph::add_prefix_suffix(subdir_name, "graph_vertices", ".shp");
+	string n_b =  FGraph::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
+	string n_v =  FGraph::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
 	const char* Name_b = n_b.c_str();
 	const char* Name_v = n_v.c_str();
 
@@ -2138,11 +2139,11 @@ void GEO::WriteGraph_R(Graph G, VECTOR lines, string subF)
 	char cur_path[256];
 	char* reference = lines.refWKT;
 	getcwd(cur_path, 255);
-	string subdir_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+	string subdir_name = FGraph::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
 	FGraph::CreateDir(subdir_name);
 	
-	string n_b =  FGraph::add_prefix_suffix(subdir_name, "graph_branches", ".shp");
-	string n_v =  FGraph::add_prefix_suffix(subdir_name, "graph_vertices", ".shp");
+	string n_b =  FGraph::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
+	string n_v =  FGraph::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
 	const char* Name_b = n_b.c_str();
 	const char* Name_v = n_v.c_str();
 
@@ -2151,7 +2152,8 @@ void GEO::WriteGraph_R(Graph G, VECTOR lines, string subF)
 	cout << " done" << endl;
 }
 
-void GEO::Point_Tree(vector<p_index> points,  vector<p_index>& closest)
+//TODO: Give these more indicative names
+void GEO::PointTree(vector<p_index> points,  vector<p_index>& closest)
 {
 	p_tree rt(points.begin(), points.end());
 
@@ -2159,7 +2161,7 @@ void GEO::Point_Tree(vector<p_index> points,  vector<p_index>& closest)
 		rt.query(geometry::index::nearest(points[i].first, 1) && geometry::index::satisfies(different_id_p(i)), std::back_inserter(closest) );        
 }
 
-void GEO::Point_Tree2(vector<pl_index> points, vector<pl_index>& closest, double max_len)
+void GEO::PointTree2(vector<pl_index> points, vector<pl_index>& closest, double max_len)
 {
  pl_tree rt(points.begin(), points.end());
  
@@ -2228,7 +2230,7 @@ typedef std::tuple<point_type, unmerged_type::iterator, bool> endpoint_value_typ
 typedef geometry::index::rtree<endpoint_value_type, geometry::index::rstar<16>> endpoint_rtree_type;
 
 //convenience function to remove enfpoints from the endpoint rtree, given an iterator
-void remove_endpoints(endpoint_rtree_type &rtree, list<line_type>::iterator it)
+void RemoveEndpoints(endpoint_rtree_type &rtree, list<line_type>::iterator it)
 {
 	rtree.remove(std::make_tuple(it->front(), it, true ));
 	rtree.remove(std::make_tuple(it->back (), it, false));
@@ -2379,7 +2381,7 @@ bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, lin
 			if (front_match_loc) geometry::reverse(prepend);
 			geometry::append(prepend, base);
 			base = prepend;
-			remove_endpoints(endpoints, front_match);
+			RemoveEndpoints(endpoints, front_match);
 			faults.erase(front_match);
 			changed = true;
 		}
@@ -2388,7 +2390,7 @@ bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, lin
 			line_type append = *back_match;
 			if (!back_match_loc) geometry::reverse(append);
 			geometry::append(base, append);
-			remove_endpoints(endpoints, back_match);
+			RemoveEndpoints(endpoints, back_match);
 			faults.erase(back_match);
 			changed = true;
 		}
@@ -2463,7 +2465,7 @@ void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 	while (!unmerged_faults.empty())
 	{
 		line_type base = unmerged_faults.front();
-		remove_endpoints(endpoint_tree, unmerged_faults.begin());
+		RemoveEndpoints(endpoint_tree, unmerged_faults.begin());
 		unmerged_faults.pop_front(); //I don't know why this doesn't also return the value being pop'd
 		MergeConnections(unmerged_faults, endpoint_tree, base, dist);
 		merged_faults.push_back(base);
@@ -2475,7 +2477,7 @@ void GEO::CorrectNetwork(vector<line_type>&F, double dist)
 
 
 
-void GEO::Get_Source_Target(const char* Name, point_type &Source, point_type &Target)
+void GEO::GetSourceTarget(const char* Name, point_type &Source, point_type &Target)
 {
 	char* refWKT;
 	GDALAllRegister();
