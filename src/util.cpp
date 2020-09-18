@@ -5,7 +5,7 @@
 #include <boost/algorithm/string.hpp>
 #include "../include/util.h"
 
-namespace FGraph
+namespace FracG
 {
     namespace fs = boost::filesystem;
     namespace ba = boost::algorithm;

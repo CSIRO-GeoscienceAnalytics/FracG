@@ -6,20 +6,15 @@
 #include <boost/filesystem.hpp>
 
 
-using namespace FGraph;
 
-extern OGRSpatialReference GeoRef;
+
+/*extern OGRSpatialReference GeoRef;
 extern double GeoTransform[8];
-extern const char *GeoProj;
+extern const char *GeoProj;*/
 
-class GEO
+namespace FracG
 {
-	public:
-	
-		GEO();
-		~GEO()
-		{}
-		;  
+
 		
 	struct different_id_p
 	{

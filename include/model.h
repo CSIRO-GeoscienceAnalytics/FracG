@@ -8,20 +8,16 @@
 namespace model = gmsh::model;
 namespace factory = gmsh::model::occ;
 
-class MODEL
+namespace FracG
 {
-	public:
-		geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
-		MODEL();
-		~MODEL()
-		{}
-		
-		
-	void BuildPointTree(Graph G);
 	
-	void AddLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc);
-	void WriteGmsh2D(bool output, Graph G, int nb_cells, string out_filename);
-	void SampleNetwork2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string out_filename);
+	typedef boost::geometry::index::rtree<FracG::p_index, geometry::index::rstar<16>> dist_tree;
+		
+	dist_tree BuildPointTree(Graph &G);
 	
-};
+	void AddLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc, dist_tree &dtree);
+	void WriteGmsh2D(dist_tree &dtree, bool output, Graph G, int nb_cells, string out_filename);
+	void SampleNetwork2D(dist_tree &dtree, bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string out_filename);
+	
+}
 #endif

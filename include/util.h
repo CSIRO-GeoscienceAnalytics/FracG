@@ -5,7 +5,7 @@
 #include <initializer_list>
 #include <boost/filesystem.hpp>
 
-namespace FGraph
+namespace FracG
 {
 
     std::string AddPrefixSuffix(boost::filesystem::path path, std::string prefix="", std::string suffix="", bool remove_extension=false);

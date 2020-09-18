@@ -98,7 +98,7 @@
 using namespace boost;
 using namespace std;
 
-namespace FGraph
+namespace FracG
 {
 // 	extern vector<std::tuple<double, double, double>> gauss_params;		// orientations obtained from KDE
 // 	extern double split_dist;											//splitting distance fro graph
