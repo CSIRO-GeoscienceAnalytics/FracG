@@ -1057,7 +1057,7 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 	{
 			BUFFER search_box = geom.DefineSquareBuffer(it->first, 1);
 			box bounding_box = boost::geometry::return_envelope<box>(search_box);
-			  IntersecTree.insert(make_pair(bounding_box, it));
+			IntersecTree.insert(make_pair(bounding_box, it));
 	}
 
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
@@ -1066,8 +1066,11 @@ void GRAPH::IntersectionMap(Graph G, VECTOR lines, float cell_size, float search
 		cur_y = max_y;
 		for (int j = 0; j < y_size; j++)
 		{
-			point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-			if (geometry::within(cur_pos,t_AOI))
+			point_type cur_pos(cur_x, cur_y); //cur_pos is the top-left corner of the pixel
+			point_type minBox(cur_x, (cur_y - cell_size));
+			point_type maxBox((cur_x + cell_size), cur_y );
+			box pixel(minBox, maxBox);
+			if (!geometry::disjoint(pixel,AOI))
 			{
 				point_type minBox(cur_x, (cur_y - cell_size));
 				point_type maxBox((cur_x + cell_size), cur_y );

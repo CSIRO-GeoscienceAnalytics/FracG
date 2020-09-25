@@ -45,6 +45,10 @@ const char *GRAPH_RESULTS_FOLDER="graph_results_folder";
 const char *GMSH_CELL_COUNT="gmsh_cell_count";
 const char *GMSH_SHOW_OUTPUT="gmsh_show_output";
 
+const char *GMSH_MIN_CL="gmsh_min_cl";
+const char *GMSH_MAX_DIST="gmsh_min_dist";
+const char *GMSH_MIN_DIST="gmsh_max_dist";
+
 const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
 const char *GMSH_SAMPLE_COUNT="gmsh_sample_count";
 const char *GMSH_SAMPLE_SHOW_OUTPUT="gmsh_sample_show_output";
@@ -95,9 +99,13 @@ int main(int argc, char *argv[])
         (GRAPH_RESULTS_FILE, po::value<string>()->default_value("first"), "Filename to save graph analysis results to")
         (GRAPH_RESULTS_FOLDER, po::value<string>()->default_value("g"), "Save the resulting graph to this folder")
         
-        (GMSH_CELL_COUNT, po::value<int>()->default_value(15), "GMSH Cell Count")
+        (GMSH_CELL_COUNT, po::value<int>()->default_value(10), "GMSH Cell Count")
         (GMSH_SHOW_OUTPUT, po::bool_switch(), "Show GMSH output in the GMSH viewer")
         
+       (GMSH_MIN_CL, po::value<int>()->default_value(4), "Minimum characteristic length for mesh")
+       (GMSH_MIN_DIST, po::value<int>()->default_value(2), "Minimum distance for mesh refinemnt around lineament")
+       (GMSH_MAX_DIST, po::value<int>()->default_value(4), "Maximum distance for mesh refinemnt around lineament")
+
         (GMSH_SAMPLE_CELL_COUNT, po::value<int>()->default_value(15), "GMSH Sample Network cell count")
         (GMSH_SAMPLE_COUNT, po::value<int>()->default_value(2), "GMSH Sample Network sample count")
         (GMSH_SAMPLE_SHOW_OUTPUT, po::bool_switch(), "GMSH show Sample Network output")
@@ -166,6 +174,10 @@ int main(int argc, char *argv[])
     const int gmsh_cell_count = vm[GMSH_CELL_COUNT].as<int>();
     const int gmsh_show_output = vm[GMSH_SHOW_OUTPUT].as<bool>();
     
+	int gmsh_min_cl = vm[GMSH_MIN_CL].as<int>();
+    int gmsh_min_dist = vm[GMSH_MIN_DIST].as<float>();
+    int gmsh_max_dist = vm[GMSH_MAX_DIST].as<float>();
+    
     const int gmsh_sample_cell_count = vm[GMSH_SAMPLE_CELL_COUNT].as<int>();
     const int gmsh_sample_count = vm[GMSH_SAMPLE_COUNT].as<int>();
     const bool gmsh_sample_show_output = vm[GMSH_SAMPLE_SHOW_OUTPUT].as<bool>();
@@ -192,22 +204,24 @@ int main(int argc, char *argv[])
 	VECTOR lines = geo.ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	geo.CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
 
+/*
 	// the following functions analyse staatistical properties of the network
- 	stats.GetLengthDist(lines); 							     // test for three distributions of length 
- 	stats.DoBoxCount(lines); 								    // Boxcounting algorithm 
+ 	//stats.GetLengthDist(lines); 							     // test for three distributions of length 
+ 	//stats.DoBoxCount(lines); 								    // Boxcounting algorithm 
  	AngleDistribution angle_distribution = stats.KDE_estimation_strikes(lines, angle_param_penalty); 				  //kernel density estimation
 
-	geo.WRITE_SHP(lines, angle_distribution, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
+	//geo.WRITE_SHP(lines, angle_distribution, FGraph::add_prefix_suffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
 	
- 	stats.CreateStats(lines, angle_distribution); 								   // statistical analysis of network
+ 	//stats.CreateStats(lines, angle_distribution); 								   // statistical analysis of network
  	
- 	stats.KMCluster(print_kmeans, lines, angle_distribution);							 // KM clustering
- 	stats.ScanLine(lines, scanline_count, angle_distribution);								// sanline analysis of density and spacing (number is number of scalines to generate)
+	stats.KMCluster(print_kmeans, lines, angle_distribution);							 // KM clustering
+	stats.ScanLine(lines, scanline_count, angle_distribution);								// sanline analysis of density and spacing (number is number of scalines to generate)
  
  	// Here we create some raster files that characterize the spatial arangement
 	geom.CentreDistanceMap(lines, raster_spacing);   //fault centre to fault centre distance (second argument is the pixel resolution)
 	geom.P_Maps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
 
+*/
 	//this creates a georeferences graph, analyses it, and writes two shp files containing edges and vertices of the graph
 // 	map_vertex_type map;
     graph_map<point_type, vertex_type, Graph> gm = G.ConvertLinesToGraph(lines.data, lines.refWKT, map_dist_thresh); 	  //convert the faults into a graph
@@ -215,33 +229,35 @@ int main(int argc, char *argv[])
 	graph_map<> split_map = G.SplitFaults(gm, split_dist_thresh);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
 	G.RemoveSpurs(split_map, spur_dist_thresh);//100 					 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
 	graph = split_map.get_graph();
-	
-	G.GraphAnalysis(graph, lines, graph_min_branches, angle_param_penalty, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
-	geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
+	/*
+	//G.GraphAnalysis(graph, lines, graph_min_branches, angle_param_penalty, (out_path / graph_results_filename).string());		//graph, vector data, minimum number of branches per component to analyse
+	//geo.WriteGraph(graph, lines, graph_results_folder);		//write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	//simple graph algorithms
-	Graph m_tree = G.MinTree(split_map, map_dist_thresh, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
-	Graph s_path = G.ShortPath(split_map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
+	//Graph m_tree = G.MinTree(split_map, map_dist_thresh, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
+	//Graph s_path = G.ShortPath(split_map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
 	
 	//create a shp file with lineaments classified based on orientation (from KDE) and intersecions (from graph)
-	G.ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
+	//G.ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
 
-	stats.RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
+	//stats.RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
-	Graph r_graph = geo.BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, angle_param_penalty, raster_name);//5 5, another distance threshold to check
+	//Graph r_graph = geo.BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, angle_param_penalty, raster_name);//5 5, another distance threshold to check
 	
-	G.MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
+	//G.MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
 //	G.MaximumFlow_HG(graph, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
 //	G.MaximumFlow_VG(graph, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
 	//create a intersection density map with circular sampling window.
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
 	G.IntersectionMap(graph, lines, raster_spacing, isect_search_size);//2000 2500 need to check what values to use here, also need to check the function itself
+	*/
+
 	
     fs::path mesh_dir = out_path / "mesh/";
-    
-	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	m.SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	m.WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+	//m.SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	
 	return EXIT_SUCCESS;
 } 

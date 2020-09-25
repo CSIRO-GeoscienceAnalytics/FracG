@@ -229,6 +229,7 @@ void GEOMETRIE::SortDist(vector <std::tuple<long double, point_type, AttachPoint
 
 void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 {
+	
 	GEO georef;
 	point_type centre;
 	vector<p_index> result;
@@ -277,8 +278,11 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 		cur_y = max_y;
 		for (int j = 0; j < y_size; j++)
 		{
+			point_type minBox(cur_x, (cur_y - cell_size));
+			point_type maxBox((cur_x + cell_size), cur_y );
+			box pixel(minBox, maxBox);
 			point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-			if (geometry::within(cur_pos, t_AOI))
+			if (!geometry::disjoint(pixel, t_AOI))
 			{
 				DistTree.query(geometry::index::nearest(cur_pos, 1), back_inserter(result));
 				vec[i][j] = geometry::distance(cur_pos, result[0].first);
@@ -293,7 +297,6 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 	}
 //write the raster file---------------------------------------------
 
-
     std::string out_name = FGraph::add_prefix_suffix_subdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
 	georef.WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
 	cout << " done \n" << endl;
@@ -301,6 +304,7 @@ void GEOMETRIE::CentreDistanceMap(VECTOR lines, float cell_size)
 
 void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
 {
+
 	GEO georef;
 	geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
 	vector<p_index> result;
@@ -344,21 +348,20 @@ void GEOMETRIE::P_Maps(VECTOR lines, float box_size)
 		 << vec_count.size()<< " x " << vec_count[0].size() << endl;
 	progress_display * show_progress =  new boost::progress_display(x_size * y_size);
 
-	for (int i = 0; i < x_size; i++)
+	for (int i = 0; i < x_size ; i++)
 	{
 		cur_y = max_y;
-		for (int j = 0; j < y_size; j++)
+		for (int j = 0; j < y_size ; j++)
 		{
-			point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-			if (geometry::within(cur_pos,t_AOI))
+			point_type cur_pos(cur_x, cur_y); //cur_pos is the top-left corner of the pixel
+			point_type minBox(cur_x, (cur_y - box_size));
+			point_type maxBox((cur_x + box_size), cur_y );
+			box pixel(minBox, maxBox);
+			if (!geometry::disjoint(pixel, AOI)) //or t_AOI
 			{
-				point_type minBox(cur_x, (cur_y - box_size));
-				point_type maxBox((cur_x + box_size), cur_y );
-
-				box pixel(minBox, maxBox);
 				double intersec = 0;
 				double intersection_length = 0;
-			
+
 	//get the lines that have intersecting bounding boxes-------------------
 				std::vector<box_line> candidates;
 				line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));

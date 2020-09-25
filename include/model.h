@@ -11,16 +11,13 @@ namespace factory = gmsh::model::occ;
 class MODEL
 {
 	public:
-		geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
 		MODEL();
 		~MODEL()
 		{}
 		
-		
-	void BuildPointTree(Graph G);
-	
 	void addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc);
-	void WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename);
+	void WriteGmsh_2D(bool output, Graph G, int nb_cells, int gmsh_min_cl, int gmsh_min_dist, int gmsh_max_dist, string out_filename);
+	
 	void SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string out_filename);
 	
 };

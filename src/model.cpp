@@ -24,6 +24,54 @@ const char* gmsh_sam = "./gmsh/samples/";
 	}
 }
 
+void MeshRefine_line(Graph G, float lc, int gmsh_min_cl, int gmsh_min_dist, int gmsh_max_dist)
+{
+   vector<double> lines;
+   vector<double> points;
+   for (int i = 0; i < num_edges(G);i++)
+	lines.push_back(double(i+4));		//need fixing
+  
+	int p_tag = 0;
+	for (auto v : make_iterator_range(vertices(G)))
+	{
+		if(degree(v, G) > 1)
+			points.push_back(double( p_tag+1 ));
+	p_tag++;
+	}
+  
+  gmsh::model::geo::synchronize();
+
+  model::mesh::field::add("Distance", 1);
+ // model::mesh::field::setNumber(1, "NNodesByEdge", 100);
+  model::mesh::field::setNumbers(1, "EdgesList", lines);
+  model::mesh::field::add("Threshold", 2);
+  model::mesh::field::setNumber(2, "IField", 1);
+  model::mesh::field::setNumber(2, "LcMin", lc/gmsh_min_cl);
+  model::mesh::field::setNumber(2, "LcMax", lc);
+  model::mesh::field::setNumber(2, "DistMin", lc/gmsh_min_dist);
+  model::mesh::field::setNumber(2, "DistMax", lc/gmsh_max_dist);
+  
+  /*
+  model::mesh::field::add("Distance", 10);
+  model::mesh::field::setNumbers(10, "NodesList", points);
+  model::mesh::field::add("Threshold", 20);
+  model::mesh::field::setNumber(20, "IField", 10);
+  model::mesh::field::setNumber(20, "LcMin", lc/10);
+  model::mesh::field::setNumber(20, "LcMax", lc/2);
+  model::mesh::field::setNumber(20, "DistMin", lc/4);
+  model::mesh::field::setNumber(20, "DistMax", lc/2);
+  */
+  
+  gmsh::model::mesh::field::add("Min", 3);
+  gmsh::model::mesh::field::setNumbers(3, "FieldsList", {2});
+  gmsh::model::mesh::field::setAsBackgroundMesh(3);
+
+  gmsh::option::setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0);
+  gmsh::option::setNumber("Mesh.CharacteristicLengthFromPoints", 0);
+  gmsh::option::setNumber("Mesh.CharacteristicLengthFromCurvature", 0);
+}
+
+
 /* create a bounding box of the area around the network.
  * At the moment it is just a rectangular box derived from the envelope around all 
  * lines */
@@ -207,16 +255,6 @@ vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
 	return(SamplingWindows);
 }
 
-void MODEL::BuildPointTree(Graph G)
-{
-	int index = 0;
-	for (auto Eg : make_iterator_range(edges(G)))
-	{
-		BOOST_FOREACH(point_type p, G[Eg].trace)
-			DistTree.insert(make_pair(p, ++index));
-	}
-}
-
 void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc)
 {
 	int deg = 0; //TODO: deg needs to be set properly, this line only avoids undefined values
@@ -229,33 +267,8 @@ void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int
 	boost::geometry::simplify(line, simpl_line, 100);
 
 	BOOST_FOREACH(point_type p, simpl_line)
-	{
-//find nearsest five neigbouring points and calculate average distance--
-		vector<p_index> result;
-		vector<double> distances;
-		
-		
-//mesh refinement-------------------------------------------------------
-		DistTree.query(geometry::index::nearest(p, 5), back_inserter(result));
-		
-		for (auto r = result.begin(); r < result.end(); r++)
-			distances.push_back( geometry::distance(p, r[0].first));
-			
-		double average = accumulate( distances.begin(), distances.end(), 0.0)/distances.size();  
-		double f = average/lc;
-		//if ( f < 0.5)
-		//	deg = average;
-		//else
-		//	deg = lc/floor(source + target) ; 
-
-		if (geometry::equals(p, line.front()))
-			deg /= source;
-
-		if (geometry::equals(p, line.back()))
-			deg /=  target;
-//----------------------------------------------------------------------
-		factory::addPoint(p.x(), p.y(), 0, ( deg ), ++p_tag);
-	}
+		factory::addPoint(p.x(), p.y(), 0, ( lc ), ++p_tag);
+	
 	for( int i = init_p_tag; i < p_tag+1; i++ )
 		spline_points.push_back( i );
 	
@@ -264,43 +277,41 @@ void MODEL::addLineament(line_type line, int source, int target, int &p_tag, int
 	factory::addSpline(spline_points, ++l_tag);
 }
 
-void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, string out_filename)
+void MODEL::WriteGmsh_2D(bool output, Graph G, int nb_cells, int gmsh_min_cl, float gmsh_min_dist, float gmsh_max_dist, string out_filename)
 {
-  cout << "creating 2D mesh for lineament set" << endl;
-  BuildPointTree(G);
-  out_filename = FGraph::add_prefix_suffix(out_filename, "", ".msh");
-  FGraph::CreateDir(out_filename);
-  
-  float lc;
-  int nb_bb_pts;
-  int p_tag = 0;
-  int l_tag = 0;
-  vector<int> intersec;
-  vector< vector<pair<int, int>> > fused_lines;
-
-  gmsh::initialize();
-  if (output)
-	gmsh::option::setNumber("General.Terminal", 1);
-  model::add("map2mesh");
+	float lc;
+	int nb_bb_pts;
+	int p_tag = 0;
+	int l_tag = 0;
+	vector<int> intersec;
+	vector< vector<pair<int, int>> > fused_lines;
 	
-  BoundingBox_2d(G, nb_cells, p_tag, l_tag, lc);
+	cout << "creating 2D mesh for lineament set" << endl;
+	out_filename = FGraph::add_prefix_suffix(out_filename, "", ".msh");
+	FGraph::CreateDir(out_filename);
+	gmsh::initialize();
+	
+	if (output)
+		gmsh::option::setNumber("General.Terminal", 1);
+	model::add("map2mesh");
+	
+	BoundingBox_2d(G, nb_cells, p_tag, l_tag, lc);
 
-  nb_bb_pts = p_tag;
-  
-  for (auto Eg : make_iterator_range(edges(G)))
-	 addLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
-	 
-  MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
-  NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-  EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::add_prefix_suffix(out_filename, "", "_SideSet_names", true));
-  
-  factory::synchronize();
-  model::mesh::generate(2);
-  gmsh::write(out_filename);
-  if (output)
-	gmsh::fltk::run();
-  gmsh::finalize();
-  cout << "Created msh-file " << out_filename << endl << endl;
+	nb_bb_pts = p_tag;
+	for (auto Eg : make_iterator_range(edges(G)))
+		addLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
+ 
+	MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
+	NameBoundingBox(nb_bb_pts, fused_lines, intersec);
+	EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FGraph::add_prefix_suffix(out_filename, "", "_SideSet_names", true));
+	MeshRefine_line(G, lc, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist);
+
+	model::mesh::generate(2);
+	gmsh::write(out_filename);
+	if (output)
+		gmsh::fltk::run();
+	gmsh::finalize();
+	cout << "Created msh-file " << out_filename << endl << endl;
 }
 
 void MODEL::SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string filename)
