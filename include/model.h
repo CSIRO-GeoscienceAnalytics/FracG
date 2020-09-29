@@ -8,17 +8,11 @@
 namespace model = gmsh::model;
 namespace factory = gmsh::model::occ;
 
-class MODEL
+namespace FracG
 {
-	public:
-		MODEL();
-		~MODEL()
-		{}
-		
-	void addLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc);
-	void WriteGmsh_2D(bool output, Graph G, int nb_cells, int gmsh_min_cl, int gmsh_min_dist, int gmsh_max_dist, string out_filename);
+
+	void WriteGmsh_2D(bool output, Graph G, int nb_cells, int gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, std::string out_filename);
+	void SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, std::string out_filename);
 	
-	void SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string out_filename);
-	
-};
+}
 #endif
