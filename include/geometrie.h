@@ -77,7 +77,7 @@ namespace FracG
     void SortDist(std::vector<std::tuple<long double, point_type, AttachPoint>>& cross);
 
     void CentreDistanceMap (VECTOR lines, float cell_size);
-    void PMaps(VECTOR lines, float cell_size);
+    void P_Maps(VECTOR lines, float cell_size);
 
 
     box ReturnAOI(std::vector<line_type> &lines);

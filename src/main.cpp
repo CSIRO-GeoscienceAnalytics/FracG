@@ -45,62 +45,56 @@ const char *GRAPH_RESULTS_FOLDER="graph_results_folder";
 const char *GMSH_CELL_COUNT="gmsh_cell_count";
 const char *GMSH_SHOW_OUTPUT="gmsh_show_output";
 
+const char *GMSH_MIN_CL="gmsh_min_cl";
+const char *GMSH_MAX_DIST="gmsh_min_dist";
+const char *GMSH_MIN_DIST="gmsh_max_dist";
+
 const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
 const char *GMSH_SAMPLE_COUNT="gmsh_sample_count";
 const char *GMSH_SAMPLE_SHOW_OUTPUT="gmsh_sample_show_output";
 
 int main(int argc, char *argv[])
-{ 
-	/*BUGS
-	* WriteSHp_line creates nosence for the file name
-	* WriteSHP_R cannot overwite the file once it is created
-	* Shortespath Segmentation fault for test case 1 <- solved
-	* 
-	* These functions need some attention:
-	* 1.) Build raster graph 	(slow)
-	* 2.) Intersection map		(slow)
-	* 3.) Maximum Flow			(general check)
-	* 4.) Please check the graph algorithms and the meshing as well
-	* 5.) The folder structure migth need to be cleaned
-    * 6.) Had a crash when testing. Probably using undefinded data/bad memory accesses somewhere. Test with valgrind. the gmsh code also had a crash/failure when I tried to view the output. This may be related to a file/other data already exising ("layer .shp already exists"), or a variable name problem.
-	* */
-	 
+{ 	 
     //parse input arguments
     po::options_description desc("FracG Options");
     desc.add_options()
-        ("help", "write help message")
-        (SHAPEFILE, po::value<std::string>(), "fault/fracture vector data, as a shapefile")
-        (RASTER_FILE, po::value<std::string>()->default_value(""), "Raster file to use in analysis")
-        (OUT_DIR, po::value<std::string>()->default_value(""), "Write output to this directory")
-        //(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
-        (DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
-        (MAP_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to consider points to be the same in a point-indexed map")
-        (SPLIT_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in splitting faults into segments, for considering nearby but separate faults to actually overlap")
-        (SPUR_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in removing spurs, remove spurs which are shorter than this distance")
-        (CLASSIFY_LINEAMENTS_DIST, po::value<double>()->default_value(-1), "Distance used in ClassifyLineaments") //1
-        (RASTER_STATS_DIST, po::value<double>()->default_value(-1), "Distance used in RasterStatistics") //2
-        
-        (RASTER_SPACING, po::value<double>()->default_value(3000.0), "Pixel size of output raster maps")
-        (ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
-        
-        (SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
-        
-        (ANGLE_PARAM_PENALTY, po::value<double>()->default_value(2), "Penalty per parameter, when fitting Gaussians to the angle distribution")
-        
-        (GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
-        
-        (MAX_FLOW_CAP_TYPE, po::value<std::string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
-        
-        (PRINT_KMEANS, po::bool_switch(), "Print the progress results for kmeans clustering")
-        (GRAPH_RESULTS_FILE, po::value<std::string>()->default_value("first"), "Filename to save graph analysis results to")
-        (GRAPH_RESULTS_FOLDER, po::value<std::string>()->default_value("g"), "Save the resulting graph to this folder")
-        
-        (GMSH_CELL_COUNT, po::value<int>()->default_value(15), "GMSH Cell Count")
-        (GMSH_SHOW_OUTPUT, po::bool_switch(), "Show GMSH output in the GMSH viewer")
-        
-        (GMSH_SAMPLE_CELL_COUNT, po::value<int>()->default_value(15), "GMSH Sample Network cell count")
-        (GMSH_SAMPLE_COUNT, po::value<int>()->default_value(2), "GMSH Sample Network sample count")
-        (GMSH_SAMPLE_SHOW_OUTPUT, po::bool_switch(), "GMSH show Sample Network output")
+		("help", "write help message")
+		(SHAPEFILE, po::value<std::string>(), "fault/fracture vector data, as a shapefile")
+		(RASTER_FILE, po::value<std::string>()->default_value(""), "Raster file to use in analysis")
+		(OUT_DIR, po::value<std::string>()->default_value(""), "Write output to this directory")
+		//(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
+		(DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
+		(MAP_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to consider points to be the same in a point-indexed map")
+		(SPLIT_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in splitting faults into segments, for considering nearby but separate faults to actually overlap")
+		(SPUR_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to use in removing spurs, remove spurs which are shorter than this distance")
+		(CLASSIFY_LINEAMENTS_DIST, po::value<double>()->default_value(-1), "Distance used in ClassifyLineaments") //1
+		(RASTER_STATS_DIST, po::value<double>()->default_value(-1), "Distance used in RasterStatistics") //2
+
+		(RASTER_SPACING, po::value<double>()->default_value(3000.0), "Pixel size of output raster maps")
+		(ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
+
+		(SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
+
+		(ANGLE_PARAM_PENALTY, po::value<double>()->default_value(2), "Penalty per parameter, when fitting Gaussians to the angle distribution")
+
+		(GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
+
+		(MAX_FLOW_CAP_TYPE, po::value<std::string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
+
+		(PRINT_KMEANS, po::bool_switch(), "Print the progress results for kmeans clustering")
+		(GRAPH_RESULTS_FILE, po::value<std::string>()->default_value("first"), "Filename to save graph analysis results to")
+		(GRAPH_RESULTS_FOLDER, po::value<std::string>()->default_value("g"), "Save the resulting graph to this folder")
+
+		(GMSH_CELL_COUNT, po::value<int>()->default_value(10), "GMSH Cell Count")
+		(GMSH_SHOW_OUTPUT, po::bool_switch(), "Show GMSH output in the GMSH viewer")
+
+		(GMSH_MIN_CL, po::value<int>()->default_value(4), "Minimum characteristic length for mesh")
+		(GMSH_MIN_DIST, po::value<double>()->default_value(-1), "Minimum distance for mesh refinemnt around lineament")
+		(GMSH_MAX_DIST, po::value<double>()->default_value(-1), "Maximum distance for mesh refinemnt around lineament")
+
+		(GMSH_SAMPLE_CELL_COUNT, po::value<int>()->default_value(15), "GMSH Sample Network cell count")
+		(GMSH_SAMPLE_COUNT, po::value<int>()->default_value(2), "GMSH Sample Network sample count")
+		(GMSH_SAMPLE_SHOW_OUTPUT, po::bool_switch(), "GMSH show Sample Network output")
     ;
     po::positional_options_description pdesc;
     pdesc.add(SHAPEFILE, 1); //first positional argument is the shapefile
@@ -164,7 +158,11 @@ int main(int argc, char *argv[])
     const std::string graph_results_folder = vm[GRAPH_RESULTS_FOLDER].as<std::string>(); //we should allow for this to be empty/null, and use that to signify not saving these results
     
     const int gmsh_cell_count = vm[GMSH_CELL_COUNT].as<int>();
-    const int gmsh_show_output = vm[GMSH_SHOW_OUTPUT].as<bool>();
+    const bool gmsh_show_output = vm[GMSH_SHOW_OUTPUT].as<bool>();
+    
+	int gmsh_min_cl = vm[GMSH_MIN_CL].as<int>();
+    double gmsh_min_dist = vm[GMSH_MIN_DIST].as<double>();
+    double gmsh_max_dist = vm[GMSH_MAX_DIST].as<double>();
     
     const int gmsh_sample_cell_count = vm[GMSH_SAMPLE_CELL_COUNT].as<int>();
     const int gmsh_sample_count = vm[GMSH_SAMPLE_COUNT].as<int>();
@@ -185,7 +183,8 @@ int main(int argc, char *argv[])
 	FracG::VECTOR lines = FracG::ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	FracG::CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
 
-	// the following functions analyse staatistical properties of the network
+
+	// the following functions analyse statistical properties of the network
  	FracG::GetLengthDist(lines); 							     // test for three distributions of length 
  	FracG::DoBoxCount(lines); 								    // Boxcounting algorithm 
  	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty); 				  //kernel density estimation
@@ -196,10 +195,11 @@ int main(int argc, char *argv[])
  	
  	FracG::KMCluster(print_kmeans, lines, angle_distribution);							 // KM clustering
  	FracG::ScanLine(lines, scanline_count, angle_distribution);								// sanline analysis of density and spacing (number is number of scalines to generate)
+
  
  	// Here we create some raster files that characterize the spatial arrangement
 	FracG::CentreDistanceMap(lines, raster_spacing);   //fault centre to fault centre distance (second argument is the pixel resolution)
-	FracG::PMaps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
+	FracG::P_Maps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
 
 	//this creates a geo-referenced graph, analyses it, and writes two shp files containing edges and vertices of the graph
 // 	map_vertex_type map;
@@ -234,8 +234,8 @@ int main(int argc, char *argv[])
 	
     fs::path mesh_dir = out_path / "mesh/";
     
-	FracG::p_tree dist_tree = FracG::BuildPointTree(graph);
-	FracG::WriteGmsh2D(dist_tree, gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	FracG::SampleNetwork2D(dist_tree, gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+	FracG::SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+
 	return EXIT_SUCCESS;
 } 

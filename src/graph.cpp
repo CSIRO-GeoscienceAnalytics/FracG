@@ -184,11 +184,10 @@ namespace FracG
 		const double endpoint_threshold = 0.5;
 
 
-	//we crop the graph 
+		//we crop the graph 
 		polygon_type pl = BoundingBox(transform, transform[1]);
 
-
-	//check for edge nodes (crop faults by raster area)---------------------
+		//check for edge nodes (crop faults by raster area)---------------------
 		BOOST_FOREACH(line_type const& Fault, faults)
 		{
 			if (geometry::disjoint(Fault, pl)) continue;
@@ -1001,9 +1000,10 @@ namespace FracG
 
 	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size)
 	{
-	//create intersection density maps
-	//(one qualitative(intersections per area) and one quantitative(sum of vertex degrees per area))
+		//create intersection density maps
+		//(one qualitative(intersections per area) and one quantitative(sum of vertex degrees per area))
 		std::vector<std::pair<point_type, int>> graph_vertices;
+
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
@@ -1032,8 +1032,7 @@ namespace FracG
 
 		for (auto ve : make_iterator_range(vertices(G)))
 		{
-			if (degree(ve, G) > 2)
-				graph_vertices.push_back(std::make_pair(G[ve].location, degree(ve, G)));
+			if (degree(ve, G) > 2) graph_vertices.push_back(std::make_pair(G[ve].location, degree(ve, G)));
 		}
 
 		typedef std::pair<box, decltype(graph_vertices)::iterator> box_point; 
@@ -1053,12 +1052,12 @@ namespace FracG
 			cur_y = max_y;
 			for (int j = 0; j < y_size; j++)
 			{
-				point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-				if (geometry::within(cur_pos,t_AOI))
+				point_type cur_pos(cur_x, cur_y); //cur_pos is the top-left corner of the pixel
+				point_type minBox(cur_x, (cur_y - cell_size));
+				point_type maxBox((cur_x + cell_size), cur_y );
+				box pixel(minBox, maxBox);
+				if (!geometry::disjoint(pixel,AOI))
 				{
-					point_type minBox(cur_x, (cur_y - cell_size));
-					point_type maxBox((cur_x + cell_size), cur_y );
-					box pixel(minBox, maxBox);
 					point_type centre;
 					boost::geometry::centroid(pixel, centre);
 

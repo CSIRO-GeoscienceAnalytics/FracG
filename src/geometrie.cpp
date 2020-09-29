@@ -274,34 +274,37 @@ namespace FracG
 			cur_y = max_y;
 			for (int j = 0; j < y_size; j++)
 			{
+				point_type minBox(cur_x, (cur_y - cell_size));
+				point_type maxBox((cur_x + cell_size), cur_y );
+				box pixel(minBox, maxBox);
 				point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-				if (bgm::within(cur_pos, t_AOI))
+				if (!bgm::disjoint(pixel, t_AOI))
 				{
-					DistTree.query(bgm::index::nearest(cur_pos, 1), std::back_inserter(result));
-					vec[i][j] = bgm::distance(cur_pos, result[0].first);
+					point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
+					if (bgm::within(cur_pos, t_AOI))
+					{
+						DistTree.query(bgm::index::nearest(cur_pos, 1), std::back_inserter(result));
+						vec[i][j] = bgm::distance(cur_pos, result[0].first);
+					}
+					else 
+						vec[i][j] = -256;
+					result.clear();
+					cur_y-= cell_size;
+					 ++(*show_progress);
 				}
-				else 
-					vec[i][j] = -256;
-				result.clear();
-				cur_y-= cell_size;
-				 ++(*show_progress);
 			}
 			cur_x += cell_size;
 		}
 	//write the raster file---------------------------------------------
-
-
 		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
 		WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
 		std::cout << " done \n" << std::endl;
 	}
 
-	void PMaps(VECTOR lines, float box_size)
+	void P_Maps(VECTOR lines, float box_size)
 	{
-		bgm::index::rtree<p_index, bgm::index::rstar<16>> DistTree;
-		std::vector<p_index> result;
 
-	//now we nedd to create a georefernece system based on the bounding box
+		//now we nedd to create a georefernece system based on the bounding box
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
@@ -326,7 +329,7 @@ namespace FracG
 		double cur_y = max_y;
 		double cur_x = min_x;
 
-	//put the segments into an rtree, so we don't need to check each one----
+		//put the segments into an rtree, so we don't need to check each one----
 		typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring, and the linestring
 		bgm::index::rtree<box_line, bgm::index::rstar<16>> line_tree;
 		for (auto it = lines.data.begin(); it < lines.data.end(); it++)
@@ -335,7 +338,7 @@ namespace FracG
 			line_tree.insert(std::make_pair(fault_bounding_box, it));
 		}
 
-	// query intesity and density for every grid cell-----------------------
+		// query intesity and density for every grid cell-----------------------
 		std::cout << "Calulating P20 and P21 maps for raster with size \n"
 			 << vec_count.size()<< " x " << vec_count[0].size() << std::endl;
 		boost::progress_display * show_progress =  new boost::progress_display(x_size * y_size);
@@ -345,26 +348,25 @@ namespace FracG
 			cur_y = max_y;
 			for (int j = 0; j < y_size; j++)
 			{
-				point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-				if (bgm::within(cur_pos,t_AOI))
+				point_type cur_pos(cur_x, cur_y); //cur_pos is the top-left corner of the pixel
+				point_type minBox(cur_x, (cur_y - box_size));
+				point_type maxBox((cur_x + box_size), cur_y );
+				box pixel(minBox, maxBox);
+				if (!bgm::disjoint(pixel, AOI)) //or t_AOI
 				{
-					point_type minBox(cur_x, (cur_y - box_size));
-					point_type maxBox((cur_x + box_size), cur_y );
-
-					box pixel(minBox, maxBox);
 					double intersec = 0;
 					double intersection_length = 0;
 
-		//get the lines that have intersecting bounding boxes-------------------
+					//get the lines that have intersecting bounding boxes-------------------
 					std::vector<box_line> candidates;
 					line_tree.query(bgm::index::intersects(pixel), std::back_inserter(candidates));
 					for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
 					{
-		//then check the full linestring to see if they intersect with this pixel
+						//then check the full linestring to see if they intersect with this pixel
 						if (!bgm::disjoint(*candidate->second, pixel))
 						{
 							intersec++; //intersection count for the P20 map
-		//and sum the length of the intersection(s) for the P21 map-------------
+							//and sum the length of the intersection(s) for the P21 map-------------
 
 							bgm::model::multi_linestring<line_type> intersecting;
 							bgm::intersection(pixel, *candidate->second, intersecting);
@@ -376,13 +378,11 @@ namespace FracG
 					}
 					vec_count[i][j] = intersec;
 					vec_length[i][j] = intersection_length;
-				}
-				else
-				{
+				} else {
 					vec_count[i][j]  = -256;
 					vec_length[i][j] = -256;
 				}
-				cur_y-= box_size;
+				cur_y -= box_size;
 				++(*show_progress);
 			}
 			cur_x += box_size;
