@@ -18,16 +18,16 @@ namespace FracG
 		int err = oSRS1.IsSameGeogCS(&oSRS2);
 		if (err != 1)
 		{
-			cout << "differnet reference systems!" << endl;
+			std::cout << "differnet reference systems!" << std::endl;
 			exit (EXIT_FAILURE);
 		}
 	}
 
 
 	// create and open filestream in folder "statistics"
-	string CreateDir(VECTOR &input_file, std::initializer_list<string> folders)
+	std::string CreateDir(VECTOR &input_file, std::initializer_list<std::string> folders)
 	{
-		string folder_name(input_file.folder);
+		std::string folder_name(input_file.folder);
 		while (folder_name.back() == '/' ) folder_name.pop_back(); //gdal/ESRI shapefiles don't like double slashes at the start
 		while (folder_name.back() == '\\') folder_name.pop_back();
 		if (folder_name.size() <= 0) folder_name = ".";
@@ -60,7 +60,7 @@ namespace FracG
 		{
 			if (!pOrigSrs->IsProjected() )
 			{
-				cout << "ERROR: vector data without spatial reference /not a projected reference system" << endl;
+				std::cout << "ERROR: vector data without spatial reference /not a projected reference system" << std::endl;
 				exit(EXIT_FAILURE);
 			}
 			if ( pOrigSrs->IsProjected() )
@@ -78,7 +78,7 @@ namespace FracG
 	//check for multilinestring and split into individula lines-------------
 			if ( poGeometry != NULL && wkbFlatten(poGeometry->getGeometryType()) == wkbMultiLineString)	
 			{
-				cout <<"MultiLineString detected, splitting into individual linestrings" << endl;
+				std::cout <<"MultiLineString detected, splitting into individual linestrings" << std::endl;
 				OGRMultiLineString *poMuLine = (OGRMultiLineString *) poGeometry;
 
 				for (auto line : poMuLine)
@@ -95,7 +95,7 @@ namespace FracG
 					if (!geometry::equals(Line.front(), Line.back()))
 						data.data.push_back(Line);
 					else
-						cout <<"!!! DETECTED CIRCULAR LINE AT " << setprecision(10) << Line.front().x() << " " << Line.front().y() << endl;
+						std::cout <<"!!! DETECTED CIRCULAR LINE AT " << std::setprecision(10) << Line.front().x() << " " << Line.front().y() << std::endl;
 					Line.clear();
 				}
 			}
@@ -116,13 +116,13 @@ namespace FracG
 				if (!geometry::equals(Line.front(), Line.back()))
 					data.data.push_back(Line);
 				else
-					cout <<"!!! DETECTED CIRCULAR LINE AT " << setprecision(10) << Line.front().x() << " " << Line.front().y() << endl;
+					std::cout <<"!!! DETECTED CIRCULAR LINE AT " << std::setprecision(10) << Line.front().x() << " " << Line.front().y() << std::endl;
 				Line.clear();
 			}
 			OGRFeature::DestroyFeature( poFeature );
 		}
 		GDALClose( poDS );
-		cout << "read " << data.data.size() << " faults from shp" << endl;
+		std::cout << "read " << data.data.size() << " faults from shp" << std::endl;
 	}
 
 	//Convert c++ template type to GDAL Datatype
@@ -166,7 +166,7 @@ namespace FracG
 		BUFFER envelop;
 		point_type point;
 		int maxX, minX, maxY, minY;
-		vector<double> D;
+		std::vector<double> D;
 		double radius = 1.5 * (( abs(raster.transform[1]) + abs(raster.transform[5]))/2) ;
 
 		envelop = DefineLineBuffer(L, radius);
@@ -198,7 +198,7 @@ namespace FracG
 
 	 template <typename T> double CentreGradient(line_type F, RASTER<T> raster)
 	{
-	// gradinet across teh centre of lineament
+	// gradient across the centre of lineament
 		line_type cross;
 		point_type point, p1, p2;
 		polygon_type pl = BoundingBox(raster.transform, 1);
@@ -240,7 +240,7 @@ namespace FracG
 		functor  = geometry::for_each_segment(F, functor );
 
 		polygon_type pl = BoundingBox(raster.transform, 1);
-		vector<double> D;
+		std::vector<double> D;
 
 		BOOST_FOREACH(line_type cross, functor.all)
 		{
@@ -311,7 +311,7 @@ namespace FracG
 			bool fadded, badded;
 			boost::tie(frwd, fadded) = boost::add_edge(ds, dt, de, dg);
 			boost::tie(back, badded) = boost::add_edge(dt, ds, de, dg);
-			if (!fadded || !badded) cout << "Warning: Edge from " << dg[ds].index << " to " << dg[dt].index << " already exists (forward " << !fadded << ", back " << !badded << ")" << endl;
+			if (!fadded || !badded) std::cout << "Warning: Edge from " << dg[ds].index << " to " << dg[dt].index << " already exists (forward " << !fadded << ", back " << !badded << ")" << std::endl;
 			dg[frwd].reverse = back;
 			dg[back].reverse = frwd;
 		}
@@ -345,7 +345,7 @@ namespace FracG
 		double mean = sig1 + 90;
 		double flow = 1/ (stddev * sqrt(2*math::constants::pi<double>())) * exp(-0.5 * (std::pow( ((angle - mean) / stddev),2)));
 		flow *= 1000;
-		cout << "angle " << angle << " " << flow << endl;
+		std::cout << "angle " << angle << " " << flow << std::endl;
 		return(flow);
 	}
 
@@ -375,11 +375,11 @@ namespace FracG
 	}
 
 	//the capacity values for the maximum flow algorithm
-	void SetupMaximumFlow(DGraph &dg, string cap_type)
+	void SetupMaximumFlow(DGraph &dg, std::string cap_type)
 	{
 		float sig1;
 		enum {ERROR, l, lo, o};
-		static std::map<string, int> c_type;
+		static std::map<std::string, int> c_type;
 		if (c_type.empty() )
 		{
 			c_type["l"] = l;			//capacity depending on length
@@ -393,9 +393,9 @@ namespace FracG
 				case o:
 				case lo:
 				{
-					cout << "Enter maximum stress orientation: " ;
-					cin >> sig1;
-					cout << endl;
+					std::cout << "Enter maximum stress orientation: " ;
+					std::cin >> sig1;
+					std::cout << std::endl;
 				} break;
 				default: 
 				{
@@ -426,7 +426,7 @@ namespace FracG
 
 				default: 
 				{
-					cout << "ERROR: Wrong capacity type defined" << endl;
+					std::cout << "ERROR: Wrong capacity type defined" << std::endl;
 					exit(EXIT_FAILURE);
 				} break;
 			}
@@ -480,7 +480,7 @@ namespace FracG
 		}
 		if (dg[t].data > dg[s].data){
 			std::swap(s, t);
-			cout << "Swapping source and target to find maximum flow from higher location to lower location" << endl;
+			std::cout << "Swapping source and target to find maximum flow from higher location to lower location" << std::endl;
 		}
 
 		for (v = vstart; v < vend; v++)
@@ -491,15 +491,15 @@ namespace FracG
 
 		//sanity check, make sure we're not calculating the max flow from a vertex to itself
 		if (s == t){
-			cout << "Warning: The source and target points for the maximum flow (" << s << ") are the same" << endl;
+			std::cout << "Warning: The source and target points for the maximum flow (" << s << ") are the same" << std::endl;
 			return std::numeric_limits<double>::infinity();
 		}
 
-		cout << "Calculating maximum flow from vertex " << s << " (" << dg[s].data << "m) to vertex " << t << " (" << dg[t].data << ")" << endl;
+		std::cout << "Calculating maximum flow from vertex " << s << " (" << dg[s].data << "m) to vertex " << t << " (" << dg[t].data << ")" << std::endl;
 
 		//clear capacities for verticies that are above the source
 		const double start_data = dg[s].data;
-		vector<std::pair<dedge_type, double>> saved_capacities;
+		std::vector<std::pair<dedge_type, double>> saved_capacities;
 		DGraph::edge_iterator e, estart, eend;
 		boost::tie(estart, eend) = boost::edges(dg);
 		for (e = estart; e != eend; e++)
@@ -563,20 +563,20 @@ namespace FracG
 		VECTOR lineaments;
 		fs::path in_file(in_filename);
 	// 	string file = f; //this crashes if there are no arrguments
-		string ext, name;
+		std::string ext, name;
 
 
 
 	// 	if (argc == 1+1 )
 	// 	{
-		ext =  in_file.extension().string();
+		ext = in_file.extension().string();
 	//     name = file.substr(0, file.find_last_of("."));
 
 		if (ext == ".txt" ||  ext == ".shp") //we don't read from text files
-			cout << "Reading fault data from a " << ext << "-file." << endl;
+			std::cout << "Reading fault data from a " << ext << "-file." << std::endl;
 		else
 		{
-			cout << "ERROR: Wrong vector format provided  (" << ext << ")" << endl;
+			std::cout << "ERROR: Wrong vector format provided  (" << ext << ")" << std::endl;
 			exit (EXIT_FAILURE);
 		}
 	// 	}
@@ -607,7 +607,7 @@ namespace FracG
 		if (ext == ".shp")
 			ReadShapefile(in_filename, lineaments);
 		else
-			cerr << "ERROR: no shape file definend" << endl;
+			std::cerr << "ERROR: no shape file definend" << std::endl;
 
 		//set variable in FracG namespace
 	// 	refWKT_shp = lineaments.refWKT; //TODO: store this in the local variables, not a global. or rather, read it from local varaibles
@@ -622,12 +622,12 @@ namespace FracG
 	{
 		line_type curEdge;
 		point_type centre;
-		cout << " Assigning raster data to graph." << endl;
+		std::cout << " Assigning raster data to graph." << std::endl;
 
 		for (auto Ve : boost::make_iterator_range(vertices(G)))
 		{
 			G[Ve].data = GetRasterValue(G[Ve].location, raster.transform, raster.values);
-			if (std::isnan(G[Ve].data)) cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
+			if (std::isnan(G[Ve].data)) std::cout <<"Error: vertex " << Ve << " read a value of nan" << std::endl;
 		}
 
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
@@ -641,7 +641,7 @@ namespace FracG
 			G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, raster);
 			G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, raster) ;
 		}
-		cout << " done" << endl;
+		std::cout << " done" << std::endl;
 	}
 	//make these instatiations so that other cpp files can find them
 	template void AssignValuesGraph<int>(Graph& G, RASTER<int> raster);
@@ -649,7 +649,7 @@ namespace FracG
 	template void AssignValuesGraph<double>(Graph& G, RASTER<double> raster);
 
 	template <typename T>
-	RASTER <T>ReadRaster(string in_filename, const char *refWKT)
+	RASTER <T>ReadRaster(std::string in_filename, const char *refWKT)
 	{
 
 		/*
@@ -662,7 +662,7 @@ namespace FracG
 		[6]  x-size
 		[7]  y-size
 		*/
-		cout << "Reading raster " << in_filename;
+		std::cout << "Reading raster " << in_filename;
 		T** raster_data;
 		const char * name = in_filename.c_str();
 		RASTER <T>raster;
@@ -674,7 +674,7 @@ namespace FracG
 		poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
 		if( poDataset == NULL )
 		{
-			cout << "\n ERROR: cannot open raster file " << endl;
+			std::cout << "\n ERROR: cannot open raster file " << std::endl;
 			exit(EXIT_FAILURE);
 		}
 		else
@@ -703,7 +703,7 @@ namespace FracG
 				raster.transform[6] = xSize;
 				raster.transform[7] = ySize;
 
-				cout << " of size: "<<  xSize << " x " << ySize << endl;
+				std::cout << " of size: "<<  xSize << " x " << ySize << std::endl;
 
 				raster.values = (T**)RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), raster.values);
 
@@ -712,7 +712,7 @@ namespace FracG
 					int err = band->RasterIO(GF_Read, row, 0, 1, ySize, &(raster.values[row][0]), 1, ySize, GetGDALDataType<T>(), 0, 0, nullptr);  //read coloun of raster (switch datatype depending on raster's data type)
 					if (err != 0)
 					{
-						cerr << " ERROR reading from raster" << endl;
+						std::cerr << " ERROR reading from raster" << std::endl;
 						exit (EXIT_FAILURE);
 					}
 				}
@@ -726,11 +726,11 @@ namespace FracG
 	template<typename T> 
 	graph_map<> RasterGraph(VECTOR lines, int split, int spurs, RASTER<T> raster, double distance_threshold)
 	{
-		cout << "Building graph for raster " << raster.name << endl;
+		std::cout << "Building graph for raster " << raster.name << std::endl;
 		graph_map<> map = ReadVEC4raster(raster.transform, lines, distance_threshold);
 		graph_map<> split_map = SplitFaults(map, split); //split the faults in the graph into fault segments, according to the intersections of the faults
 		RemoveSpurs(split_map, spurs); //remove any spurs from the graph network
-		cout << "done" << endl;
+		std::cout << "done" << std::endl;
 		return split_map;
 	}
 
@@ -915,7 +915,7 @@ namespace FracG
 	template<typename T>
 	void WriteTXT(VECTOR lines, double dist, RASTER<T> raster, std::string tsv_filename)
 	{
-		ofstream txtF = FracG::CreateFileStream(tsv_filename);
+		std::ofstream txtF = FracG::CreateFileStream(tsv_filename);
 
 		GetMidSegment<geometry::model::referring_segment<point_type>> functor;
 
@@ -957,24 +957,24 @@ namespace FracG
 		poDataset = (GDALDataset *) GDALOpen(raster.name.c_str(), GA_ReadOnly );
 		if( poDataset == NULL )
 		{
-			cout << "\n ERROR: cannot open raster file " << endl;
+			std::cout << "\n ERROR: cannot open raster file " << std::endl;
 			exit(EXIT_FAILURE);
 		}
 		else
 		{
 				GDALRasterBand *band = poDataset -> GetRasterBand(1);  
 				 if (band->ComputeStatistics(false, &pdfMin, &pdfMax, &pdfMean,  &pdfStdDev, NULL, NULL))
-						cout << "WARNING: cannot compute raster statistics" << endl;
+						std::cout << "WARNING: cannot compute raster statistics" << std::endl;
 		}
 		GDALClose( poDataset );
 		txtF	<< "Statistics " << raster.name << "\n" 
 				<< "Min \t" 	<< pdfMin << "\n" 
 				<< "Max \t" 	<< pdfMax << "\n" 
 				<< "Mean \t" 	<< pdfMean << "\n" 
-				<< "StdDev \t" 	<< pdfStdDev << endl;
+				<< "StdDev \t" 	<< pdfStdDev << std::endl;
 
-		txtF << "Pixel values \t" << dist << endl;
-		txtF << "No \t Parallel Profile \t Cross Profile" << endl;
+		txtF << "Pixel values \t" << dist << std::endl;
+		txtF << "No \t Parallel Profile \t Cross Profile" << std::endl;
 
 	//now loop over lines to obtain profile and crossing--------------------
 		int nb = 0;
@@ -1045,7 +1045,7 @@ namespace FracG
 				if (it < result_c.end()-1)
 					txtF << it->second << ", ";
 				else
-					txtF << it->second << endl;;
+					txtF << it->second << std::endl;;
 			}
 			nb++;
 		}
@@ -1058,7 +1058,7 @@ namespace FracG
 		//two things are happening here:
 		//1.) building a shape file 
 		//2.) creating a txt file containing profiles and cross profiles
-		string filename = raster.name;
+		std::string filename = raster.name;
 		raster = ReadRaster<T>(raster.name, lines.refWKT);
 		std::string raster_shp_filename = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"raster_shp"}, "raster_augmented_shapefile", ".shp", true);
 		WriteSHP_r<T>(lines, dist, raster, raster_shp_filename);
@@ -1070,16 +1070,16 @@ namespace FracG
 	template void AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
 	template void AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, const double angle_param_penalty, string raster_filename)
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, const double angle_param_penalty, std::string raster_filename)
 	{
-		cout << "Generating graph linked to raster " << raster_filename << endl;
+		std::cout << "Generating graph linked to raster " << raster_filename << std::endl;
 		Graph raster_graph;
 		//switch case based on raster type
 		const char * name = raster_filename.c_str();
 
 		//build a map to use switch case for differnt data types
 		enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
-		static std::map<string, int> d_type;
+		static std::map<std::string, int> d_type;
 		if ( d_type.empty() )
 		{
 			d_type["Byte"] = Byte;
@@ -1099,13 +1099,13 @@ namespace FracG
 		std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
 		GDALClose( poDataset );
 
-		cout << "Raster datatype is " ;
+		std::cout << "Raster datatype is " ;
 		int type = d_type[datatype];
 		 switch (type) 
 		 {
 			case Byte:
 			{
-				cout	<< "byte (will not perform graph analysis)" << endl;
+				std::cout	<< "byte (will not perform graph analysis)" << std::endl;
 				RASTER<char> R;
 				R = ReadRaster<char>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1115,7 +1115,7 @@ namespace FracG
 
 			case UInt16:
 			{
-				cout << "uint16" << endl;
+				std::cout << "uint16" << std::endl;
 				RASTER<int> R;
 				R = ReadRaster<int>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1127,7 +1127,7 @@ namespace FracG
 
 			case Int16:
 			{
-				cout << "int16" << endl;
+				std::cout << "int16" << std::endl;
 				RASTER<int> R;
 				R = ReadRaster<int>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1139,7 +1139,7 @@ namespace FracG
 
 			case UInt32:
 			{
-				cout << "uint32" << endl;
+				std::cout << "uint32" << std::endl;
 				RASTER<int> R;
 				R = ReadRaster<int>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1151,7 +1151,7 @@ namespace FracG
 
 			case Int32:
 			{
-				cout << "int32" << endl;
+				std::cout << "int32" << std::endl;
 				RASTER<int> R;
 				R = ReadRaster<int>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1163,7 +1163,7 @@ namespace FracG
 
 			case Float32:
 			{
-				cout << "Float32" << endl;
+				std::cout << "Float32" << std::endl;
 				RASTER<float> R;
 				R = ReadRaster<float>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1175,7 +1175,7 @@ namespace FracG
 
 			case Float64:
 			{
-				cout << "Float64" << endl;
+				std::cout << "Float64" << std::endl;
 				RASTER<double> R;
 				R = ReadRaster<double>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -1188,12 +1188,12 @@ namespace FracG
 
 			default: 
 			{
-				cout << " unknown" << endl;
-				cout << "ERROR: Could not determine dataype of raster" << endl;
+				std::cout << " unknown" << std::endl;
+				std::cout << "ERROR: Could not determine dataype of raster" << std::endl;
 			}
 			break;
 		 }
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 		return(raster_graph);
 	}
 
@@ -1203,7 +1203,7 @@ namespace FracG
 		line_type Line;
 		const char* refWKT = lines.refWKT;
 		const char * name = filename.c_str();
-		vector<point_type> points;
+		std::vector<point_type> points;
 
 		OGRSpatialReference init_ref;
 		init_ref.importFromWkt(&refWKT);
@@ -1224,15 +1224,15 @@ namespace FracG
 		{
 			if (!pOrigSrs->IsProjected() )
 			{
-				cout << "ERROR: vector data without spatial reference" << endl;
+				std::cout << "ERROR: vector data without spatial reference" << std::endl;
 				exit(EXIT_FAILURE);
 			}
 			if ( pOrigSrs->IsProjected() )
 			{
-				string d1 = to_string(datum);
+				std::string d1 = to_string(datum);
 				if(to_string(datum)!= to_string(datum2))
 				{
-					cout << " ERROR: datum of point data not consitent with initial datum" << endl;
+					std::cout << " ERROR: datum of point data not consitent with initial datum" << std::endl;
 					return;
 				}
 			}
@@ -1292,7 +1292,7 @@ namespace FracG
 			source_target.second = points[1];
 		}
 		else
-			cout << " ERROR: inconsitent point number in source - target file" << endl;
+			std::cout << " ERROR: inconsitent point number in source - target file" << std::endl;
 	}
 
 	//read a value from the raster at a point-------------------------------
@@ -1328,7 +1328,7 @@ namespace FracG
 		poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
 		if( poDriver == NULL )
 		{
-			cout << "ERROR: Could not load GDAL driver ( GTiff)" << endl;
+			std::cout << "ERROR: Could not load GDAL driver ( GTiff)" << std::endl;
 			EXIT_FAILURE;
 		}
 
@@ -1343,7 +1343,7 @@ namespace FracG
 		GDALRasterBand *poBand = poDstDS->GetRasterBand(1);
 
 		float *rowBuff = (float*) CPLMalloc(sizeof(float)*x);
-		cout << "Writing raster (struc) " << endl;
+		std::cout << "Writing raster (struc) " << std::endl;
 		progress_display* show_progress =  new boost::progress_display(y * x);
 
 		for(int row = 0; row < y; row++) 
@@ -1357,13 +1357,13 @@ namespace FracG
 		}
 		poBand->SetNoDataValue(-256);
 		GDALClose( (GDALDatasetH) poDstDS );
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 	template void WriteRasterStruct<int>(RASTER<int> raster);
 	template void WriteRasterStruct<float>(RASTER<float> raster);
 	template void WriteRasterStruct<double>(RASTER<double> raster);
 
-	 void WriteRASTER(vector<vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string out_filename)
+	 void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string out_filename)
 	{
 	  //get the path of the current directory
 		char cur_path[256];
@@ -1381,7 +1381,7 @@ namespace FracG
 		poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
 		if( poDriver == NULL )
 		{
-			cout << "ERROR: Could not load GDAL driver ( GTiff)" << endl;
+			std::cout << "ERROR: Could not load GDAL driver ( GTiff)" << std::endl;
 			EXIT_FAILURE;
 		}
 
@@ -1393,7 +1393,7 @@ namespace FracG
 		GDALRasterBand *poBand = poDstDS->GetRasterBand(1);
 
 		float *rowBuff = (float*) CPLMalloc(sizeof(float)*x);
-		cout << "Writing raster " << endl;
+		std::cout << "Writing raster " << std::endl;
 
 		for(int row = 0; row < y; row++) 
 		{
@@ -1408,7 +1408,7 @@ namespace FracG
 		GDALClose( (GDALDatasetH) poDstDS );
 		chdir(cur_path);
 	}
-	  void WriteSHP_lines(vector<line_type>lineaments, const char* refWKT, string name)
+	  void WriteSHP_lines(std::vector<line_type> lineaments, const char* refWKT, std::string name)
 	 {
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
@@ -1482,7 +1482,7 @@ namespace FracG
 
 	 //write vector data to disk
 	 //TODO: this can write gauss parameter-associated values, but is only called before those values are calculated
-	 void WriteShapefile(VECTOR &lineaments, AngleDistribution &angle_dist, string name)
+	 void WriteShapefile(VECTOR &lineaments, AngleDistribution &angle_dist, std::string name)
 	 {
 		GDALAllRegister();
 		const char* refWKT = lineaments.refWKT;
@@ -1591,7 +1591,7 @@ namespace FracG
 			id++;
 		}
 		GDALClose( poDS );
-		cout << "created shp-file " << name << endl << endl;
+		std::cout << "created shp-file " << name << std::endl << std::endl;
 	 }
 
 	//convert graph edges to shp-file---------------------------------------
@@ -1876,7 +1876,7 @@ namespace FracG
 			GDALClose( poDS );
 	}
 
-	void WriteSHP_maxFlow(DGraph G, const char* refWKT, string name)
+	void WriteSHP_maxFlow(DGraph G, const char* refWKT, std::string name)
 	{
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
@@ -2095,50 +2095,50 @@ namespace FracG
 		GDALClose( poDS );
 	}
 
-	void WriteGraph(Graph G, VECTOR lines, string subF)
+	void WriteGraph(Graph G, VECTOR lines, std::string subF)
 	{
-		cout << "starting writegraph" << endl;
+		std::cout << "starting writegraph" << std::endl;
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 		char cur_path[256];
 		char* reference = lines.refWKT;
 		getcwd(cur_path, 255);
 
-		string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
 		FracG::CreateDir(subdir_name);
 
-		string n_b =  FracG::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
-		string n_v =  FracG::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
+		std::string n_b =  FracG::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
+		std::string n_v =  FracG::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
 		const char* Name_b = n_b.c_str();
 		const char* Name_v = n_v.c_str();
 
 		WriteSHP_g_lines(G, reference, Name_b);
 		WriteSHP_g_points(G, reference, Name_v);
-		cout << " done" << endl;
+		std::cout << " done" << std::endl;
 	}
 
 	//TODO: Why is this a separate function from the above?
-	void WriteGraph_R(Graph G, VECTOR lines, string subF)
+	void WriteGraph_R(Graph G, VECTOR lines, std::string subF)
 	{
-		cout << "starting writegraph (raster)" << endl;
+		std::cout << "starting writegraph (raster)" << std::endl;
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 		char cur_path[256];
 		char* reference = lines.refWKT;
 		getcwd(cur_path, 255);
-		string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
 		FracG::CreateDir(subdir_name);
 
-		string n_b =  FracG::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
-		string n_v =  FracG::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
+		std::string n_b =  FracG::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
+		std::string n_v =  FracG::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
 		const char* Name_b = n_b.c_str();
 		const char* Name_v = n_v.c_str();
 
 		WriteSHP_g_lines_R(G, reference, Name_b);
 		WriteSHP_g_points(G, reference, Name_v);
-		cout << " done" << endl;
+		std::cout << " done" << std::endl;
 	}
 
 	//TODO: Give these more indicative names
-	void PointTree(vector<p_index> points,  vector<p_index>& closest)
+	void PointTree(std::vector<p_index> points,  std::vector<p_index>& closest)
 	{
 		p_tree rt(points.begin(), points.end());
 
@@ -2146,7 +2146,7 @@ namespace FracG
 			rt.query(geometry::index::nearest(points[i].first, 1) && geometry::index::satisfies(different_id_p(i)), std::back_inserter(closest) );        
 	}
 
-	void PointTree2(vector<pl_index> points, vector<pl_index>& closest, double max_len)
+	void PointTree2(std::vector<pl_index> points, std::vector<pl_index>& closest, double max_len)
 	{
 	 pl_tree rt(points.begin(), points.end());
 
@@ -2154,7 +2154,7 @@ namespace FracG
 	 {
 		if (get<2>(points[i]) >= max_len)
 		{
-			closest.push_back(make_tuple(get<0>(points[i]),i,0));
+			closest.push_back(std::make_tuple(get<0>(points[i]),i,0));
 		}
 		else
 		{
@@ -2210,12 +2210,12 @@ namespace FracG
 	}
 
 	//   typedef the rtree here so both functions can see the same type. not putting it in the header because no other function uses it
-	typedef list<line_type> unmerged_type; //might want to change this to a set or map
+	typedef std::list<line_type> unmerged_type; //might want to change this to a set or map
 	typedef std::tuple<point_type, unmerged_type::iterator, bool> endpoint_value_type;
 	typedef geometry::index::rtree<endpoint_value_type, geometry::index::rstar<16>> endpoint_rtree_type;
 
 	//convenience function to remove enfpoints from the endpoint rtree, given an iterator
-	void RemoveEndpoints(endpoint_rtree_type &rtree, list<line_type>::iterator it)
+	void RemoveEndpoints(endpoint_rtree_type &rtree, std::list<line_type>::iterator it)
 	{
 		rtree.remove(std::make_tuple(it->front(), it, true ));
 		rtree.remove(std::make_tuple(it->back (), it, false));
@@ -2250,8 +2250,8 @@ namespace FracG
 			//use boxes, because boost doesn't have a circle geometry object (just a polygon/linestring that approximates a circle)
 			box front_box(point_type(base.front().x() - dt, base.front().y() - dt), point_type(base.front().x() + dt, base.front().y() + dt));
 			box  back_box(point_type(base.back ().x() - dt, base.back ().y() - dt), point_type(base.back ().x() + dt, base. back().y() + dt));
-			vector<endpoint_value_type> candidates;
-			endpoints.query(geometry::index::intersects(front_box), back_inserter(candidates));
+			std::vector<endpoint_value_type> candidates;
+			endpoints.query(boost::geometry::index::intersects(front_box), back_inserter(candidates));
 			for (auto cand_it = candidates.begin(); cand_it != candidates.end(); cand_it++)
 			{
 				unmerged_type::iterator comp_it = std::get<1>(*cand_it);
@@ -2412,7 +2412,7 @@ namespace FracG
 
 	//sometimes the data has faults that are split into different entries in the shapefile
 	//this function checks the vector of input line_types for faults that were split, and merges them back together
-	void CorrectNetwork(vector<line_type>&F, double dist)
+	void CorrectNetwork(std::vector<line_type>&F, double dist)
 	{
 		//first we need to remove duplicates. We sort the lines by distance to a reference point (from line centroid)
 		//and then remove every duplicates
@@ -2431,10 +2431,10 @@ namespace FracG
 					found_dublicate = false;
 
 			}	while (found_dublicate);
-		cout << F.size() << " lines remaining after removing dublicates \n" << endl;
+		std::cout << F.size() << " lines remaining after removing dublicates \n" << std::endl;
 	//----------------------------------------------------------------------
 
-		vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
+		std::vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
 		unmerged_type unmerged_faults; //a list of faults that have not been merged yet. the get removed from this list once they've been added to merged_faults, either by being merged with another fault segment, or on its own
 		unmerged_faults.insert(std::end(unmerged_faults), std::begin(F), std::end(F));
 
@@ -2445,7 +2445,7 @@ namespace FracG
 			endpoint_tree.insert(std::make_tuple(it->back (), it, false));
 		}
 
-		cout <<"merging split faults - starting" <<endl;
+		std::cout << "merging split faults - starting" << std::endl;
 		while (!unmerged_faults.empty())
 		{
 			line_type base = unmerged_faults.front();
@@ -2454,9 +2454,9 @@ namespace FracG
 			MergeConnections(unmerged_faults, endpoint_tree, base, dist);
 			merged_faults.push_back(base);
 		}
-		cout <<"merging split faults - finished" <<endl;
+		std::cout <<"merging split faults - finished" << std::endl;
 		F = merged_faults;
-		cout << F.size() << " lines remaining after merging" << endl;
+		std::cout << F.size() << " lines remaining after merging" << std::endl;
 	}
 
 
@@ -2480,7 +2480,7 @@ namespace FracG
 		{
 			if (!pOrigSrs->IsProjected() )
 			{
-				cout << "ERROR: vector data without spatial reference /not a projected reference system" << endl;
+				std::cout << "ERROR: vector data without spatial reference /not a projected reference system" << std::endl;
 				exit(EXIT_FAILURE);
 			}
 			if ( pOrigSrs->IsProjected() )
@@ -2495,7 +2495,7 @@ namespace FracG
 		{
 			if (p > 1)
 			{
-				cout << "more than two points in shape file" << endl;
+				std::cout << "more than two points in shape file" << std::endl;
 				break;
 			}
 			OGRGeometry *poGeometry = poFeature->GetGeometryRef();
@@ -2522,8 +2522,8 @@ namespace FracG
 			p++;
 		}
 		GDALClose( poDS );
-		cout << setprecision(10) << "Source: " << Source.x() << ", " << Source.y() << "\n"
-			 << "Target: " << Target.x() << ", " << Target.y() << endl;
+		std::cout << std::setprecision(10) << "Source: " << Source.x() << ", " << Source.y() << "\n"
+			 << "Target: " << Target.x() << ", " << Target.y() << std::endl;
 	}
 
 }

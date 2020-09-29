@@ -161,7 +161,7 @@ namespace FracG
 			}
 			nb++;
 		}
-		cout << "Converted " << faults.size() << " lineaments into " << num_edges(graph) << " edges." << endl;
+		std::cout << "Converted " << faults.size() << " lineaments into " << num_edges(graph) << " edges." << std::endl;
 		return map;
 	}
 
@@ -172,7 +172,7 @@ namespace FracG
 		graph_map<> map(map_distance_threshold, lines.refWKT);
 		Graph& graph = map.GetGraph();
 		geometry::model::multi_linestring<line_type> intersection;
-		vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
+		std::vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
 		std::pair <point_type, point_type> NODES;
 		line_type TRACE;
 		long double Xmax, Xmin, Ymax, Ymin;
@@ -204,13 +204,13 @@ namespace FracG
 				//use the distance from the original fault's end points to determine if this segment's end points are from the original fault segment, or are cut off by the boundaries of the area of interest
 				if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold) type |= FRONT_ENODE;
 				if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold) type |=  BACK_ENODE;
-				G.push_back(make_tuple(make_pair(segment.front(),segment.back()), segment, type, fault_length));
+				G.push_back(std::make_tuple(std::make_pair(segment.front(),segment.back()), segment, type, fault_length));
 			}
 			intersection.clear();
 		}
 
 		//create edges and nodes for faults in the graph-------------------------
-		for (typename vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double>>::const_iterator it = G.begin(); it != G.end(); ++it)
+		for (typename std::vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double>>::const_iterator it = G.begin(); it != G.end(); ++it)
 		{
 			NODES = get<0> (*it);
 			TRACE = get<1> (*it);
@@ -227,7 +227,7 @@ namespace FracG
 			if (type &  BACK_ENODE) graph[VB].Enode = true;
 		}
 
-		cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << endl;
+		std::cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << std::endl;
 
 		faults.clear();
 		for (auto Eg : make_iterator_range(edges(graph)))
@@ -242,7 +242,7 @@ namespace FracG
 		graph_map map(graph, map_distance_threshold, lines.refWKT);
 
 		geometry::model::multi_linestring<line_type> intersection;
-		vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >> G;
+		std::vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >> G;
 		std::pair <point_type, point_type> NODES;
 		line_type TRACE;
 		long double Xmax, Xmin, Ymax, Ymin;
@@ -269,14 +269,14 @@ namespace FracG
 				//use the distance from the original fault's end points to determine if this segment's end points are from the original fault segment, or are cut off by the boundaries of the area of interest
 				if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold) type |= FRONT_ENODE;
 				if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold) type |=  BACK_ENODE;
-				G.push_back(make_tuple(make_pair(segment.front(),segment.back()), segment, type, nb));
+				G.push_back(std::make_tuple(std::make_pair(segment.front(),segment.back()), segment, type, nb));
 			}
 			intersection.clear();
 			nb++;
 		}
 
 		//create edges and nodes for faults in the graph-------------------------
-		for (typename vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >>::const_iterator it = G.begin(); it != G.end(); ++it)
+		for (typename std::vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >>::const_iterator it = G.begin(); it != G.end(); ++it)
 		{
 			NODES = get<0> (*it);
 			TRACE = get<1> (*it);
@@ -302,7 +302,7 @@ namespace FracG
 		}
 		else
 		{
-			cout << "No lineaments found in samling window" << endl;
+			std::cout << "No lineaments found in sampling window" << std::endl;
 			return(graph);
 		}
 	}
@@ -313,7 +313,7 @@ namespace FracG
 	//this function assumes that the fault graph has already been split into the fault segments between intersections
 	void RemoveSpurs(graph_map<>& map, double minDist)
 	{
-		cout << "Removing spurs" << endl;
+		std::cout << "Removing spurs" << std::endl;
 		Graph& G = map.GetGraph();
 		point_type rmP;
 		vertex_type U ,u;
@@ -363,7 +363,7 @@ namespace FracG
 	// 			exit(EXIT_FAILURE);
 	// 		}
 	// 	}
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
 	//return whether the given point should be attached to the front, middle, or end of this fault
@@ -383,22 +383,22 @@ namespace FracG
 	graph_map<> SplitFaults(graph_map<> &map, double minDist)
 	{
 		Graph& graph = map.GetGraph();
-		cout << "Splitting edges at intersection points" << endl;
+		std::cout << "Splitting edges at intersection points" << std::endl;
 		graph_map<> split_map(map.GetDist(), map.GetRefWKT()); //the map translates physical coordinates and nodes in the graph.
 		Graph &split_graph = split_map.GetGraph();
 		long double Distance;
 		line_type fault, fault2;
 		edge_iter Eg, Eg_end, Eg2, Eg2_end;
 		vertex_type NewV;
-		vector<point_type> Intersec;
-		vector<point_type> rmVert;
+		std::vector<point_type> Intersec;
+		std::vector<point_type> rmVert;
 
-		vector <std::pair<vertex_type, vertex_type >> removeEdge;
+		std::vector <std::pair<vertex_type, vertex_type >> removeEdge;
 		std::pair<vertex_type, vertex_type > removeS, removeT;
-		vector <std::tuple<long double, point_type, AttachPoint>> cross; //point type is the start/end point of the fault, the double is the distance along the (other) fault that the intersection occurrs at, AttachPoint is whether the other fault attaches to the front or back of this fault (for cases where the intersection point is outside of the fault but withing the threshold distance) or middle, if the faults intersect
+		std::vector <std::tuple<long double, point_type, AttachPoint>> cross; //point type is the start/end point of the fault, the double is the distance along the (other) fault that the intersection occurrs at, AttachPoint is whether the other fault attaches to the front or back of this fault (for cases where the intersection point is outside of the fault but withing the threshold distance) or middle, if the faults intersect
 		//the AttachPoint is used in the sorting of the intersections
 
-		typedef vector <std::tuple < edge_iter, vector< std::tuple<long double, point_type, AttachPoint>> >> UpGraph;
+		typedef std::vector <std::tuple < edge_iter, std::vector< std::tuple<long double, point_type, AttachPoint>> >> UpGraph;
 		UpGraph GraphBuild;
 
 		for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
@@ -406,7 +406,7 @@ namespace FracG
 			fault  = graph[*Eg].trace;
 			int N  = graph[*Eg].FaultNb;
 			const double fault_length = geometry::length(fault);
-			cross.push_back(make_tuple(0, fault.front(), AttachPoint::middle));
+			cross.push_back(std::make_tuple(0, fault.front(), AttachPoint::middle));
 			for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
 			{
 				fault2 = graph[*Eg2].trace;
@@ -418,7 +418,7 @@ namespace FracG
 				{
 					geometry::intersection(fault, fault2, Intersec);
 					Distance =  geometry::length(GetSegment(fault, fault.front(), Intersec.at(0)));
-					cross.push_back(make_tuple(Distance, Intersec.at(0), AttachPoint::middle));
+					cross.push_back(std::make_tuple(Distance, Intersec.at(0), AttachPoint::middle));
 				}
 				//check for Y-node------------------------------------------------------
 				else
@@ -427,21 +427,21 @@ namespace FracG
 					{
 						Distance =  geometry::length(GetSegment(fault, fault.front(), fault2.front()));
 						AttachPoint attach_to = LocateAttachPoint(fault, fault2.front(), Distance, minDist);
-						cross.push_back(make_tuple(Distance, fault2.front(), attach_to));
+						cross.push_back(std::make_tuple(Distance, fault2.front(), attach_to));
 					}
 					if (geometry::distance(fault, fault2.back()) < minDist )
 					{
 						Distance =  geometry::length(GetSegment(fault, fault.front(), fault2.back()));
 						AttachPoint attach_to = LocateAttachPoint(fault, fault2.back(), Distance, minDist);
-						cross.push_back(make_tuple(Distance, fault2.back(), attach_to));
+						cross.push_back(std::make_tuple(Distance, fault2.back(), attach_to));
 					}
 				}
 			}
-			cross.push_back(make_tuple(geometry::length(fault), fault.back(), AttachPoint::middle));
+			cross.push_back(std::make_tuple(geometry::length(fault), fault.back(), AttachPoint::middle));
 
 			SortDist(cross); //sort the vertices so that we get them in order of how far along the fault they appear (while taking into account that some intersection points appear off the fault line itself)
 			vertex_type prev_vertex = split_map.AddVertex(std::get<1>(cross.front()));
-			for (vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
+			for (std::vector<std::tuple<long double, point_type, AttachPoint>>::const_iterator I = cross.begin(); I != cross.end(); I++)
 			{
 				if (I == cross.begin()) continue;
 				point_type intersect = get<1>(*I);
@@ -465,7 +465,7 @@ namespace FracG
 		}
 	// 	graph = g;
 	// 	map = m;
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 		return split_map;
 	}
 
@@ -600,31 +600,31 @@ namespace FracG
 	}
 
 	//Topolgy analysis of graph---------------------------------------------
-	void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, string out_filename)
+	void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string out_filename)
 	{
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
-		cout<< "GRAPH'S ANALYSIS OF NETWORK" << endl;
+		std::cout<< "GRAPH'S ANALYSIS OF NETWORK" << std::endl;
 		/***********************************************************************
 		* Graph analysis based on:												*
 		* Sanderson, D. J., Peacock, D. C., Nixon, C. W., & Rotevatn, A. (2018)* 
 		* Graph theory and the analysis of fracture networks.					*
 		* Journal of Structural Geology.										*
 		**********************************************************************/
-		ofstream txtG;
-		vector<line_type> faults = lines.data;
+		std::ofstream txtG;
+		std::vector<line_type> faults = lines.data;
 
 		int Inodes = 0,  Xnodes = 0, Ynodes = 0, Enodes = 0, NbB = 0, Nc, NbN, Nl, numK, II = 0 , IC = 0, CC = 0;
 		float Cl, Cb, NCfreq, B20,  P20, P21 , B22;
 		double Area, totalLength = 0, avLenL, avLenB;
 
 		vertex_type U, u;
-		vector <line_type> Fault_in_component;
-		vector < double> Fault_length;
-		vector <line_type> lineaments;
+		std::vector <line_type> Fault_in_component;
+		std::vector < double> Fault_length;
+		std::vector <line_type> lineaments;
 
 		//test whether graph is planer
 		if (!boyer_myrvold_planarity_test(G))
-			cout << " WARNING: GRAPH IS NOT PLANAR! Proceed with caution" << endl;
+			std::cout << " WARNING: GRAPH IS NOT PLANAR! Proceed with caution" << std::endl;
 
 			ClassifyEdges(G, Inodes, Ynodes, Xnodes, Enodes, II, IC, CC, NbB, totalLength, numK, Area);
 
@@ -678,7 +678,7 @@ namespace FracG
 	//write results---------------------------------------------------------
 			//string graphFile =  + ;
 	//         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-			string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
+			std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
 	//         cout << "the resulting name is " << save_name << endl;
 			txtG = FracG::CreateFileStream(save_name);
 			if (txtG.is_open())  
@@ -708,10 +708,10 @@ namespace FracG
 					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n"
 					<< "KDE edge orientation" << "\n";
 					//	stat.KDE_estimation_strikes(Edges, txtG);
-				txtG << endl;
+				txtG << std::endl;
 
 	//Analyse the different component of the network------------------------
-			cout << " Analysing components of graph " << endl;
+			std::cout << " Analysing components of graph " << std::endl;
 
 				for (int i = 0; i < numK; i++)
 				{
@@ -764,8 +764,8 @@ namespace FracG
 					NbN = (Inodes + 3*Ynodes + 4*Xnodes) / 2;
 					if (NbB > nb)
 					{
-						cout << "Component no " << i << " containing " << NbB << " branches " << endl;
-						string comp = lines.name + "_Graph_component_" + std::to_string(i);// + name
+						std::cout << "Component no " << i << " containing " << NbB << " branches " << std::endl;
+						std::string comp = lines.name + "_Graph_component_" + std::to_string(i);// + name
 						VECTOR comp_Lineamants;
 						comp_Lineamants.folder = lines.folder;
 						comp_Lineamants.name = comp;
@@ -791,7 +791,7 @@ namespace FracG
 							<< "Connections (Y +X): " << "\t" << (Ynodes + Xnodes) << "\n"	
 							<< " Total length:" << "\t" << totalLength << "\n"
 							<< " Average length:" << "\t" << totalLength / NbB << "\n" 
-							<< " Strike of underlying lineaments" << endl;
+							<< " Strike of underlying lineaments" << std::endl;
 					}
 					Fault_in_component.clear();
 					lineaments.clear();
@@ -799,7 +799,7 @@ namespace FracG
 				}
 			}
 			else 
-				cout << "ERROR: FAILED TO WRITE RESULTS!" << endl;
+				std::cout << "ERROR: FAILED TO WRITE RESULTS!" << std::endl;
 
 		txtG.close();
 	}
@@ -849,22 +849,22 @@ namespace FracG
 	// 		geometry::clear(SV);
 		}
 
-		cout << "Adding source and target vertices for shortest path" << endl;
+		std::cout << "Adding source and target vertices for shortest path" << std::endl;
 
 		geometry::append(SV, source);
 		geometry::append(SV, G[s_nearest].location);
 		bool added_source = AddNewEdge(G, S, s_nearest, SV);
-		cout << "Added source? " << added_source << endl;
+		std::cout << "Added source? " << added_source << std::endl;
 
 
 		geometry::append(TV, target);
 		geometry::append(TV, G[t_nearest].location);
 		bool added_target = AddNewEdge(G, T, t_nearest, TV);
-		cout << "Added target? " << added_target << endl;
+		std::cout << "Added target? " << added_target << std::endl;
 
-		vector<double> distances( boost::num_vertices(G));
-		vector<edge_type> path;
-		vector<vertex_type> predecessors(boost::num_vertices(G));
+		std::vector<double> distances( boost::num_vertices(G));
+		std::vector<edge_type> path;
+		std::vector<vertex_type> predecessors(boost::num_vertices(G));
 
 		boost::dijkstra_shortest_paths(G, S,
 										boost::weight_map(boost::get(&FEdge::length, G))
@@ -872,17 +872,17 @@ namespace FracG
 										.predecessor_map(boost::make_iterator_property_map(predecessors.begin(), boost::get(boost::vertex_index,G)))
 										);
 
-		cout << "Calculating shortest path from " << S << " to " << T << ": "; //predecessors is mapping each node to itself
+		std::cout << "Calculating shortest path from " << S << " to " << T << ": "; //predecessors is mapping each node to itself
 		vertex_type previous = T;
 		bool finished = false;
 		for(vertex_type current = predecessors[T]; !finished; previous = current, current = predecessors[current])
 		{
 			std::pair<edge_type, bool> edge_pair = boost::edge(current,previous,G);
 			path.push_back( edge_pair.first );
-			cout << edge_pair.first << ", ";
+			std::cout << edge_pair.first << ", ";
 			finished = (current == S) || (current == predecessors[current]);
 		}
-		cout << endl;
+		std::cout << std::endl;
 
 		double distance = 0;
 		for(std::vector<edge_type>::size_type i = 0; i != path.size(); i++) //path is only length 1
@@ -900,11 +900,11 @@ namespace FracG
 
 			distance += G[e_tmp].length;
 		}
-		cout <<"Dijkstra shortest paths: " << distance << " ("<<path.size() << ") \n" << endl;
+		std::cout <<"Dijkstra shortest paths: " << distance << " ("<<path.size() << ") \n" << std::endl;
 
 		if (distance > 0)
 		{
-			vector<line_type> edges_shortPath;
+			std::vector<line_type> edges_shortPath;
 			for (auto Eg : make_iterator_range(edges(shortP)))
 				edges_shortPath.push_back(shortP[Eg].trace);
 			if (out_filename != "")
@@ -918,14 +918,14 @@ namespace FracG
 		if (added_source_vertex) m.RemoveVertex(source);
 		if (added_target_vertex) m.RemoveVertex(target);
 
-		cout << " done " << endl;
+		std::cout << " done " << std::endl;
 		return(shortP);
 	}
 
 	//create minimum spanning tree (backbone of network)--------------------
 	Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string filename)
 	{  
-		cout << "Generating minimum spanning tree" << endl;
+		std::cout << "Generating minimum spanning tree" << std::endl;
 		Graph &G = gm.GetGraph();
 		Graph min_graph;
 		int i = 0;
@@ -950,8 +950,8 @@ namespace FracG
 						min_graph);
 			i++;  
 		}
-		cout <<"minTree Total eges: " << i << endl;
-		vector<line_type> edges_minTree;
+		std::cout <<"minTree Total eges: " << i << std::endl;
+		std::vector<line_type> edges_minTree;
 		for (auto Eg : make_iterator_range(edges(min_graph)))
 			edges_minTree.push_back(min_graph[Eg].trace);
 
@@ -961,14 +961,14 @@ namespace FracG
 			WriteSHP_lines(edges_minTree, gm.GetRefWKT(), save_filename);
 		}
 
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 		return(min_graph);
 	}
 
 	VECTOR ComponentExtract(Graph G, VECTOR lines, int component)
 	{
 		VECTOR extr_lines;
-		vector <line_type> Extractor;
+		std::vector <line_type> Extractor;
 	//here we extract the initial lineaments--------------------------------
 		bool extract;
 		for (auto Eg : make_iterator_range(edges(G)))
@@ -989,7 +989,7 @@ namespace FracG
 					Extractor.push_back(lines.data.at(G[Eg].FaultNb));
 			}
 		}
-		cout << " Found " << Extractor.size() << " lineaments for component " << component << endl;
+		std::cout << " Found " << Extractor.size() << " lineaments for component " << component << std::endl;
 
 		//build the struct from the extracted data and return it------------
 		extr_lines.name = lines.name + "_component_" + to_string(component);
@@ -1003,7 +1003,7 @@ namespace FracG
 	{
 	//create intersection density maps
 	//(one qualitative(intersections per area) and one quantitative(sum of vertex degrees per area))
-		vector<pair<point_type, int>> graph_vertices;
+		std::vector<std::pair<point_type, int>> graph_vertices;
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
@@ -1021,30 +1021,30 @@ namespace FracG
 
 		int x_size = (long int) ceil((geometry::distance(ll, lr) / cell_size));
 		int y_size = (long int) ceil((geometry::distance(ll, ul) / cell_size));
-		vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  //count of intersections in area
-		vector<vector<double> > vec2(x_size , vector<double> (y_size, 0));  //sum of degree of intersections in area
+		std::vector<std::vector<double> > vec(x_size ,  std::vector<double> (y_size, 0));  //count of intersections in area
+		std::vector<std::vector<double> > vec2(x_size , std::vector<double> (y_size, 0));  //sum of degree of intersections in area
 
 		double cur_y = max_y;
 		double cur_x = min_x;
 
-		cout << "Calulating intersection density for raster with size \n"
-			 << vec.size()<< " x " << vec[0].size() << endl;
+		std::cout << "Calulating intersection density for raster with size \n"
+			 << vec.size()<< " x " << vec[0].size() << std::endl;
 
 		for (auto ve : make_iterator_range(vertices(G)))
 		{
 			if (degree(ve, G) > 2)
-				graph_vertices.push_back(make_pair(G[ve].location, degree(ve, G)));
+				graph_vertices.push_back(std::make_pair(G[ve].location, degree(ve, G)));
 		}
 
-		typedef pair<box, decltype(graph_vertices)::iterator> box_point; 
-		vector<box_point> result;
+		typedef std::pair<box, decltype(graph_vertices)::iterator> box_point; 
+		std::vector<box_point> result;
 		geometry::index::rtree<box_point, geometry::index::rstar<16>> IntersecTree;
 
 		for (auto it = graph_vertices.begin(); it < graph_vertices.end(); it++)
 		{
 				BUFFER search_box = DefineSquareBuffer(it->first, 1);
 				box bounding_box = boost::geometry::return_envelope<box>(search_box);
-				  IntersecTree.insert(make_pair(bounding_box, it));
+				  IntersecTree.insert(std::make_pair(bounding_box, it));
 		}
 
 		progress_display * show_progress =  new boost::progress_display(x_size * y_size);
@@ -1098,19 +1098,19 @@ namespace FracG
 
 		std::string isec_intens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
 		WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, isec_intens_name);
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
-	void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, string name)
+	void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, std::string name)
 	{
-		cout << "Classifying line set based on orientation and intersections" << endl;
+		std::cout << "Classifying line set based on orientation and intersections" << std::endl;
 		std::clock_t startcputime = std::clock();
 		auto wcts = std::chrono::system_clock::now();
 
 		typedef std::tuple<decltype(lines.data)::iterator, int, int, int, int> deg_v; //storing vertex degrees per line [ line iterator 1 - 3 - 4 - intersections]
 		typedef std::pair<point_type, vertex_iter> g_points; 
 
-		vector<deg_v> lines_classified;
+		std::vector<deg_v> lines_classified;
 		geometry::index::rtree<g_points, geometry::index::rstar<16>> point_tree;
 
 		for (auto it = lines.data.begin(); it < lines.data.end(); it++)
@@ -1168,7 +1168,7 @@ namespace FracG
 		name.append(".shp");
 		const char* Name = name.c_str();
 
-		cout << Name << endl;
+		std::cout << Name << std::endl;
 		OGRSpatialReference oSRS;
 		oSRS.importFromWkt(&system);
 
@@ -1304,7 +1304,7 @@ namespace FracG
 			id++;
 		}
 		GDALClose( poDS );
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
 	//parameters: graph, pressure1 , pressure2, adn bool whether vertical or horizontal gradient (vertical if true)
@@ -1313,13 +1313,13 @@ namespace FracG
 		//creating a gradient raster with a buffer of 5 cell sizes around the AOI
 		//float** values[x_dim][y_dim];
 		RASTER<float> raster;
-		vector<line_type> lines;
+		std::vector<line_type> lines;
 
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
 			lines.push_back(G[Eg].trace);
 		line_type l = ShortestLine(lines);
 		double min_l = floor(geometry::length(l)/3);
-		cout << "Aiming for cell size of: " << min_l << endl;
+		std::cout << "Aiming for cell size of: " << min_l << std::endl;
 
 		box AOI = ReturnAOI(lines);
 
@@ -1339,7 +1339,7 @@ namespace FracG
 		int x_dim = geometry::distance(ll, lr) / min_l ;
 		int y_dim = geometry::distance(lr, ur) / min_l ;
 
-		cout << "Building raster with dimesnions: "<< x_dim << " " << y_dim << endl;
+		std::cout << "Building raster with dimesnions: "<< x_dim << " " << y_dim << std::endl;
 		raster.transform[0] = ll.x();
 		raster.transform[1] = min_l;
 		raster.transform[2] = 0;
@@ -1361,7 +1361,7 @@ namespace FracG
 
 		if (p1 == p2)
 		{
-			cout << "no differntial pressure" << endl;
+			std::cout << "no differntial pressure" << std::endl;
 			change = 0;
 		}
 
@@ -1388,55 +1388,55 @@ namespace FracG
 			G[Ve].data = GetRasterValue(G[Ve].location, raster.transform, raster.values);
 			if (std::isnan(G[Ve].data)) 
 			{
-				cout <<"Error: vertex " << Ve << " read a value of nan" << endl;
-				cout << G[Ve].location.x() << " " << G[Ve].location.y() << endl;
+				std::cout <<"Error: vertex " << Ve << " read a value of nan" << std::endl;
+				std::cout << G[Ve].location.x() << " " << G[Ve].location.y() << std::endl;
 			}
 		}
 		delete raster.values;
 	}
 
-	void MaximumFlow_R(Graph G, string st_filename, string capacity_type, const char *refWKT, std::string out_filename)
+	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		point_type s, t;
 		GetSourceTarget(st_filename.c_str(), s, t);
-		cout<< "Maximum flow with raster data." << endl;
+		std::cout<< "Maximum flow with raster data." << std::endl;
 
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);
 		double mf =  MaximumFlow(dg, s, t);
-		cout << "maximum flow is: " << mf << endl;
+		std::cout << "maximum flow is: " << mf << std::endl;
 		if (out_filename != "")
 		{
 			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
 			WriteSHP_maxFlow(dg, refWKT, name.c_str());
 		}
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
-	void MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, const char *refWKT, std::string out_filename)
+	void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		point_type s, t;
 		GetSourceTarget(st_filename.c_str(), s, t);
-		cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << endl;  
+		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
 		AssignGrad(G, top, bottom, false, refWKT);
 
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);
 		double mf =  MaximumFlow(dg, s, t);
-		cout << "maximum flow is: " << mf << endl;
+		std::cout << "maximum flow is: " << mf << std::endl;
 		if (out_filename != "")
 		{
 			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_VG_");
 			WriteSHP_maxFlow(dg, refWKT, name.c_str());
 		}
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
-	void MaximumFlow_HG(Graph G, string st_filename, float left, float right, string capacity_type, const char *refWKT, std::string out_filename)
+	void MaximumFlow_HG(Graph G, std::string st_filename, float left, float right, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		point_type s, t;
 		GetSourceTarget(st_filename.c_str(), s, t);
-		cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << endl;  
+		std::cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << std::endl;  
 		AssignGrad(G, left, right, false, refWKT);
 
 		DGraph dg = MakeDirectedGraph(G);
@@ -1444,10 +1444,10 @@ namespace FracG
 		double mf =  MaximumFlow(dg, s, t);
 		if (out_filename != "")
 		{
-			string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
+			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
 			WriteSHP_maxFlow(dg, refWKT, name.c_str());
 		}
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
 }

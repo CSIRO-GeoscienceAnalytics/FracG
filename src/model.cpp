@@ -28,7 +28,7 @@ namespace FracG
 	 * lines */
 	void BoundingBox_2d(Graph G, int nb_cells, int &p_tag, int &l_tag, float &lc)
 	{
-		vector<line_type> lines;
+		std::vector<line_type> lines;
 
 		for (auto Eg : make_iterator_range(edges(G)))
 			lines.push_back(G[Eg].trace);  
@@ -40,8 +40,8 @@ namespace FracG
 		double max_x = geometry::get<geometry::max_corner, 0>(AOI);
 		double max_y = geometry::get<geometry::max_corner, 1>(AOI);
 
-		lc = min((max_x-min_x)/nb_cells, (max_y-min_y)/nb_cells);
-		cout <<"init lc: " << lc<<endl;
+		lc = std::min((max_x-min_x)/nb_cells, (max_y-min_y)/nb_cells);
+		std::cout <<"init lc: " << lc<<std::endl;
 
 		factory::addPoint(min_x, min_y, 0, lc, ++p_tag);
 		factory::addPoint(max_x, min_y, 0, lc, ++p_tag);
@@ -54,17 +54,17 @@ namespace FracG
 		factory::addLine(p_tag, 1, ++l_tag); 
 	}
 
-	void NameBoundingBox(int nb_bb_pts, vector< vector<pair<int, int>> > fused_lines, vector<int>& intersec)
+	void NameBoundingBox(int nb_bb_pts, std::vector< std::vector<std::pair<int, int>> > fused_lines, std::vector<int>& intersec)
 	{
-		vector<int> fused_bb;
-		vector<int> all_bb;
+		std::vector<int> fused_bb;
+		std::vector<int> all_bb;
 
-		vector<pair<int, int>> ov;
-		vector <pair<int, int>> inside;
-		vector<vector<pair<int, int>> > ovv;
+		std::vector<std::pair<int, int>> ov;
+		std::vector <std::pair<int, int>> inside;
+		std::vector<std::vector<std::pair<int, int>> > ovv;
 
-		string boundary_tags[4] = {"bottom","right","top","left"};
-		string phys_tag_name; 
+		std::string boundary_tags[4] = {"bottom","right","top","left"};
+		std::string phys_tag_name; 
 		for (int i = 0; i < nb_bb_pts; i++)
 		{
 			phys_tag_name = "boundary_" + to_string(i);
@@ -87,7 +87,7 @@ namespace FracG
 		for (auto i : fused_lines)
 		{
 			for (auto ii : i)
-				inside.push_back(make_pair(ii.first, ii.second));
+				inside.push_back(std::make_pair(ii.first, ii.second));
 		}
 		factory::intersect(inside, {{2, 1}}, ov, ovv, -1, true, false);
 
@@ -95,31 +95,31 @@ namespace FracG
 			intersec.push_back(i.second);
 	}
 
-	void MangeIntersections_bb(int &l_tag, int nb_bb_pts, vector< vector<pair<int, int>>>& fused_lines)
+	void MangeIntersections_bb(int &l_tag, int nb_bb_pts, std::vector< std::vector<std::pair<int, int>>>& fused_lines)
 	{
 	/*
 	 * Mange intersections between lines and the bounding box
 	 * and generate boundaries 
 	*/
-		vector<pair <int,int>> bb_lines;
-		vector<pair <int,int>> l_lines;
-		vector<pair <int,int>> ov;
+		std::vector<std::pair <int,int>> bb_lines;
+		std::vector<std::pair <int,int>> l_lines;
+		std::vector<std::pair <int,int>> ov;
 
 		for( int i = 1; i < nb_bb_pts+1; i++ )
-			bb_lines.push_back(make_pair(1, i));
+			bb_lines.push_back(std::make_pair(1, i));
 
 		for( int i = nb_bb_pts+1; i < l_tag+1; i++ )
-			l_lines.push_back(make_pair(1, i));
+			l_lines.push_back(std::make_pair(1, i));
 
 		factory::fuse(bb_lines, l_lines, ov, fused_lines, -1, true, true);
 	}
 
-	void EmbedLineaments_all(Graph G, vector< vector<pair<int, int>>> fused_lines, vector<int> intersec, int nb_bb_pts, string name)
+	void EmbedLineaments_all(Graph G, std::vector< std::vector<std::pair<int, int>>> fused_lines, std::vector<int> intersec, int nb_bb_pts, std::string name)
 	{
-		ofstream ss_names, lowD_ss_name, interface_ss_name;
-		string full_path  = FracG::AddPrefixSuffix(name, "", ".txt", true);
-		string full_path2 = FracG::AddPrefixSuffix(name, "", "_lowD.txt", true);
-		string full_path3 = FracG::AddPrefixSuffix(name, "", "_interface.txt", true);
+		std::ofstream ss_names, lowD_ss_name, interface_ss_name;
+		std::string full_path  = FracG::AddPrefixSuffix(name, "", ".txt", true);
+		std::string full_path2 = FracG::AddPrefixSuffix(name, "", "_lowD.txt", true);
+		std::string full_path3 = FracG::AddPrefixSuffix(name, "", "_interface.txt", true);
 		ss_names.open (full_path); 
 		lowD_ss_name.open (full_path2); 
 		interface_ss_name.open (full_path3); 
@@ -128,8 +128,8 @@ namespace FracG
 	   //get the tags of lineaments that are not the bounding box
 	   for (int i = 0; i < num_edges(G); i++)
 	   {
-			vector<int>phys_group;
-			vector<pair<int,int>> this_line_tags = fused_lines[i + nb_bb_pts];
+			std::vector<int>phys_group;
+			std::vector<std::pair<int,int>> this_line_tags = fused_lines[i + nb_bb_pts];
 			if (this_line_tags.empty())
 				continue;
 
@@ -151,14 +151,14 @@ namespace FracG
 		interface_ss_name.close();
 	}
 
-	vector <box> CreateSamplingWindows(vector<line_type> faults, int nb_samples)
+	std::vector <box> CreateSamplingWindows(std::vector<line_type> faults, int nb_samples)
 	{
 		boost::random_device dev;
 		boost::mt19937 rng(dev);
 
-		vector <box> SamplingWindows;
-		vector<line_type> lines;
-		vector<double> length;
+		std::vector <box> SamplingWindows;
+		std::vector<line_type> lines;
+		std::vector<double> length;
 
 		BOOST_FOREACH(line_type l, faults)
 		{
@@ -204,23 +204,23 @@ namespace FracG
 		return(SamplingWindows);
 	}
 
-	dist_tree BuildPointTree(Graph &G)
+	p_tree BuildPointTree(Graph &G)
 	{
-		dist_tree dtree;
+		p_tree dist_tree;
 		int index = 0;
 		for (auto Eg : make_iterator_range(edges(G)))
 		{
 			BOOST_FOREACH(point_type p, G[Eg].trace)
-				dtree.insert(make_pair(p, ++index));
+				dist_tree.insert(std::make_pair(p, ++index));
 		}
-		return dtree;
+		return dist_tree;
 	}
 
-	void AddLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc, dist_tree &dtree)
+	void AddLineament(line_type line, int source, int target, int &p_tag, int &l_tag, float lc, p_tree &dist_tree)
 	{
 		int deg = 0; //TODO: deg needs to be set properly, this line only avoids undefined values
 		int init_p_tag = p_tag + 1;
-		vector<int> spline_points;
+		std::vector<int> spline_points;
 
 		geometry::unique(line);
 		line_type simpl_line;
@@ -230,12 +230,12 @@ namespace FracG
 		BOOST_FOREACH(point_type p, simpl_line)
 		{
 	//find nearsest five neigbouring points and calculate average distance--
-			vector<p_index> result;
-			vector<double> distances;
+			std::vector<p_index> result;
+			std::vector<double> distances;
 
 
 	//mesh refinement-------------------------------------------------------
-			dtree.query(geometry::index::nearest(p, 5), back_inserter(result));
+			dist_tree.query(geometry::index::nearest(p, 5), std::back_inserter(result));
 
 			for (auto r = result.begin(); r < result.end(); r++)
 				distances.push_back( geometry::distance(p, r[0].first));
@@ -259,13 +259,13 @@ namespace FracG
 			spline_points.push_back( i );
 
 		if (spline_points.size() < 2)
-			cout << spline_points.size() << endl;
+			std::cout << spline_points.size() << std::endl;
 		factory::addSpline(spline_points, ++l_tag);
 	}
 
-	void WriteGmsh2D(dist_tree &dtree, bool output, Graph G, int nb_cells, string out_filename)
+	void WriteGmsh2D(p_tree &dist_tree, bool output, Graph G, int nb_cells, std::string out_filename)
 	{
-	  cout << "creating 2D mesh for lineament set" << endl;
+	  std::cout << "creating 2D mesh for lineament set" << std::endl;
 	  out_filename = FracG::AddPrefixSuffix(out_filename, "", ".msh");
 	  FracG::CreateDir(out_filename);
 
@@ -273,8 +273,8 @@ namespace FracG
 	  int nb_bb_pts;
 	  int p_tag = 0;
 	  int l_tag = 0;
-	  vector<int> intersec;
-	  vector< vector<pair<int, int>> > fused_lines;
+	  std::vector<int> intersec;
+	  std::vector<std::vector<std::pair<int, int>> > fused_lines;
 
 	  gmsh::initialize();
 	  if (output)
@@ -286,7 +286,7 @@ namespace FracG
 	  nb_bb_pts = p_tag;
 
 	  for (auto Eg : make_iterator_range(edges(G)))
-		 AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc, dtree);
+		 AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc, dist_tree);
 
 	  MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
 	  NameBoundingBox(nb_bb_pts, fused_lines, intersec);
@@ -298,17 +298,17 @@ namespace FracG
 	  if (output)
 		gmsh::fltk::run();
 	  gmsh::finalize();
-	  cout << "Created msh-file " << out_filename << endl << endl;
+	  std::cout << "Created msh-file " << out_filename << std::endl << std::endl;
 	}
 
-	void SampleNetwork2D(dist_tree &dtree, bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, string filename)
+	void SampleNetwork2D(p_tree &dist_tree, bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, std::string filename)
 	{
-		vector<line_type> &faults = lines.data;
+		std::vector<line_type> &faults = lines.data;
 	// 	const char* dir = CreateDir(true);
-		vector <box> sampling_windows;
+		std::vector <box> sampling_windows;
 		sampling_windows = CreateSamplingWindows(faults, nb_samples);
 
-		cout << "Creating "<< nb_samples << " samples from lineament set" << endl;
+		std::cout << "Creating "<< nb_samples << " samples from lineament set" << std::endl;
 
 		for (int w = 0; w < sampling_windows.size(); w++)
 		{
@@ -317,16 +317,16 @@ namespace FracG
 			int p_tag = 0;
 			int l_tag = 0;
 
-			vector<int> intersec;
-			vector< vector<pair<int, int>> > fused_lines;
+			std::vector<int> intersec;
+			std::vector< std::vector<std::pair<int, int>> > fused_lines;
 
 			box AOI = sampling_windows.at(w);
-			cout << AOI.min_corner().get<0>() << endl;
+			std::cout << AOI.min_corner().get<0>() << std::endl;
 			Graph G = ReadVEC4MODEL(lines, AOI, map_distance_threshold);
 
 			if (num_edges(G) > 0)
 			{
-				string output_filename = FracG::AddPrefixSuffix(filename, "", "_sample_" + to_string(w) +  ".msh");
+				std::string output_filename = FracG::AddPrefixSuffix(filename, "", "_sample_" + to_string(w) +  ".msh");
 				FracG::CreateDir(output_filename);
 				gmsh::initialize();
 				model::add(output_filename);
@@ -338,7 +338,7 @@ namespace FracG
 				double max_x = geometry::get<geometry::max_corner, 0>(AOI);
 				double max_y = geometry::get<geometry::max_corner, 1>(AOI);
 
-				lc = min((max_x-min_x)/nb_cells, (max_y-min_y)/nb_cells);
+				lc = std::min((max_x-min_x)/nb_cells, (max_y-min_y)/nb_cells);
 
 				factory::addPoint(min_x, min_y, 0, lc, ++p_tag);
 				factory::addPoint(max_x, min_y, 0, lc, ++p_tag);
@@ -352,7 +352,7 @@ namespace FracG
 				nb_bb_pts = p_tag;
 
 				for (auto Eg : make_iterator_range(edges(G)))
-					AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc, dtree);
+					AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc, dist_tree);
 
 				MangeIntersections_bb(l_tag,  nb_bb_pts, fused_lines);
 				NameBoundingBox(nb_bb_pts, fused_lines, intersec);
@@ -364,7 +364,7 @@ namespace FracG
 				gmsh::finalize();
 			}
 		}
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
 }

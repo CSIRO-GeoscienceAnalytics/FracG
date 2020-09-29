@@ -2,7 +2,6 @@
 #define _GEOMETRIE_h
 #include "../include/fracg.h"
 
-using namespace boost;
 namespace FracG
 {
 
@@ -16,7 +15,7 @@ namespace FracG
     {
             line_type cross;
             point_type centre, p1, p2;
-            vector<line_type> all;
+            std::vector<line_type> all;
             double d;
 
             Perpencicular() : cross(), centre(), p1(), p2(), all(), d()
@@ -26,26 +25,26 @@ namespace FracG
             {
                     double rx, ry, l;
 
-                    geometry::convert(s, cross);
+                    boost::geometry::convert(s, cross);
                     p1 = cross.front();
                     p2 = cross.back();
-                    geometry::centroid(cross, centre);
+                    boost::geometry::centroid(cross, centre);
 
                     rx = p2.x() - p1.x();
                     ry = p2.y() - p1.y();
                     l = sqrt(rx*rx + ry*ry);
-                    geometry::clear(p1);
-                    geometry::clear(p2);
+                    boost::geometry::clear(p1);
+                    boost::geometry::clear(p2);
 
                     p1.set<0>((centre.x() + ( ry/l) * d ));
                     p1.set<1>((centre.y() + (-rx/l) * d ));
                     p2.set<0>((centre.x() + (-ry/l) * d ));
                     p2.set<1>((centre.y() + ( rx/l) * d ));
-                    geometry::clear(cross);
+                    boost::geometry::clear(cross);
 
-                    geometry::append(cross, p1);
-                    geometry::append(cross, centre);
-                    geometry::append(cross, p2);
+                    boost::geometry::append(cross, p1);
+                    boost::geometry::append(cross, centre);
+                    boost::geometry::append(cross, p2);
                     all.push_back(cross);
             }
     };
@@ -62,8 +61,8 @@ namespace FracG
             inline void operator()(Segment const& s)
             {
 
-            if (geometry::intersects(s, cross))
-                    geometry::convert(s, midSeg);
+            if (boost::geometry::intersects(s, cross))
+                    boost::geometry::convert(s, midSeg);
 
             }
     };
@@ -75,14 +74,14 @@ namespace FracG
     BUFFER DefineLineBuffer(line_type fault, const double Bdistance);
     double MinSpacing(line_type Trace);
     line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
-    void SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross);
+    void SortDist(std::vector<std::tuple<long double, point_type, AttachPoint>>& cross);
 
     void CentreDistanceMap (VECTOR lines, float cell_size);
     void PMaps(VECTOR lines, float cell_size);
 
 
-    box ReturnAOI(vector<line_type> &lines);
-    polygon_type ReturnTightAOI(vector<line_type> &lines);
-    line_type ShortestLine(vector <line_type> &Set);
+    box ReturnAOI(std::vector<line_type> &lines);
+    polygon_type ReturnTightAOI(std::vector<line_type> &lines);
+    line_type ShortestLine(std::vector <line_type> &Set);
 }
 #endif

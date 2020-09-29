@@ -217,17 +217,17 @@ namespace FracG
     Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold);
     void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
     graph_map<> SplitFaults(graph_map<>& map, double minDist );
-    void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, string name);
+    void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string name);
 
     VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
     void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);
-    void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, string name);
+    void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, std::string name);
 
     Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
     Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 
-    void MaximumFlow_R(Graph G, string st_filename, string type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_VG(Graph G, string st_filename, float top, float bottom, string capacity_type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_HG(Graph G, string st_filename, float left, float rigth, string capacity_type, const char *refWKT, std::string out_filename);
+    void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
+    void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename);
+    void MaximumFlow_HG(Graph G, std::string st_filename, float left, float rigth, std::string capacity_type, const char *refWKT, std::string out_filename);
 }
 #endif

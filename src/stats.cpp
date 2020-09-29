@@ -11,16 +11,16 @@ namespace FracG
 
 
 	// create and open filestream in folder "statistics"
-	ofstream CreateFileStream(string subdir_name, string name)
+	std::ofstream CreateFileStream(std::string subdir_name, std::string name)
 	{
-		string stats_dirname = subdir_name + stats_subdir;
+		std::string stats_dirname = subdir_name + stats_subdir;
 		const char* stats_dir = stats_dirname.c_str();
 			if(!opendir(stats_dir))
 
 		mkdir(stats_dir, 0777);
-		string csv_file = stats_dir + name;
-		ofstream txtF; 
-		txtF.open (csv_file, ios::out); 
+		std::string csv_file = stats_dir + name;
+		std::ofstream txtF; 
+		txtF.open (csv_file, std::ios::out); 
 		return(txtF);
 	}
 
@@ -28,10 +28,10 @@ namespace FracG
 	struct QuadTreeNode
 	{
 		box bbox; //bounding box for the square
-		vector<box> child_bboxes; //bboxes for this node's children
-		vector<std::unique_ptr<QuadTreeNode>> children;
+		std::vector<box> child_bboxes; //bboxes for this node's children
+		std::vector<std::unique_ptr<QuadTreeNode>> children;
 		int generation;
-		//how do I have this be null until i set them? if i use a vector, i cant guarantee that the nodes will line up with the bounding boxes? c++ is wierd
+		//how do I have this be null until i set them? if i use a std::vector, i cant guarantee that the nodes will line up with the bounding boxes? c++ is wierd
 		friend std::ostream& operator<<(std::ostream &os, const QuadTreeNode &n) {
 			const point_type &min = n.bbox.min_corner();
 			const point_type &max = n.bbox.max_corner();
@@ -69,7 +69,7 @@ namespace FracG
 	{
 		if (node.children.size() != 4)
 		{
-			cout << "ERROR - node " << node << " has children length " << node.children.size() << " at layer " << layers << endl;
+			std::cout << "ERROR - node " << node << " has children length " << node.children.size() << " at layer " << layers << std::endl;
 			return;
 		}
 		const box fault_bbox = geometry::return_envelope<box>(fault);
@@ -95,7 +95,7 @@ namespace FracG
 		if (index >= counts.size()) //this should never be off by more than one bexo, because the preceding elements of counts should have been set when checking the parent boxes
 		{
 			const double side_length = (node.bbox.max_corner().x() - node.bbox.min_corner().x()); //assuming that the boxes are square
-			counts.push_back(make_tuple(side_length, 0));
+			counts.push_back(std::make_tuple(side_length, 0));
 		}
 		std::get<1>(counts[index]) += 1;//count this box
 		//now check its children
@@ -105,10 +105,10 @@ namespace FracG
 		}
 	}
 
-	void BoxCountQuadTree(const vector<line_type> &faults, vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset)
+	void BoxCountQuadTree(const std::vector<line_type> &faults, std::vector<std::tuple<double, long long int>> &counts, const double start_scale, const int max_depth, point_type &offset)
 	{
 		box bbox(faults.front().front(), faults.front().front()); //bounding box for the entire fault set. start with an arbitrary point that is known to be inside the bounding box of the faults
-		vector<box> bboxes;
+		std::vector<box> bboxes;
 		bboxes.reserve(faults.size());//bounding boxes for each fault
 		for (auto it = faults.begin(); it != faults.end(); it++)
 		{
@@ -123,19 +123,19 @@ namespace FracG
 		const int nX = lrint(ceil((xEnd - xStart)/start_scale)) +1; //plus one here, so that nX and nY are exclusive upper bounds. (and also measn that they're the acutal number of elements)
 		const int nY = lrint(ceil((yEnd - yStart)/start_scale)) +1; //ie, the indices are in the range [0, nX) and [0, nY)
 
-	// 	cout << "FINAL bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<endl;
-	// 	cout << "x = " << xStart << ", " << xEnd << ", y = " << yStart << ", " << yEnd << endl;
+	// 	std::cout << "FINAL bbox = x(" << bbox.min_corner().x()<<", "<<bbox.max_corner().x()<<"), y("<<bbox.min_corner().y()<<", "<<bbox.max_corner().y()<<")"<<std::endl;
+	// 	std::cout << "x = " << xStart << ", " << xEnd << ", y = " << yStart << ", " << yEnd << std::endl;
 
 		//setup the top-most layer of the Quad Tree
-		vector<vector<box>> node_bboxes; //the bounding boxes for the top-most layer of QuadTreeNode s
-		vector<vector<unique_ptr<QuadTreeNode>>> nodes; //the (nodes that are) the top-most layer of QuadTreeNode s
+		std::vector<std::vector<box>> node_bboxes; //the bounding boxes for the top-most layer of QuadTreeNode s
+		std::vector<std::vector<std::unique_ptr<QuadTreeNode>>> nodes; //the (nodes that are) the top-most layer of QuadTreeNode s
 		node_bboxes.reserve(nX);
 		nodes.reserve(nX);
 		for (int ix = 0; ix < nX; ix++)
 		{
-			vector<box> bbox_row;
+			std::vector<box> bbox_row;
 			bbox_row.reserve(nY);
-			vector<unique_ptr<QuadTreeNode>> node_row;
+			std::vector<std::unique_ptr<QuadTreeNode>> node_row;
 			node_row.reserve(nY);
 			for (int iy = 0; iy < nY; iy++)
 			{
@@ -158,22 +158,22 @@ namespace FracG
 			/*const */int max_y = std::lrint(std::ceil ((fault_bbox.max_corner().y() - yStart)/start_scale));
 			if (min_x < 0)
 			{
-				cout << "WARNING: box counting minimum x boundary returned " << min_x << endl;
+				std::cout << "WARNING: box counting minimum x boundary returned " << min_x << std::endl;
 				min_x = 0;
 			}
 			if (max_x >= nX)
 			{
-				cout << "WARNING: box counting maximum x boundary returned " << max_x << " when using " << nX << " boxes, from position (" << fault_bbox.min_corner().x() << ", " << fault_bbox.max_corner().x() << "), (" << fault_bbox.min_corner().y() << ", " << fault_bbox.max_corner().y() << ")" << endl;
+				std::cout << "WARNING: box counting maximum x boundary returned " << max_x << " when using " << nX << " boxes, from position (" << fault_bbox.min_corner().x() << ", " << fault_bbox.max_corner().x() << "), (" << fault_bbox.min_corner().y() << ", " << fault_bbox.max_corner().y() << ")" << std::endl;
 				max_x = nX-1;
 			}
 			if (min_y < 0)
 			{
-				cout << "WARNING: box counting minimum y boundary returned " << min_y << endl;
+				std::cout << "WARNING: box counting minimum y boundary returned " << min_y << std::endl;
 				min_y = 0;
 			}
 			if (max_y >= nY)
 			{
-				cout << "WARNING: box counting maximum y boundary returned " << max_y << " when using " << nY << "boxes" << endl;
+				std::cout << "WARNING: box counting maximum y boundary returned " << max_y << " when using " << nY << "boxes" << std::endl;
 				max_y = nY-1;
 			}
 			//this parallelisation can be better, each fault might only be looking at a small range of the area, not enough to use all threads/cores
@@ -206,8 +206,8 @@ namespace FracG
 
 	void DoBoxCount(VECTOR lines)
 	{
-		cout << "Box Counting (QuadTree Method)" << endl;
-		ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / ("box_count.tsv"));
+		std::cout << "Box Counting (QuadTree Method)" << std::endl;
+		std::ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / ("box_count.tsv"));
 
 		std::clock_t startcputime = std::clock();
 		auto t_start = std::chrono::high_resolution_clock::now();
@@ -218,30 +218,30 @@ namespace FracG
 		for (auto it = lines.data.begin(); it != lines.data.end(); it++)
 		{
 			const double length = geometry::length(*it);
-			longest = max(longest, length);
-			shortest = min(shortest, length);
+			longest = std::max(longest, length);
+			shortest = std::min(shortest, length);
 		}
 
 		const int max_depth = 6;
-		vector<std::tuple<double, long long int>> counts;
+		std::vector<std::tuple<double, long long int>> counts;
 		point_type offset(0,0);
 		BoxCountQuadTree(lines.data, counts, longest, max_depth, offset);
 
 		auto t_end = std::chrono::high_resolution_clock::now();
-		cout << " CPU  time: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds\n"
-			 << " Wall time: " << std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << endl;
+		std::cout << " CPU  time: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds\n"
+			 << " Wall time: " << std::chrono::duration<double, std::milli>(t_end-t_start).count() << " ms" << std::endl;
 
 	//Least-Square-Fit------------------------------------------------------
 		int NB = 0;
-		vec X(counts.size(),fill::zeros);
-		vec Y(counts.size(),fill::zeros);
-		vec XX(counts.size(),fill::zeros);
-		vec XY(counts.size(),fill::zeros);
+		arma::vec X(counts.size(),  arma::fill::zeros);
+		arma::vec Y(counts.size(),  arma::fill::zeros);
+		arma::vec XX(counts.size(), arma::fill::zeros);
+		arma::vec XY(counts.size(), arma::fill::zeros);
 
-		txtF <<" frequency \t size" << endl;
+		txtF <<" frequency \t size" << std::endl;
 		for (auto it = counts.begin(); it != counts.end(); it++)
 		{
-			txtF << std::get<1>(*it) << "\t" << std::get<0>(*it) << endl;
+			txtF << std::get<1>(*it) << "\t" << std::get<0>(*it) << std::endl;
 			X[NB] = log(get<0>(*it));
 			Y[NB] = log(get<1>(*it));
 			XX[NB] = log(get<0>(*it)) * log(get<0>(*it));
@@ -271,33 +271,33 @@ namespace FracG
 
 		R2 = (SUM_res - SUM_yres) / SUM_res;
 
-		txtF <<  "No \t x(S) \t log(y(observed)) \t log(y(fitted))" << endl;
+		txtF <<  "No \t x(S) \t log(y(observed)) \t log(y(fitted))" << std::endl;
 
 		for (int ii=0; ii<N; ii++)
-			txtF <<"" << ii+1 << "\t"<< X[ii] << "\t" <<Y[ii] << "\t" << y_fit[ii] << endl;    
+			txtF <<"" << ii+1 << "\t"<< X[ii] << "\t" <<Y[ii] << "\t" << y_fit[ii] << std::endl;    
 
-		txtF << " LS-Fit: "<< "\t" << a  << "x + " << b << endl; 
-		txtF << " R^2: "   << "\t" << R2 <<endl; 
-		cout << "Linear fit: "<<a<<"x + " << b << " (R^2 = " << R2 << ")"  << endl;
+		txtF << " LS-Fit: "<< "\t" << a  << "x + " << b << std::endl; 
+		txtF << " R^2: "   << "\t" << R2 << std::endl; 
+		std::cout << "Linear fit: "<<a<<"x + " << b << " (R^2 = " << R2 << ")"  << std::endl;
 
 		delete[] y_fit;
 		txtF.close();
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
-	//caluclates the Kolmogorov-Smirnov test for a given vector of values, a function that gives the cdf for the distribution being tested, the parameters for the cdf model, and the minimum x value to iterate from
-	//the data in values *must* be sorted (so that tha CDF for the data values is calculated in the correct order)
+	//caluclates the Kolmogorov-Smirnov test for a given std::vector of values, a function that gives the cdf for the distribution being tested, the parameters for the cdf model, and the minimum x value to iterate from
+	//the data in values *must* be std::sorted (so that tha CDF for the data values is calculated in the correct order)
 	template<typename T>
-	double KSTest(vector<double> &values, const ModelHolder<T> &model, const T &params, const vector<double>::iterator &xmin)
+	double KSTest(std::vector<double> &values, const ModelHolder<T> &model, const T &params, const std::vector<double>::iterator &xmin)
 	{
 	// 	//for debug purposes
 	// 	std::ostringstream fname;
 	// 	fname << "kstest_" << (xmin - values.begin()) << ".txt";
-	// 	ofstream outF(fname.str());
-	// 	outF << "#x data_cdf_before data_cdf_after distribution_cdf" << endl;
+	// 	std::ofstream outF(fname.str());
+	// 	outF << "#x data_cdf_before data_cdf_after distribution_cdf" << std::endl;
 
 		const int n_tail = values.end() - xmin;
-	// 	for (auto it = values.begin(); it != values.end(); it++) if (*it >= xmin) n_tail++; //not needed, because the data is already sorted
+	// 	for (auto it = values.begin(); it != values.end(); it++) if (*it >= xmin) n_tail++; //not needed, because the data is already std::sorted
 		double max_diff = 0; //maximum difference between the data values and the model CDF
 		//int counter = 0;
 		#pragma omp parallel for reduction(max:max_diff)
@@ -309,7 +309,7 @@ namespace FracG
 			const double data_cdf_after  = (position + 1) / (double)n_tail; //measure the difference both before and after the step function of the empirical CDF rises
 			max_diff = std::max(max_diff, std::abs(data_cdf_before - dist_cdf_value));
 			max_diff = std::max(max_diff, std::abs(data_cdf_after  - dist_cdf_value));
-	// 		outF << *it << " " << data_cdf_before << " " << data_cdf_after << " " << dist_cdf_value << endl;
+	// 		outF << *it << " " << data_cdf_before << " " << data_cdf_after << " " << dist_cdf_value << std::endl;
 		}
 
 		return max_diff;
@@ -317,7 +317,7 @@ namespace FracG
 
 	//Calculate the best paramaters for the distribution, for the given dataset. Iterates over each element of the values to check if it is the best option for xmin
 	template<typename T>
-	void CalculateBestDistParams(vector<double> &values, const ModelHolder<T> &model, T &params, vector<double>::iterator &xmin, double &best_ks)
+	void CalculateBestDistParams(std::vector<double> &values, const ModelHolder<T> &model, T &params, std::vector<double>::iterator &xmin, double &best_ks)
 	{
 		best_ks = std::numeric_limits<double>::infinity();
 		//if we don't use xmin, then only calculate the results once
@@ -329,13 +329,13 @@ namespace FracG
 			return;
 		}
 		//if we do need to select a value for xmin, try each value as a candidate
-		vector<double>::iterator xmax = values.end();
+		std::vector<double>::iterator xmax = values.end();
 		while ((xmax > values.begin()) && (xmax == values.end() || *xmax >= values.back())) --xmax; //don't use xmin here, it isn't inisialised. this is the function that is supposed to initialise it.
 		#pragma omp parallel for
 		for (auto it = values.begin(); it <= xmax; it++)
 		{
 			//first check to see if we have any values that are strictly larger than our proposed minimum
-			if (*it >= values.back()) continue; //they're sorted, so if this one doesn't have anything higher than it, none of the others will either
+			if (*it >= values.back()) continue; //they're std::sorted, so if this one doesn't have anything higher than it, none of the others will either
 			T this_params = model.calculate_params_func(values, it);
 			const double this_ks = KSTest(values, model, this_params, it);
 			#pragma omp critical
@@ -350,8 +350,8 @@ namespace FracG
 		}
 	}
 
-	//get the vector of values that are below xmin
-	void GetLowerValues(const vector<double> &values, const double xmin, vector<double> lower, int &n_tail)
+	//get the std::vector of values that are below xmin
+	void GetLowerValues(const std::vector<double> &values, const double xmin, std::vector<double> lower, int &n_tail)
 	{
 		lower.clear();
 		n_tail = 0;
@@ -364,7 +364,7 @@ namespace FracG
 	//TODO: need to calculate optimal xmin, not just use the lowst value
 	//returns <alpha, c>
 	//default xmin = min(data)
-	PowerLawParams PowerLawCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+	PowerLawParams PowerLawCalculateParams(const std::vector<double> &data, const std::vector<double>::iterator &xmin)
 	{
 		const int N = data.end() - xmin;
 		double sum = 0;
@@ -397,9 +397,9 @@ namespace FracG
 
 	//A "standard" way of generating (and consuming) multiple values at a time, using a converter that takes a single value at a time
 	template<typename T>
-	vector<double> StandardGenerateMultiValue(const vector<double> &r, const double xmin, const T &params, std::function<double(const double, const double, const T &params)> convert_func)
+	std::vector<double> StandardGenerateMultiValue(const std::vector<double> &r, const double xmin, const T &params, std::function<double(const double, const double, const T &params)> convert_func)
 	{
-		vector<double> samples;
+		std::vector<double> samples;
 		samples.reserve(r.size());
 		for (auto it = r.begin(); it != r.end(); it++) samples.push_back(convert_func(*it, xmin, params));
 		return std::move(samples);
@@ -408,7 +408,7 @@ namespace FracG
 	//calculate exponential distribution parameters for pdf p(x,lambda) = (lambda) * exp(- lambda * x)
 	//cdf(x, lambda) = 1 - exp[- lambda * x]
 	//default xmin = 0
-	ExponentialParams ExponentialCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+	ExponentialParams ExponentialCalculateParams(const std::vector<double> &data, const std::vector<double>::iterator &xmin)
 	{
 		double sum = 0;
 		const int count = data.end() - xmin;
@@ -440,7 +440,7 @@ namespace FracG
 	//cdf(x, mu, sigma) = 1/2 + (1/2) * erf[(ln(x) - mu) / (sqrt(2) sigma)]
 	//returns mu, sigma
 	//default xmin = 
-	LogNormParams LogNormCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+	LogNormParams LogNormCalculateParams(const std::vector<double> &data, const std::vector<double>::iterator &xmin)
 	{
 		double sum = 0;
 		int count = data.end() - xmin;
@@ -479,11 +479,11 @@ namespace FracG
 		return -1; //invalid operation
 	}
 
-	vector<double> LogNormGenerateMultiValue(const vector<double> &r, const double xmin, const LogNormParams &params)
+	std::vector<double> LogNormGenerateMultiValue(const std::vector<double> &r, const double xmin, const LogNormParams &params)
 	{
 		//this doesn't use mu, but then again the power law one doesn't use c either.
-		const int N = (int)r.size() / 2; //making this many pairs of values
-		vector<double> samples;
+		const int N = (int)r.size() / 2; //making this many std::pairs of values
+		std::vector<double> samples;
 		samples.reserve(2*N);
 		for (int i = 0; i < N; i++)
 		{
@@ -497,7 +497,7 @@ namespace FracG
 		return std::move(samples);
 	}
 
-	WeibullParams WeibullCalculateParams(const vector<double> &data, const vector<double>::iterator &xmin)
+	WeibullParams WeibullCalculateParams(const std::vector<double> &data, const std::vector<double>::iterator &xmin)
 	{
 		const int N = data.end() - xmin;
 		double lambda = 0, beta = 0;
@@ -529,11 +529,11 @@ namespace FracG
 				const double dbotv = dbsum - dsubval;
 				const double func_val = topv / botv - logsum;
 				const double diff_val = (botv*dtopv - topv*dbotv) / (botv*botv); //d/dx (t(x)/b(x)) = dt(x)/db(x) = (b(x) dt(x) - t(x) db(x)) / (b(x)**2)
-				return make_pair(func_val, diff_val); //I think these calculations are correct, but I'm not entirely sure
+				return std::make_pair(func_val, diff_val); //I think these calculations are correct, but I'm not entirely sure
 			},
 			//intial guess, min, max, number of digits precision, max iterations
 			2.0, 0.001, 20.0, 5, max_iters);
-	// 	cout << "used " << max_iters << " iterations" << endl;
+	// 	std::cout << "used " << max_iters << " iterations" << std::endl;
 		beta = result;//(result.first + result.second) / 2;
 		const double xbmin = std::pow(*xmin, beta);
 		for (auto it = xmin; it < data.end(); it++) lambda += std::pow(*it, beta) - xbmin;
@@ -557,9 +557,9 @@ namespace FracG
 	}
 
 	template<typename T>
-	vector<double> GetSampleSingles(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
+	std::vector<double> GetSampleSingles(const ModelHolder<T> &model, const T &params, const int n_samples, const std::vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
 	{
-		vector<double> samples;
+		std::vector<double> samples;
 		samples.reserve(n_samples);
 		const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
 		const double p_lower = (xmin - values.begin())/(double)values.size(); //probability with which to use the below-xmin portion of the samples 
@@ -584,17 +584,17 @@ namespace FracG
 	}
 
 	template<typename T>
-	vector<double> GetSampleMulti(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
+	std::vector<double> GetSampleMulti(const ModelHolder<T> &model, const T &params, const int n_samples, const std::vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
 	{
 		const int per_call = model.samples_per_call;
 		const int n_generations = std::lrint(std::ceil(n_samples/per_call));
-		vector<double> samples;
+		std::vector<double> samples;
 		samples.reserve(n_generations*per_call);
 		const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
 		const double p_lower = (xmin - values.begin())/values.size(); //probability with which to use the below-xmin portion of the samples 
 		std::uniform_real_distribution<double> uniform01(0.0, 1.0);
 		std::uniform_int_distribution<int> lower_selector(0, max_low);
-		vector<double> random_values;
+		std::vector<double> random_values;
 		random_values.reserve(per_call);
 		for (int i = 0; i < n_generations; i++)
 		{
@@ -608,7 +608,7 @@ namespace FracG
 				//get from distribution
 				random_values.clear();
 				for (int j = 0; j < per_call; j++) random_values.push_back(uniform01(gen));
-				vector<double> model_values = model.convert_multi_func(random_values, *xmin, params);
+				std::vector<double> model_values = model.convert_multi_func(random_values, *xmin, params);
 				samples.insert(samples.end(), model_values.begin(), model_values.end());
 			}
 		}
@@ -637,9 +637,9 @@ namespace FracG
 				//std::replace(model_fname.begin(), model_fname.end(), ' ', '_');
 				//std::transform(model_fname.begin(), model_fname.end(), model_fname.begin(), ::tolower);
 
-				fname << "CUMMULATIVE DISTRIBUTION FUNCTION" << endl;
+				fname << "CUMMULATIVE DISTRIBUTION FUNCTION" << std::endl;
 				fname << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
-				fname << "#x_value" << "\t"<< "data_cdf_low" <<"\t"<< "data_cdf_high" <<"\t"<< "model_cdf" << endl;
+				fname << "#x_value" << "\t"<< "data_cdf_low" <<"\t"<< "data_cdf_high" <<"\t"<< "model_cdf" << std::endl;
 
 				for (int i = stats.xmin_ind; i < NV; i++)
 				{
@@ -648,7 +648,7 @@ namespace FracG
 					const double model_cdf = stats.model.cdf_func(values.at(i), stats.xmin, stats.params);
 					fname << values[i] << "\t" << data_low << "\t" << data_hi << "\t" << model_cdf << std::endl;
 				}
-				fname << endl;
+				fname << std::endl;
 			}
 	};
 
@@ -658,19 +658,19 @@ namespace FracG
 	{
 		public:
 			const std::vector<double> &values;
-			ofstream &fname;
-			PrintPDFSingle(const std::vector<double> &v, ofstream &fn) : values(v), fname(fn) {};
+			std::ofstream &fname;
+			PrintPDFSingle(const std::vector<double> &v, std::ofstream &fn) : values(v), fname(fn) {};
 
 			template<typename T>
 			void operator()(DistStats<T> &stats)
 			{
-				fname << "PROBABILITY DENSITY FUNCTION" << endl;
+				fname << "PROBABILITY DENSITY FUNCTION" << std::endl;
 				const int NV = values.size(); //total number of data values
 				const int N  = NV - stats.xmin_ind; //number of data values that are above xmin
 				const double ND = N; //save having to convert this multiple times
 
 				fname << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
-				fname << "#x_value" << "\t" << "data_pdf_low" <<"\t"<< "data_pdf_high" <<"\t"<< "model_pdf" << endl; 
+				fname << "#x_value" << "\t" << "data_pdf_low" <<"\t"<< "data_pdf_high" <<"\t"<< "model_pdf" << std::endl; 
 
 				for (int i = stats.xmin_ind; i < NV; i++)
 				{
@@ -679,12 +679,12 @@ namespace FracG
 					const double model_pdf = stats.model.pdf_func(values.at(i), stats.xmin, stats.params);
 					fname << values[i] << "\t" << data_low << "\t" << data_hi << "\t" << model_pdf << std::endl;
 				}
-				fname << endl;
+				fname << std::endl;
 			}
 	};
 
 	//print out all the model CDF's, as compared to their relative data CDF's
-	void PrintBest2File(const StatsModelData dists, const vector<double> values, ofstream &fname)
+	void PrintBest2File(const StatsModelData dists, const std::vector<double> values, std::ofstream &fname)
 	{
 		PrintCDFSingle print_visitor_c(values, fname);
 		PrintPDFSingle print_visitor_p(values, fname);
@@ -748,7 +748,7 @@ namespace FracG
 			sigma_sum += l*l;
 		}
 		const double sigma = std::sqrt(sigma_sum/N);
-	// 	cout << "comparison: R = " << R << ", sigma = " << sigma << ", sigma_sum = " << sigma_sum <<", N = " << N << ", erfc input = " << std::abs(R)/(std::sqrt(2*N)*sigma) << endl;
+	// 	std::cout << "comparison: R = " << R << ", sigma = " << sigma << ", sigma_sum = " << sigma_sum <<", N = " << N << ", erfc input = " << std::abs(R)/(std::sqrt(2*N)*sigma) << std::endl;
 		const double p = (sigma_sum <= 0.0) ? 1 : erfc(std::abs(R)/(std::sqrt(2*N)*sigma)); //lower <-> more confidence that R value is meaningful
 		return std::make_tuple(R, p);//std::move()
 	}
@@ -756,14 +756,14 @@ namespace FracG
 	//generate a number of samples from a distribution, including the values that are below xmin
 	//split into single and multi calls, so as to avoid extra overhead in the (more common) single value case
 	template<typename T>
-	vector<double> GetSampleValues(const ModelHolder<T> &model, const T &params, const int n_samples, const vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
+	std::vector<double> GetSampleValues(const ModelHolder<T> &model, const T &params, const int n_samples, const std::vector<double>::iterator &xmin, random::mt19937 &gen, const std::vector<double> &values)
 	{
 		if (model.samples_per_call == 1) return std::move(GetSampleSingles<T>(model, params, n_samples, xmin, gen, values));
 		return std::move(GetSampleMulti<T>(model, params, n_samples, xmin, gen, values));
 	}
 
 	template<typename T>
-	double GetPValue(const ModelHolder<T> &model, const T &params, const vector<double>::iterator &xmin, const std::vector<double> &values, const double data_ks, std::vector<random::mt19937> &gen)
+	double GetPValue(const ModelHolder<T> &model, const T &params, const std::vector<double>::iterator &xmin, const std::vector<double> &values, const double data_ks, std::vector<random::mt19937> &gen)
 	{
 		const double err = 0.01; //accuracy to two significant figures
 		const int ntrials = std::lrint(std::ceil(0.25/(err*err))); //2500
@@ -772,8 +772,8 @@ namespace FracG
 		for (int i = 0; i < ntrials; i++)
 		{
 			random::mt19937 &local_generator = gen[omp_get_thread_num()]; //each thread uses its own RNG
-			vector<double> samples = GetSampleValues<T>(model, params, (int)values.size(), xmin, local_generator, values);
-			vector<double>::iterator sample_xmin;
+			std::vector<double> samples = GetSampleValues<T>(model, params, (int)values.size(), xmin, local_generator, values);
+			std::vector<double>::iterator sample_xmin;
 			T sample_params;
 			double sample_ks;
 			CalculateBestDistParams(samples, model, sample_params, sample_xmin, sample_ks);
@@ -798,19 +798,19 @@ namespace FracG
 				stats.pvalue = GetPValue(stats.model, stats.params, xmin, values, stats.ks, generators);
 				stats.xmin = *xmin;
 				stats.xmin_ind = xmin - values.begin();
-		//cout << "Model " << stats.name << " with parameters " << stats.params << " has ks value " << stats.ks << ", pvalue = " << stats.pvalue << ", with xmin = " << stats.xmin << ", at index " << stats.xmin_ind << " of " << values.size() << endl;
+		//cout << "Model " << stats.name << " with parameters " << stats.params << " has ks value " << stats.ks << ", pvalue = " << stats.pvalue << ", with xmin = " << stats.xmin << ", at index " << stats.xmin_ind << " of " << values.size() << std::endl;
 			}
 	};
 
 	//compare the models against each other, in order to determine which one(s) are the best fit
-	void DecideBestModel(StatsModelData &model_data, const vector<double> &values, const double ACCEPT_THRESHOLD, const double DIFFERENCE_THRESHOLD)
+	void DecideBestModel(StatsModelData &model_data, const std::vector<double> &values, const double ACCEPT_THRESHOLD, const double DIFFERENCE_THRESHOLD)
 	{
 		model_data.best_match = -1;
 		model_data.best_matches.clear();
 		bool have_model = false;
-		vector<DistStatsType> &models = model_data.models; //convenience name
+		std::vector<DistStatsType> &models = model_data.models; //convenience name
 		const int N = model_data.models.size(); //Number of models
-		//initialise comparisons as a NxN 2D vector, initialised with R=0 (no difference), p = 1 (no certainty that there is a meaningful difference even if R is large)//= std::vector<
+		//initialise comparisons as a NxN 2D std::vector, initialised with R=0 (no difference), p = 1 (no certainty that there is a meaningful difference even if R is large)//= std::vector<
 		model_data.comparisons = std::vector<std::vector<std::tuple<double,double>>>(N, std::vector<std::tuple<double, double>>(N));
 
 		//first, check to see if any models are acceptable.
@@ -820,25 +820,25 @@ namespace FracG
 			{
 				have_model = true;
 				model_data.best_match = it - models.begin();
-			//	cout << "Model " << boost::apply_visitor([](auto &x){return x.name;}, *it) << " has not been rejected" << endl;
+			//	std::cout << "Model " << boost::apply_visitor([](auto &x){return x.name;}, *it) << " has not been rejected" << std::endl;
 			}
 		}
-	// 	cout << endl;
+	// 	std::cout << std::endl;
 
 		//if none are acceptable, stop now. there is no point in comparing them
 		if (!have_model)
 		{
-			cout << "All models are below the acceptance threshold" << endl;
+			std::cout << "All models are below the acceptance threshold" << std::endl;
 			return;
 		}
 
-		//do a pairwise comparison between all the acceptable models
+		//do a std::pairwise comparison between all the acceptable models
 		for (auto it1 = models.begin(); it1 != models.end(); it1++)
 		{
 			if (boost::apply_visitor([&](auto &x){return x.pvalue < ACCEPT_THRESHOLD;}, *it1)) continue; //if we don't accept this model, don't compare it to other models
 			int ind1 = it1 - models.begin();
 			std::string name1 = boost::apply_visitor([](auto &x){return x.name;}, *it1);
-			//need const_iterator because values is a const vector now. (also need const_iterator's in log_likelihood_ratio())
+			//need const_iterator because values is a const std::vector now. (also need const_iterator's in log_likelihood_ratio())
 			const std::vector<double>::const_iterator xmin1 = std::next(values.begin(), boost::apply_visitor([](auto &x){return x.xmin_ind;}, *it1)); //we can save this one to save a bit of time
 			for (auto it2 = it1; it2 != models.end(); it2++)
 			{
@@ -854,7 +854,7 @@ namespace FracG
 				model_data.comparisons[ind1][ind2] = std::move(comparison_result);
 				if (p > DIFFERENCE_THRESHOLD)
 				{
-					//cout << "Models " << name1 << " and " << name2 << " cannot be distinguished, with R = " << R << ", and p = " << p << endl;
+					//cout << "Models " << name1 << " and " << name2 << " cannot be distinguished, with R = " << R << ", and p = " << p << std::endl;
 					continue;
 				}
 				std::string best_name, worse_name;
@@ -866,7 +866,7 @@ namespace FracG
 					best_name = name2;
 					worse_name = name1;
 				}
-				//cout << "Model " << best_name << " is a better fit that model " << worse_name << ", with R = " << R << ", p = " << p << endl;
+				//cout << "Model " << best_name << " is a better fit that model " << worse_name << ", with R = " << R << ", p = " << p << std::endl;
 	// 			if (model_data.best_match == worse_ind) model_data.best_match = best_ind;
 			}
 		}
@@ -901,7 +901,7 @@ namespace FracG
 
 		if (have_loop)
 		{
-			cout << "There is a loop in the relation of the best models" << endl;
+			std::cout << "There is a loop in the relation of the best models" << std::endl;
 			std::fill(seen.begin(), seen.end(), false);
 			int next_best = model_data.best_match;
 			int curr_best = model_data.best_match;
@@ -924,10 +924,10 @@ namespace FracG
 					}
 				}
 			}
-			cout << "The loop is: ";
+			std::cout << "The loop is: ";
 			for (auto it = model_data.best_matches.begin(); it < model_data.best_matches.end(); it++)
-				cout << ((it == model_data.best_matches.begin()) ? "" : ", ") << boost::apply_visitor([](auto &x){return x.name;}, model_data.models[*it]);
-			cout << endl;
+				std::cout << ((it == model_data.best_matches.begin()) ? "" : ", ") << boost::apply_visitor([](auto &x){return x.name;}, model_data.models[*it]);
+			std::cout << std::endl;
 			return;
 		}
 
@@ -947,42 +947,42 @@ namespace FracG
 	{
 		StatsModelData results;
 		random::random_device rd{};
-		vector <double> values;
+		std::vector <double> values;
 
-		ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_distributions.tsv"));
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_distributions.tsv"));
 
 		BOOST_FOREACH(line_type l , lines.data)
 			values.push_back(geometry::length(l));
 
 		std::sort(values.begin(), values.end());
-		cout << "Determing length distribution for values in the range " << values.front() << ", " << values.back() << endl;
+		std::cout << "Determing length distribution for values in the range " << values.front() << ", " << values.back() << std::endl;
 
 		const int NTHREADS = std::max(1, omp_get_max_threads());
 
-		cout << "Using " << NTHREADS << " threads" << endl;
+		std::cout << "Using " << NTHREADS << " threads" << std::endl;
 		std::vector<random::mt19937> rngs(NTHREADS);
 		for (auto it = rngs.begin(); it < rngs.end(); it++) *it = std::move(random::mt19937{rd}); //make one random number generator per omp thread
 		ModelHolder<PowerLawParams> power_law_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
-			[](const vector<double>&r, const double xmin, const PowerLawParams& params) -> vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, true, 1};
+			[](const std::vector<double>&r, const double xmin, const PowerLawParams& params) -> std::vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, true, 1};
 		ModelHolder<PowerLawParams> power_law_all_model = {PowerLawCalculateParams, PowerLawCDF, PowerLawPDF, PowerLawGenerateValue,
-			[](const vector<double>&r, const double xmin, const PowerLawParams& params) -> vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, false, 1};
+			[](const std::vector<double>&r, const double xmin, const PowerLawParams& params) -> std::vector<double> {return StandardGenerateMultiValue<PowerLawParams>(r, (const double)xmin, params, PowerLawGenerateValue);}, false, 1};
 
 		ModelHolder<ExponentialParams> exponential_model = {ExponentialCalculateParams, ExponentialCDF, ExponentialPDF, ExponentialGenerateValue,
-			[](const vector<double>&r, const double xmin, const ExponentialParams& params) -> vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, true, 1};
+			[](const std::vector<double>&r, const double xmin, const ExponentialParams& params) -> std::vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, true, 1};
 		ModelHolder<ExponentialParams> exponential_all_model = {ExponentialCalculateParams, ExponentialCDF, ExponentialPDF, ExponentialGenerateValue,
-			[](const vector<double>&r, const double xmin, const ExponentialParams& params) -> vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, false, 1};
+			[](const std::vector<double>&r, const double xmin, const ExponentialParams& params) -> std::vector<double> {return StandardGenerateMultiValue<ExponentialParams>(r, (const double)xmin, params, ExponentialGenerateValue);}, false, 1};
 
 		ModelHolder<LogNormParams> lognorm_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, true, 2};
 		ModelHolder<LogNormParams> lognorm_all_model = {LogNormCalculateParams, LogNormCDF, LogNormPDF, LogNormGenerateValue, LogNormGenerateMultiValue, false, 2};
 
 		/*
 		ModelHolder<WeibullParams> weibull_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
-			[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, true, 1};
+			[](const std::vector<double>&r, const double xmin, const WeibullParams& params) -> std::vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, true, 1};
 		ModelHolder<WeibullParams> weibull_all_model = {WeibullCalculateParams, WeibullCDF, WeibullPDF, WeibullGenerateValue,
-			[](const vector<double>&r, const double xmin, const WeibullParams& params) -> vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, false, 1};
+			[](const std::vector<double>&r, const double xmin, const WeibullParams& params) -> std::vector<double> {return StandardGenerateMultiValue<WeibullParams>(r, (const double)xmin, params, WeibullGenerateValue);}, false, 1};
 		*/
 
-		vector<DistStatsType> &models = results.models; //convenience name
+		std::vector<DistStatsType> &models = results.models; //convenience name
 
 		models.push_back(DistStats<PowerLawParams>{power_law_model, std::string{"Power Law"}});
 		models.push_back(DistStats<PowerLawParams>{power_law_all_model, std::string{"Power Law All"}});
@@ -1016,25 +1016,25 @@ namespace FracG
 			const int best = results.best_match;
 			if (best >= 0)
 			{
-			cout << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl << endl;
-			txtF << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << endl;
+			std::cout << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << std::endl << std::endl;
+			txtF << "The best model is " << "\t" << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[best]) << std::endl;
 			}
 		} else if (results.best_matches.size() > 1) 
 		{
-			cout << "The " << results.best_matches.size() << " best matches are: ";
+			std::cout << "The " << results.best_matches.size() << " best matches are: ";
 			txtF << "The " << results.best_matches.size() << " best matches are: " << "\t";
 			for (auto it = results.best_matches.begin(); it < results.best_matches.end(); it++)
 			{
-				cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
+				std::cout << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
 				txtF << (it == results.best_matches.begin() ? "" : ", ") << boost::apply_visitor([](auto& x)->std::string{return x.name;}, results.models[*it]);
 			}
-			cout << endl;
-			txtF << endl;		
+			std::cout << std::endl;
+			txtF << std::endl;		
 		}
 
 		PrintBest2File(results, values, txtF); //print the cdf's for testing purposes
 		txtF.close();
-		cout << endl;
+		std::cout << std::endl;
 		return results;
 	}
 
@@ -1045,7 +1045,7 @@ namespace FracG
 		point_type point;
 		int maxX, minX, maxY, minY;
 		double M = 0;
-		vector<double> D;
+		std::vector<double> D;
 
 		envelop = DefinePointBuffer(P, radius);
 		geometry::envelope(envelop, AOI);
@@ -1068,7 +1068,7 @@ namespace FracG
 
 		if (D.size() > 0)
 		{
-			vec DATA(D.size(),fill::zeros);
+			arma::vec DATA(D.size(), arma::fill::zeros);
 			for(int i = 0; i < (int) D.size(); i++)
 				 DATA(i) = D.at(i);
 			M = arma::mean(DATA);
@@ -1078,10 +1078,10 @@ namespace FracG
 
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename)
 	{
-		cout << "Generating raster statisics " << endl;
+		std::cout << "Generating raster statisics " << std::endl;
 		const char * name = raster_filename.c_str();
 		enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
-		static std::map<string, int> d_type;
+		static std::map<std::string, int> d_type;
 		if ( d_type.empty() )
 		{
 			d_type["Byte"] = Byte;
@@ -1095,25 +1095,25 @@ namespace FracG
 
 		GDALDataset  *poDataset;
 		GDALAllRegister();
-		cout << "RasterStatistics is opening \"" << name << "\"" << endl;
+		std::cout << "RasterStatistics is opening \"" << name << "\"" << std::endl;
 		poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
 		GDALRasterBand  *poBand;
 		poBand = poDataset->GetRasterBand( 1 );
 		std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
 		GDALClose( poDataset );
 
-		cout << "Raster datatype is " ;
+		std::cout << "Raster datatype is " ;
 		int type = d_type[datatype];
 		 switch (type) 
 		 {
 			case Byte:
 			{
-				cout	<< "byte (will not perform analysis)" << endl;
+				std::cout	<< "byte (will not perform analysis)" << std::endl;
 			} break;
 
 			case UInt16:
 			{
-				cout << "uint16" << endl;
+				std::cout << "uint16" << std::endl;
 				RASTER<int> R;
 				R.name = raster_filename;
 				AnalyseRaster<int>(lines, dist, R);
@@ -1121,7 +1121,7 @@ namespace FracG
 
 			case Int16:
 			{
-				cout << "int16" << endl;
+				std::cout << "int16" << std::endl;
 				RASTER<int> R;
 				R.name = raster_filename;
 				AnalyseRaster<int>(lines, dist, R);
@@ -1129,7 +1129,7 @@ namespace FracG
 
 			case UInt32:
 			{
-				cout << "uint32" << endl;
+				std::cout << "uint32" << std::endl;
 				RASTER<int> R;
 				R.name = raster_filename;
 				AnalyseRaster<int>(lines, dist, R);
@@ -1138,7 +1138,7 @@ namespace FracG
 
 			case Int32:
 			{
-				cout << "int32" << endl;
+				std::cout << "int32" << std::endl;
 				RASTER<int> R;
 				R.name = raster_filename;
 				AnalyseRaster<int>(lines, dist, R);
@@ -1146,7 +1146,7 @@ namespace FracG
 
 			case Float32:
 			{
-				cout << "Float32" << endl;
+				std::cout << "Float32" << std::endl;
 				RASTER<float> R;
 				R.name = raster_filename;
 				AnalyseRaster<float>(lines, dist, R);
@@ -1154,7 +1154,7 @@ namespace FracG
 
 			case Float64:
 			{
-				cout << "Float64" << endl;
+				std::cout << "Float64" << std::endl;
 				RASTER<double> R;
 				R.name = raster_filename;
 				AnalyseRaster<double>(lines, dist, R);
@@ -1162,20 +1162,20 @@ namespace FracG
 
 			default: 
 			{
-				cout << " unknown" << endl;
-				cout << "ERROR: Could not determine dataype of raster" << endl;
+				std::cout << " unknown" << std::endl;
+				std::cout << "ERROR: Could not determine dataype of raster" << std::endl;
 			}
 			break;
 		 }
-		 cout << " done \n" << endl;
+		 std::cout << " done \n" << std::endl;
 	}
 
-	void MA_filter(vector< std::pair<double,double>> &KDE, int window)
+	void MA_filter(std::vector< std::pair<double,double>> &KDE, int window)
 	{
 		if (KDE.size() > 5 * (unsigned int) window)
 		{
 			unsigned int wn = (int) (window - 1) / 2;
-			vector<float>KDE_filtered(KDE.size());
+			std::vector<float>KDE_filtered(KDE.size());
 
 			for (unsigned int i = 0; i < KDE.size(); i++) 
 			{
@@ -1244,12 +1244,12 @@ namespace FracG
 
 
 	//perform a moving average of the KDE, that wraps around
-	void MovingAverageFilterWraparound(vector< std::pair<double,double>> &KDE, int window_size)
+	void MovingAverageFilterWraparound(std::vector< std::pair<double,double>> &KDE, int window_size)
 	{
 		window_size |= 1; //make the window_size odd-sized
 		const unsigned int hw = window_size / 2;
-		vector<double> saved(window_size); //saved values of the moving sum, so we know which value to remove for the next index
-		vector<double> copy(window_size); //a copy to hold the values that get overwritten in the first pass
+		std::vector<double> saved(window_size); //saved values of the moving sum, so we know which value to remove for the next index
+		std::vector<double> copy(window_size); //a copy to hold the values that get overwritten in the first pass
 		//initialise values
 		double sum = 0;
 		for (int i = 0; i < window_size; i++)
@@ -1283,13 +1283,13 @@ namespace FracG
 	typedef std::pair<int, bool> crossing_type; //crossing position, whether the crossing is rising or falling
 	typedef std::pair<int, int> crossing_location_type; //the falling and rising edges of a gaussian candidate location
 	//find zero-crossings, from a fourier-domain representation of the data
-	vector<crossing_type> FindZerocrossings(arma::cx_vec &fd, arma::vec &freqs)
+	std::vector<crossing_type> FindZerocrossings(arma::cx_vec &fd, arma::vec &freqs)
 	{
 		arma::cx_vec d2(fd.size());
 		for (unsigned int i = 0; i < fd.size(); i++) d2[i] = -freqs[i]*freqs[i]*fd[i];
 		arma::cx_vec angle = arma::ifft(d2); //arma doesn't have a real-valued fft/ifft
 
-		vector<crossing_type> crossings;
+		std::vector<crossing_type> crossings;
 		for (unsigned int i = 0; i < fd.size(); i++)
 		{
 			bool sign_this = !std::signbit(std::real(angle[i])); //use not, so that sign being true <-> the value is positive
@@ -1298,20 +1298,20 @@ namespace FracG
 			{
 				const bool rising = sign_this;
 				crossings.push_back(std::make_pair(i, rising));
-	// 			cout << " found crossing at " << i << ": " << rising << endl;
+	// 			std::cout << " found crossing at " << i << ": " << rising << std::endl;
 			}
 		}
-	// 	cout << endl;
+	// 	std::cout << std::endl;
 		return crossings;
 	}
 
 
 	//a simpler matching algorithm, that finds gaussian locations by matching leading edges to the next falling edge
-	vector<crossing_location_type> SimpleLocationDetection(vector<crossing_type> &crossings)
+	std::vector<crossing_location_type> SimpleLocationDetection(std::vector<crossing_type> &crossings)
 	{
-		vector<bool> used(crossings.size(), false);
+		std::vector<bool> used(crossings.size(), false);
 		const int nGauss = crossings.size() / 2;
-		vector<crossing_location_type> found;
+		std::vector<crossing_location_type> found;
 
 		while ((int)found.size() < nGauss)
 		{
@@ -1349,8 +1349,8 @@ namespace FracG
 		struct gauss_data *data = (struct gauss_data *) data_ptr;
 
 	// 	for (int g = 0; g < data->nGauss; g++)
-	// 		cout << "g" << g << ": amp = " << gsl_vector_get(params, PPG*g    ) << ", sigma = " << gsl_vector_get(params, PPG*g + 1) << ", pos = " << gsl_vector_get(params, PPG*g + 2) << endl;
-	// 	cout << endl;
+	// 		std::cout << "g" << g << ": amp = " << gsl_vector_get(params, PPG*g    ) << ", sigma = " << gsl_vector_get(params, PPG*g + 1) << ", pos = " << gsl_vector_get(params, PPG*g + 2) << std::endl;
+	// 	std::cout << std::endl;
 
 
 		for (int i = 0; i < data->nData; i++)
@@ -1406,7 +1406,7 @@ namespace FracG
 	}
 
 	//fit the gaussians, using a set of initial values, the data values to fit against (pdf) and the angle the data is evaluated at
-	AngleDistribution FitGaussians(vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle, bool use_horizontal)
+	AngleDistribution FitGaussians(std::vector<crossing_location_type> &initial_positions, arma::vec &pdf, arma::vec &angle, bool use_horizontal)
 	{
 		const int nData = pdf.size();
 		const int nGaussians = initial_positions.size();
@@ -1416,7 +1416,7 @@ namespace FracG
 
 		//set initial values
 		gsl_vector *initial_guess = gsl_vector_alloc(nParams);
-	// 	cout << "initial guess:" << endl;
+	// 	std::cout << "initial guess:" << std::endl;
 		for (int i = 0; i < nGaussians; i++)
 		{
 			const int p1 = initial_positions[i].first, p2 = initial_positions[i].second;
@@ -1437,7 +1437,7 @@ namespace FracG
 			gsl_vector_set(initial_guess, PPG*i  ,  amp);
 			gsl_vector_set(initial_guess, PPG*i+1, size);
 			gsl_vector_set(initial_guess, PPG*i+2,  pos);
-	// 		cout << a1 << ", " << a2 << " -> amp = " << amp << ", size = " << size << ", pos = " << pos << endl;
+	// 		std::cout << a1 << ", " << a2 << " -> amp = " << amp << ", size = " << size << ", pos = " << pos << std::endl;
 		}
 		//if using a horizontal line, the initial guess is the minimum value of the pdf
 		if (use_horizontal) gsl_vector_set(initial_guess, nParams - 1, std::asin(2*pdf.min() - 1));
@@ -1466,10 +1466,10 @@ namespace FracG
 
 		if (status != GSL_SUCCESS)
 		{
-			cerr << "Warning: gaussian fitting failed, status = " << status << " -> " << gsl_strerror(status) << ", info = " << info << endl;
+			std::cerr << "Warning: gaussian fitting failed, status = " << status << " -> " << gsl_strerror(status) << ", info = " << info << std::endl;
 		}
 
-		vector<std::tuple<double, double, double>> out_params(nGaussians);
+		std::vector<std::tuple<double, double, double>> out_params(nGaussians);
 		for (int i = 0; i < nGaussians; i++)
 		{
 			const double amp  =  std::abs(gsl_vector_get(w->x, PPG*i    ));
@@ -1496,7 +1496,7 @@ namespace FracG
 	}
 
 	//evaluate the sum of gaussians model at a particular angle
-	double EvaluateGaussianSum(vector<std::tuple<double, double, double>> &gaussians, double x)
+	double EvaluateGaussianSum(std::vector<std::tuple<double, double, double>> &gaussians, double x)
 	{
 	//     return -1; //filler until I replace everywhere this function is used
 		AngleDistribution ad(gaussians);
@@ -1504,9 +1504,9 @@ namespace FracG
 	}
 
 	//fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-	AngleDistribution FitGaussiansWraparound(vector<std::pair<double, double>> &KDE, vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
+	AngleDistribution FitGaussiansWraparound(std::vector<std::pair<double, double>> &KDE, std::vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
 	{
-	// 	cout << "starting gaussian fit" << endl;
+	// 	std::cout << "starting gaussian fit" << std::endl;
 		arma::vec pdf(KDE.size());
 		arma::vec angle(KDE.size());
 		for (unsigned int i = 0; i < KDE.size(); i++)
@@ -1515,7 +1515,7 @@ namespace FracG
 			pdf[i] = KDE[i].second;
 		}
 
-		//cout << "fitting a kde for " << fault_angles.size() << " faults" << endl;
+		//cout << "fitting a kde for " << fault_angles.size() << " faults" << std::endl;
 
 	// 	const double err_thresh = 1e-6;//1e-3;
 
@@ -1533,19 +1533,19 @@ namespace FracG
 
 		AngleDistribution results, results_unif, previous_results;
 
-		vector<std::pair<double, decltype(results)>> ic; //information criteria - used to chosse the number of gaussians
+		std::vector<std::pair<double, decltype(results)>> ic; //information criteria - used to chosse the number of gaussians
 
 		while (nGaussians < max_gaussians)
 		{
 			nGaussians += 1;
 
-			vector<crossing_type> base_crossings = FindZerocrossings(ft, freqs);
+			std::vector<crossing_type> base_crossings = FindZerocrossings(ft, freqs);
 
 			//now make scale image
 			const int max_peaks = base_crossings.size() / 2;
 			if (max_peaks < nGaussians) break; //we don't have enough peaks to get the required amount, so use the best result before this
 			int peak_count = max_peaks;
-			vector<vector<crossing_type>> scale_image = {base_crossings};
+			std::vector<std::vector<crossing_type>> scale_image = {base_crossings};
 
 			double scale = 0;
 			while (peak_count > nGaussians)
@@ -1555,9 +1555,9 @@ namespace FracG
 				{
 					arma::cx_vec scaled_ft(ft.size());
 					for (unsigned int i = 0; i < scaled_ft.size(); i++) scaled_ft[i] = ft[i] * std::sqrt(M_PI * next_scale) * std::exp(-M_PI * M_PI * freqs[i] * freqs[i] * next_scale);
-					vector<crossing_type> next_crossings = FindZerocrossings(scaled_ft, freqs);
+					std::vector<crossing_type> next_crossings = FindZerocrossings(scaled_ft, freqs);
 					int this_peaks = next_crossings.size() / 2;
-	// 				cout << "At scale " << next_scale << " there are " << this_peaks << " peaks, diff = " << peak_count - this_peaks << endl;
+	// 				std::cout << "At scale " << next_scale << " there are " << this_peaks << " peaks, diff = " << peak_count - this_peaks << std::endl;
 					if (peak_count - this_peaks <= 1){
 						scale = next_scale;
 						scale_image.push_back(next_crossings);
@@ -1569,7 +1569,7 @@ namespace FracG
 			}
 
 			//now follow scale image back to original scale
-			vector<crossing_location_type> positions;
+			std::vector<crossing_location_type> positions;
 		//	positions = follow_scale_image(scale_image, KDE.size(), nGaussians);
 			positions = SimpleLocationDetection(scale_image.back());//base_crossings
 
@@ -1577,9 +1577,9 @@ namespace FracG
 			//debug output
 	//  		for (auto it = positions.begin(); it < positions.end(); it++)
 	//  		{
-	//  			cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
+	//  			std::cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
 	//  		}
-	//  		cout << endl;
+	//  		std::cout << std::endl;
 
 			results = FitGaussians(positions, pdf, angle, false);
 			results_unif = FitGaussians(positions, pdf, angle, true);
@@ -1606,7 +1606,7 @@ namespace FracG
 			double aicc_unif = param_penalty * nParams_unif - 2 * llikelihood_unif;
 			bool has_negative = false;
 			for (auto it = results.gaussians.begin(); it < results.gaussians.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
-			cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", unif ll is " << llikelihood_unif << ", unif aicc = " << aicc_unif << ", has neg: " << has_negative << endl;
+			std::cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", unif ll is " << llikelihood_unif << ", unif aicc = " << aicc_unif << ", has neg: " << has_negative << std::endl;
 
 	// 		 //error err
 	//         has_negative = false; //debug
@@ -1623,11 +1623,11 @@ namespace FracG
 
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty)
 	{
-		vector<line_type> &lineaments = lines.data;
+		std::vector<line_type> &lineaments = lines.data;
 		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
-		ofstream txtF = FracG::CreateFileStream(out_name);
+		std::ofstream txtF = FracG::CreateFileStream(out_name);
 		int index = 0 ;
-		vec ANGLE(lineaments.size(),fill::zeros);
+		arma::vec ANGLE(lineaments.size(), arma::fill::zeros);
 		BOOST_FOREACH(line_type F,  lineaments)
 		{ 
 			double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
@@ -1639,15 +1639,15 @@ namespace FracG
 		}
 
 		//KDE estimation of orientation to obtain number of lineament sets------
-		sort(ANGLE.begin(), ANGLE.end());
+		std::sort(ANGLE.begin(), ANGLE.end());
 
-		vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) pairs
+		std::vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) std::pairs
 		arma::vec est_pdf = AngleKdeFillArray(MAX_ANGLE * 10, ANGLE, 10);
 		for (unsigned int i = 0; i < est_pdf.size(); i++)
 		{
 			GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
 		}
-		vector< std::pair<double, double>> Maximas;
+		std::vector< std::pair<double, double>> Maximas;
 
 		MovingAverageFilterWraparound(GAUSS, 5);
 
@@ -1656,49 +1656,49 @@ namespace FracG
 			if (i == 0)
 				if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
 					GAUSS[i].second > GAUSS[i+1].second)
-						Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
+						Maximas.push_back(std::make_pair(GAUSS[i].first, GAUSS[i].second));
 
 			if (i > 0 && i+1 < GAUSS.size())
 				if (GAUSS[i].second > GAUSS[i-1].second &&
 					GAUSS[i].second > GAUSS[i+1].second)
-						Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
+						Maximas.push_back(std::make_pair(GAUSS[i].first, GAUSS[i].second));
 
 
 			if (i == GAUSS.size())
 				if (GAUSS[i].second > GAUSS[i-1].second && 
 					GAUSS[i].second > GAUSS[0].second)
-						Maximas.push_back(make_pair(GAUSS[i].first, GAUSS[i].second));
+						Maximas.push_back(std::make_pair(GAUSS[i].first, GAUSS[i].second));
 		}
 
-		vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
+		std::vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
 		AngleDistribution angle_dist = FitGaussiansWraparound(GAUSS, angles_vector, param_penalty);
 		gauss_params gauss_p = angle_dist.gaussians;
 
-		txtF << "Amplitude\tSigma\tMean" << endl;
-		cout << "We fit " << gauss_p.size() << " gaussians to the angle data, with parameters:" << endl << "Amplitude\tSigma\tMean" << endl;
+		txtF << "Amplitude\tSigma\tMean" << std::endl;
+		std::cout << "We fit " << gauss_p.size() << " gaussians to the angle data, with parameters:" << std::endl << "Amplitude\tSigma\tMean" << std::endl;
 		for (auto it = gauss_p.begin(); it < gauss_p.end(); it++)
 		{
-			txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
-			cout << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
+			txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
+			std::cout << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
 		}
 
 		std::cout << "Uniform Level:\t" << angle_dist.uniform_prob << std::endl;
 		txtF      << "Uniform Level:\t" << angle_dist.uniform_prob << std::endl;
-		cout << endl;
+		std::cout << std::endl;
 
-		txtF << "Fault sets:" << "\t" << gauss_p.size() << endl;
-		txtF << "Angle \t Density \t Smoothed Density" << endl;
+		txtF << "Fault sets:" << "\t" << gauss_p.size() << std::endl;
+		txtF << "Angle \t Density \t Smoothed Density" << std::endl;
 		for(unsigned int i =0; i < GAUSS.size(); i++)
-			txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.EvaluateDistribution(GAUSS[i].first) <<  endl;   
-		txtF << endl;
+			txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.EvaluateDistribution(GAUSS[i].first) <<  std::endl;   
+		txtF << std::endl;
 		//set namespace variable if true
 		return AngleDistribution(gauss_p);
 	}
 
-	vector<double> BootStrapping(vector<double>data)
+	std::vector<double> BootStrapping(std::vector<double>data)
 	{
 		const int n = data.size();
-		vector<double> bt_data(data);
+		std::vector<double> bt_data(data);
 
 		boost::random_device dev;
 		boost::mt19937 rng(dev);
@@ -1710,14 +1710,14 @@ namespace FracG
 		return(bt_data);
 	}
 
-	vector<double> PearsonCorrelation(vector<double>data1, vector<double>data2, size_t nb_iter)
+	std::vector<double> PearsonCorrelation(std::vector<double>data1, std::vector<double>data2, size_t nb_iter)
 	{
 		assert(data1.size() == data2.size());
 
 		double init_pearson;
 		const size_t stride = 1;
 		size_t n = data1.size();
-		vector <double> BootsTrapping_Cor;
+		std::vector <double> BootsTrapping_Cor;
 		BootsTrapping_Cor.reserve(nb_iter + 1);
 
 		gsl_vector_const_view D1 = gsl_vector_const_view_array( &data1[0], data1.size() );
@@ -1731,8 +1731,8 @@ namespace FracG
 		 //now perform bootstrapping analysis for iterations = nb_iter                                     
 		for (int i = 0; i < nb_iter; i++)
 		{
-			vector<double> bt_data1 = BootStrapping(data1);
-			vector<double> bt_data2 = BootStrapping(data2);
+			std::vector<double> bt_data1 = BootStrapping(data1);
+			std::vector<double> bt_data2 = BootStrapping(data2);
 
 			gsl_vector_const_view bt_D1 = gsl_vector_const_view_array( &bt_data1[0], bt_data1.size() );
 			gsl_vector_const_view bt_D2 = gsl_vector_const_view_array( &bt_data2[0], bt_data2.size() );
@@ -1747,7 +1747,7 @@ namespace FracG
 	//what does this do? //I think the chooses the id of the gaussians that 
 	int CheckGaussians(AngleDistribution &angle_dist, double angle)
 	{
-		vector<pair<int, double>> p_classes;
+		std::vector<std::pair<int, double>> p_classes;
 		double pi = boost::math::constants::pi<double>();
 
 		if (angle_dist.gaussians.size() > 1)
@@ -1759,9 +1759,9 @@ namespace FracG
 	// 			std::tuple<double, double, double> params1 = angle_dist.gaussians.at(i);
 	// 			double P = 1 / (std::get<1>(params1)* 2* pi ) * exp(- (  pow(angle - std::get<2>(params1), 2)) / (2 * std::get<1>(params1))  );
 				double P = AngleDistribution::EvaluateGaussian(angle_dist.gaussians.at(i), angle);
-				p_classes.push_back(make_pair(i, P));
+				p_classes.push_back(std::make_pair(i, P));
 			}
-			std:: pair<int, double> G = *max_element(p_classes.begin(), p_classes.end(), [](const auto& p1, const auto& p2) 
+			std::pair<int, double> G = *max_element(p_classes.begin(), p_classes.end(), [](const auto& p1, const auto& p2) 
 			{ 
 				return p1.second < p2.second; 
 			});
@@ -1837,22 +1837,22 @@ namespace FracG
 	{
 		if (angle_dist.gaussians.size() <= 0)
 		{
-			cout << "Cannot set scan line orientations (no data on prinipal orientations)" << endl;
+			std::cout << "Cannot set scan line orientations (no data on prinipal orientations)" << std::endl;
 			return;
 		}
-		vector <double> density;
-		vector<pair<int, double>> direc_nb;
-		ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
-		txtF << lines.name << endl;
+		std::vector <double> density;
+		std::vector<std::pair<int, double>> direc_nb;
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
+		txtF << lines.name << std::endl;
 
 		for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
 		{
 			float frac = std::ceil((std::get<0>(*it) - 0.05) * 10.0) / 10.0; 
 			if (frac > 0)
-				direc_nb.push_back(make_pair(frac * nb_scanlines, std::get<2>(*it)));
+				direc_nb.push_back(std::make_pair(frac * nb_scanlines, std::get<2>(*it)));
 		}
-		cout << "Scanline analysis for " << direc_nb.size() << " orientations " << endl;
-		txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< endl;
+		std::cout << "Scanline analysis for " << direc_nb.size() << " orientations " << std::endl;
+		txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< std::endl;
 
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
 		box AOI = ReturnAOI(lines.data);
@@ -1872,17 +1872,17 @@ namespace FracG
 				if (output.size() > 0)
 				{
 					density.push_back(output.size() / geometry::length(scanline));
-					txtF 	<< g << "\t" << setprecision(25)	<< scanline.front().x() << ", " 
+					txtF 	<< g << "\t" << std::setprecision(25)	<< scanline.front().x() << ", " 
 							<< scanline.front().y()		<< "\t" << scanline.back().x() 
-							<< ", " << scanline.back().y() << "\t" << setprecision(10)
+							<< ", " << scanline.back().y() << "\t" << std::setprecision(10)
 							<< geometry::length(scanline) << "\t" << output.size() << "\t"
 							<< output.size()/geometry::length(scanline) <<"\t";
 
 					if (output.size() > 1)
 					{
-						vector<pair<point_type, double>> distances;
+						std::vector<std::pair<point_type, double>> distances;
 						for (auto cross = output.begin(); cross <output.end(); cross++)
-							distances.push_back(make_pair(*cross, geometry::distance(scanline.front(), *cross)));
+							distances.push_back(std::make_pair(*cross, geometry::distance(scanline.front(), *cross)));
 
 						std::sort(distances.begin(), distances.end(), [](const std::pair<point_type,double> &left, const std::pair<point_type, double> &right) {
 							return left.second < right.second;});
@@ -1896,34 +1896,34 @@ namespace FracG
 							point_type pp = nx->first;
 							spaceing += geometry::distance(p, pp);
 						}
-						txtF << spaceing/(distances.size()-1) << endl;
+						txtF << spaceing/(distances.size()-1) << std::endl;
 					}
 					else 	
-						txtF << " " << endl;
+						txtF << " " << std::endl;
 				i++;
 				}
 			}
 			g++;
 		}
 
-		cout << "Analysed " << nb_scanlines << " scalines \n" << endl;
+		std::cout << "Analysed " << nb_scanlines << " scalines \n" << std::endl;
 	}
 
 	//create statisics from input file--------------------------------------
 	void CreateStats(VECTOR &lines, AngleDistribution &angle_dist)
 	{
 		int FaultNumber = lines.data.size();
-		vector<line_type> faults = lines.data;
+		std::vector<line_type> faults = lines.data;
 		point_type centre;
 
-		vector<double> Angle, Length, Sinuosity;
+		std::vector<double> Angle, Length, Sinuosity;
 		Angle.reserve(faults.size());
 		Length.reserve(faults.size());
 		Sinuosity.reserve(faults.size());
 
-		vector<string> Coodinates;
-		vector<p_index> points;
-		vector<pl_index> points2;
+		std::vector<std::string> Coodinates;
+		std::vector<p_index> points;
+		std::vector<pl_index> points2;
 
 		unsigned int index = 0;
 		BOOST_FOREACH(line_type F, faults)
@@ -1940,7 +1940,7 @@ namespace FracG
 			Sinuosity.push_back(sinuosity);
 
 			geometry::unique(F);
-			string coord = "";
+			std::string coord = "";
 			int p_nb = 0;
 			BOOST_FOREACH(point_type p, F)
 			{
@@ -1970,30 +1970,30 @@ namespace FracG
 	* Geophysical Research Letters, 26(13), 2001-2004.
 	***********************************************************************/
 	//fault centre to  centre distance--------------------------------------
-		vector<p_index> closest;
+		std::vector<p_index> closest;
 		PointTree(points, closest);
-		vec distance(points.size(),fill::zeros);
+		arma::vec distance(points.size(), arma::fill::zeros);
 
 	//fault centre to centre distance to larger larger fault----------------------
-		vector<pl_index> closest2;
+		std::vector<pl_index> closest2;
 		PointTree2(points2, closest2, floor(arma::vec(Length).max()*1000));
-		vec distance2(points.size(),fill::zeros);
+		arma::vec distance2(points.size(), arma::fill::zeros);
 
 	//write data to file----------------------------------------------------
-		ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.tsv"));//statistics
-		txtF << lines.name <<endl;
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.tsv"));//statistics
+		txtF << lines.name <<std::endl;
 		if (angle_dist.gaussians.size() > 0)
 		{
 			int i = 0;
-			txtF << "No \t Amplitude \t Stddev \t Mean" << endl;
+			txtF << "No \t Amplitude \t Stddev \t Mean" << std::endl;
 			for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
 			{
-				txtF << i << "\t" << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
+				txtF << i << "\t" << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
 				i++;
 			}
 		}
 		txtF << "index \t strike \t length \t sinuosity \t Generation \t nearest line" 
-			 <<"\t distance to nearest line \t nearest larger line \t distance to nearest larger line \t coodinates" << endl;
+			 <<"\t distance to nearest line \t nearest larger line \t distance to nearest larger line \t coodinates" << std::endl;
 
 		size_t curPos = 0;
 		for (int i = 0; i< lines.data.size(); i++)
@@ -2002,13 +2002,13 @@ namespace FracG
 			if (lines.data.size() != 1)
 			{
 				 txtF << closest[curPos].second  << "\t" << geometry::distance(points[curPos].first, closest[curPos].first) << "\t"
-					  << get<1>(closest2[curPos]) <<"\t" << geometry::distance(points[curPos].first, get<0>(closest2[curPos])) << "\t" << Coodinates.at(i) << endl;
+					  << get<1>(closest2[curPos]) <<"\t" << geometry::distance(points[curPos].first, get<0>(closest2[curPos])) << "\t" << Coodinates.at(i) << std::endl;
 
 			distance[i]  = geometry::distance(points[curPos].first, closest[curPos].first);
 			distance2[i] = geometry::distance(points[curPos].first, get<0>(closest2[curPos]));
 			}
 			else
-				txtF << "\t"  << "\t" << "\t" << "\t" << endl;
+				txtF << "\t"  << "\t" << "\t" << "\t" << std::endl;
 			curPos++;
 		}
 		txtF << "Mean:     " << "\t" << arma::mean(arma::vec(Angle)) 	<< "\t" << arma::mean(arma::vec(Length))	<< "\t" << arma::mean(arma::vec (Sinuosity)) 	<< "\t" << "\t" << "\t" << arma::mean(distance) 	<< "\t" << "\t" << arma::mean(distance2)   		<< "\n"
@@ -2016,37 +2016,37 @@ namespace FracG
 			 << "Stddev:   " << "\t" << arma::stddev(arma::vec(Angle)) 	<< "\t" << arma::stddev(arma::vec(Length))	<< "\t" << arma::stddev(arma::vec (Sinuosity)) 	<< "\t" << "\t" << "\t" << arma::stddev(distance) 	<< "\t" << "\t" << arma::stddev(distance2) 		<< "\n"
 			 << "Variance: " << "\t" << arma::var(arma::vec(Angle))  	<< "\t" << arma::var(arma::vec(Length))		<< "\t" << arma::var(arma::vec (Sinuosity))  	<< "\t" << "\t" << "\t" << arma::var(distance)		<< "\t" << "\t" << arma::var(distance2)			<< "\n"
 			 << "Range:    " << "\t" << arma::range(arma::vec(Angle))	<< "\t" << arma::range(arma::vec(Length))	<< "\t" << arma::range(arma::vec (Sinuosity))	<< "\t" << "\t" << "\t" << arma::range(distance)	<< "\t" << "\t" << arma::range(distance2)	<< "\n"
-			 << endl;
+			 << std::endl;
 		txtF.close(); 
 
 		txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_orientations_correlations.tsv"));
 
 	txtF << "\n Linear correlations "
-		 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "StdDev" << endl; 
+		 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "StdDev" << std::endl; 
 
 	//testing for linear correlations---------------------------------------
-		vector<double> p_dist  = arma::conv_to< std::vector<double> >::from(distance);
-		vector<double> p_dist2 = arma::conv_to< std::vector<double> >::from(distance2);
+		std::vector<double> p_dist  = arma::conv_to< std::vector<double> >::from(distance);
+		std::vector<double> p_dist2 = arma::conv_to< std::vector<double> >::from(distance2);
 
-		vector<double> len_sin_cor = PearsonCorrelation(Length, Sinuosity, 50);
-		txtF << "length sinuosity: \t" << arma::mean(arma::vec((len_sin_cor))) << "\t" << arma::stddev(arma::vec (len_sin_cor)) << endl;
+		std::vector<double> len_sin_cor = PearsonCorrelation(Length, Sinuosity, 50);
+		txtF << "length sinuosity: \t" << arma::mean(arma::vec((len_sin_cor))) << "\t" << arma::stddev(arma::vec (len_sin_cor)) << std::endl;
 
-		vector<double> len_orient_cor = PearsonCorrelation(Length, Angle, 50);
-		txtF << "length orientation: \t" << arma::mean(arma::vec((len_orient_cor))) << "\t" << arma::stddev(arma::vec (len_orient_cor)) << endl;
+		std::vector<double> len_orient_cor = PearsonCorrelation(Length, Angle, 50);
+		txtF << "length orientation: \t" << arma::mean(arma::vec((len_orient_cor))) << "\t" << arma::stddev(arma::vec (len_orient_cor)) << std::endl;
 
-		vector<double> orient_sin_cor = PearsonCorrelation(Length, Angle, 50);
-		txtF << "orientation sinuosity: \t" << arma::mean(arma::vec((orient_sin_cor))) << "\t" << arma::stddev(arma::vec (orient_sin_cor)) << endl;
+		std::vector<double> orient_sin_cor = PearsonCorrelation(Length, Angle, 50);
+		txtF << "orientation sinuosity: \t" << arma::mean(arma::vec((orient_sin_cor))) << "\t" << arma::stddev(arma::vec (orient_sin_cor)) << std::endl;
 
-		vector<double> len_p_dist_cor = PearsonCorrelation(Length, p_dist, 50);
-		txtF << "length distance: \t" << arma::mean(arma::vec((len_p_dist_cor))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor)) << endl;
+		std::vector<double> len_p_dist_cor = PearsonCorrelation(Length, p_dist, 50);
+		txtF << "length distance: \t" << arma::mean(arma::vec((len_p_dist_cor))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor)) << std::endl;
 
-		vector<double> len_p_dist_cor2 = PearsonCorrelation(Length, p_dist2, 50);
-		txtF << "length distanse (larger): \t" << arma::mean(arma::vec((len_p_dist_cor2))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor2)) << endl;
+		std::vector<double> len_p_dist_cor2 = PearsonCorrelation(Length, p_dist2, 50);
+		txtF << "length distanse (larger): \t" << arma::mean(arma::vec((len_p_dist_cor2))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor2)) << std::endl;
 
-		cout << "Wrote geometric statisics to file" << endl; 
+		std::cout << "Wrote geometric statisics to file" << std::endl; 
 	}
 
-	int GetCluster(pair<double, double> point, vector<pair<double,double>> clusters)
+	int GetCluster(std::pair<double, double> point, std::vector<std::pair<double,double>> clusters)
 	{
 		//checking the euclidian distance between the data point and every centroid
 		int  n = 0, c;
@@ -2071,9 +2071,9 @@ namespace FracG
 		int No = angle_dist.gaussians.size();
 		if (No > 1)
 		{
-			cout <<"k-means clustering of geometric properties" << endl;
-			ofstream txtF;
-			vector<double> Angle, Length, Sinuosity;
+			std::cout <<"k-means clustering of geometric properties" << std::endl;
+			std::ofstream txtF;
+			std::vector<double> Angle, Length, Sinuosity;
 			BOOST_FOREACH(line_type F, lines.data)
 			{ 
 				double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
@@ -2090,101 +2090,101 @@ namespace FracG
 			}
 
 			bool status;
-			mat means;
-			mat a = conv_to<rowvec>::from(Angle);
-			mat l = conv_to<rowvec>::from(Length);
-			mat s = conv_to<rowvec>::from(Sinuosity);
+			arma::mat means;
+			arma::mat a = arma::conv_to<arma::rowvec>::from(Angle);
+			arma::mat l = arma::conv_to<arma::rowvec>::from(Length);
+			arma::mat s = arma::conv_to<arma::rowvec>::from(Sinuosity);
 
 	//Angle and Length------------------------------------------------------
 			auto ang_len = arma::join_cols(a,l);
-			status = kmeans(means, ang_len, No, random_subset, 20, output);
+			status = kmeans(means, ang_len, No, arma::random_subset, 20, output);
 			if(status == false) 
-				cout << "clustering angle and lenght failed" << endl;
+				std::cout << "clustering angle and lenght failed" << std::endl;
 			else
 			{
 				txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_angle_length.tsv"));
-				txtF << lines.name << endl;
-				txtF << "km-means clustering of orientation and length" << endl;
-				txtF << "Amplitude\tSigma\tMean" << endl;
+				txtF << lines.name << std::endl;
+				txtF << "km-means clustering of orientation and length" << std::endl;
+				txtF << "Amplitude\tSigma\tMean" << std::endl;
 				for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
-				txtF << "Cluster centroids" << endl;
-				vector<pair<double, double>> clusters;
+					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
+				txtF << "Cluster centroids" << std::endl;
+				std::vector<std::pair<double, double>> clusters;
 				int j = 0;
 				for (int i = 0; i < means.size()-1;i++) 
 				{
 					j = i + 1;
-					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << endl;
-					clusters.push_back(make_pair(means[i], means[i++]));
+					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << std::endl;
+					clusters.push_back(std::make_pair(means[i], means[i++]));
 				}
 
-				txtF << "No \t Angle \t Length" << endl;
+				txtF << "No \t Angle \t Length" << std::endl;
 				for (int i = 0; i < lines.data.size(); i++)
-					txtF << i << "\t" << Angle[i] << "\t" << Length[i] << "\t" << GetCluster(make_pair(Angle[i], Length[i]), clusters) << endl;
+					txtF << i << "\t" << Angle[i] << "\t" << Length[i] << "\t" << GetCluster(std::make_pair(Angle[i], Length[i]), clusters) << std::endl;
 				means.clear();
 			}
 
 	//Angle and Sinuosity----------------------------------------------------
 			auto ang_sin = arma::join_cols(a,s);
-			status = kmeans(means, ang_sin, No, random_subset, 20, output);
+			status = arma::kmeans(means, ang_sin, No, arma::random_subset, 20, output);
 			if(status == false) 
-				cout << "clustering angle and lenght failed" << endl;
+				std::cout << "clustering angle and lenght failed" << std::endl;
 			else
 			{
 				txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_angle_sinuosity.tsv"));
-				txtF << lines.name << endl;
-				txtF << "km-means clustering of orientation and sinuosity" << endl;
-				txtF << "Amplitude\tSigma\tMean" << endl;
+				txtF << lines.name << std::endl;
+				txtF << "km-means clustering of orientation and sinuosity" << std::endl;
+				txtF << "Amplitude\tSigma\tMean" << std::endl;
 				for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
-				txtF << "Cluster centroids" << endl;
+					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
+				txtF << "Cluster centroids" << std::endl;
 
-				vector<pair<double, double>> clusters;
+				std::vector<std::pair<double, double>> clusters;
 				int j = 0;
 				for (int i = 0; i < means.size()-1;i++) 
 				{
 					j = i + 1;
-					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << endl;
-					clusters.push_back(make_pair(means[i], means[i++]));
+					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << std::endl;
+					clusters.push_back(std::make_pair(means[i], means[i++]));
 				}
 
-				txtF << "No \t Angle \t Sinuosity" << endl;
+				txtF << "No \t Angle \t Sinuosity" << std::endl;
 				for (int i = 0; i < lines.data.size(); i++)
-					txtF << i << "\t" << Angle[i] << "\t" << Sinuosity[i] << "\t" << GetCluster(make_pair(Angle[i], Sinuosity[i]), clusters) << endl;
+					txtF << i << "\t" << Angle[i] << "\t" << Sinuosity[i] << "\t" << GetCluster(std::make_pair(Angle[i], Sinuosity[i]), clusters) << std::endl;
 				means.clear();
 			}
 
 	//Length and Sinuosity--------------------------------------------------
 			auto len_sin = arma::join_cols(l,s);
-			status = kmeans(means, len_sin, No, random_subset, 20, output);
+			status = arma::kmeans(means, len_sin, No, arma::random_subset, 20, output);
 			if(status == false) 
-				cout << "clustering angle and lenght failed" << endl;
+				std::cout << "clustering angle and lenght failed" << std::endl;
 			else
 			{
 				txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_length_sinuosity.tsv"));
-				txtF << lines.name << endl;
-				txtF << "km-means clustering of length and sinuosity" << endl;
-				txtF << "Amplitude\tSigma\tMean" << endl;
+				txtF << lines.name << std::endl;
+				txtF << "km-means clustering of length and sinuosity" << std::endl;
+				txtF << "Amplitude\tSigma\tMean" << std::endl;
 				for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << endl;
-				txtF << "Cluster centroids" << endl;
-				vector<pair<double, double>> clusters;
+					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
+				txtF << "Cluster centroids" << std::endl;
+				std::vector<std::pair<double, double>> clusters;
 				int j = 0;
 				for (int i = 0; i < means.size()-1;i++) 
 				{
 					j = i + 1;
-					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << endl;
-					clusters.push_back(make_pair(means[i], means[i++]));
+					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << std::endl;
+					clusters.push_back(std::make_pair(means[i], means[i++]));
 				}
-				txtF << "No \t Angle \t Sinuosity" << endl;
+				txtF << "No \t Angle \t Sinuosity" << std::endl;
 				for (int i = 0; i < lines.data.size(); i++)
-					txtF << i << "\t" << Length[i] << "\t" << Sinuosity[i] << "\t" << GetCluster(make_pair(Length[i], Sinuosity[i]), clusters) << endl;
+					txtF << i << "\t" << Length[i] << "\t" << Sinuosity[i] << "\t" << GetCluster(std::make_pair(Length[i], Sinuosity[i]), clusters) << std::endl;
 				means.clear();
 			}
 		}
 		else
-			cout << "Insufficinet number of clusters derived from orientation data" << endl;
-		cout << " done \n" << endl;
+			std::cout << "Insufficinet number of clusters derived from orientation data" << std::endl;
+		std::cout << " done \n" << std::endl;
 	}
 
 }

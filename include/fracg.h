@@ -95,8 +95,6 @@
 #include <armadillo>
 
 #pragma once
-using namespace boost;
-using namespace std;
 
 namespace FracG
 {
@@ -105,36 +103,36 @@ namespace FracG
 // 	extern const char* refWKT_shp;										//reference system of shp file
 	//======================GEOMETRY======================================== 
 	//typedef geometry::model::point<double, 2, geometry::cs::geographic <geometry::degree>> point_type;  
-	typedef geometry::model::d2::point_xy<long double>  point_type;
+	typedef boost::geometry::model::d2::point_xy<long double>  point_type;
 	typedef boost::geometry::model::d2::point_xy<long long> point_int;
 	typedef boost::geometry::model::segment<point_type> Segment;
-	typedef geometry::model::linestring<point_type> line_type;
-	typedef geometry::model::multi_linestring<line_type> multiline_type;
+	typedef boost::geometry::model::linestring<point_type> line_type;
+	typedef boost::geometry::model::multi_linestring<line_type> multiline_type;
 	
 	//declare types for buffer
-	typedef geometry::model::polygon<point_type> polygon_type;
-	typedef geometry::model::multi_polygon<polygon_type> BUFFER;
-	typedef geometry::model::box<point_type> box;
+	typedef boost::geometry::model::polygon<point_type> polygon_type;
+	typedef boost::geometry::model::multi_polygon<polygon_type> BUFFER;
+	typedef boost::geometry::model::box<point_type> box;
 
 	struct VECTOR
 	{
-		string folder;
-		boost::filesystem::path in_path;
-        string out_folder;
-        boost::filesystem::path out_path;
-		string name;
-		char *refWKT;
-		vector<line_type> data;
+            std::string folder;
+            boost::filesystem::path in_path;
+            std::string out_folder;
+            boost::filesystem::path out_path;
+            std::string name;
+            char *refWKT;
+            std::vector<line_type> data;
 	};
 	
 	
 	template <typename T> 
 	struct RASTER
 	{
-		string name;
-		const char *refWKT;
-		double transform[8];
-		T** values;
+            std::string name;
+            const char *refWKT;
+            double transform[8];
+            T** values;
 	}; 
 	
 	//=======================GRAPH==========================================
@@ -142,44 +140,44 @@ namespace FracG
 	template <typename Point>
 	struct FVertex
 	{
-		FVertex()
-		{
-			geometry::assign_zero(location);
-		}
-		FVertex(Point const& loc)
-			: location(loc)
-		{
-		}
-		Point location;
-		bool Enode = false;
-		int component;
-		double data;
+            FVertex()
+            {
+                    boost::geometry::assign_zero(location);
+            }
+            FVertex(Point const& loc)
+                    : location(loc)
+            {
+            }
+            Point location;
+            bool Enode = false;
+            int component;
+            double data;
 	};
 
 	// Fault Edges Properties
 	struct FEdge
 	{
-		long double length; //length of the fault segment that makes up this edge
-		line_type trace; //the fault segment that makes up this edge
-		std::string BranchType;
-		int FaultNb;
-		int component;
-		double fault_length; //the length of the entire fault that the fault segment is taken from
-		
-		double Centre;
-		double MeanValue;
-		double CentreGrad;
-		double CrossGrad;
-		double ParalGrad;
-		friend std::ostream& operator<<(std::ostream &os, const FEdge &de) 
-		{return os << "l " << de.length << ", full length = " << de.fault_length;}
+            long double length; //length of the fault segment that makes up this edge
+            line_type trace; //the fault segment that makes up this edge
+            std::string BranchType;
+            int FaultNb;
+            int component;
+            double fault_length; //the length of the entire fault that the fault segment is taken from
+
+            double Centre;
+            double MeanValue;
+            double CentreGrad;
+            double CrossGrad;
+            double ParalGrad;
+            friend std::ostream& operator<<(std::ostream &os, const FEdge &de) 
+                {return os << "l " << de.length << ", full length = " << de.fault_length;}
 	};
 	
-		struct FEdge2
+        struct FEdge2
 	{
-		long double length;
-		line_type trace;
-		int FaultNb;
+            long double length;
+            line_type trace;
+            int FaultNb;
 	};
 	
 	typedef std::pair<point_type, point_type> s_t; //source and target for graph
@@ -187,70 +185,68 @@ namespace FracG
 	//now we can define the graph as an adjacency list
 	//we also need a vertex descriptor to add vertices to the graph
 	//and a map that stores the vertices that have already been added (control)
-	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
+	typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS,
 		FVertex<point_type>, FEdge> Graph;  
 	
 	//now we can define the graph as an adjacency list
 	//we also need a vertex descriptor to add vertices to the graph
 	//and a map that stores the vertices that have already been added (control)
-	typedef adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
+	typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::undirectedS,
 		FVertex<point_type>, FEdge2> MGraph;
 
-	typedef graph_traits<Graph>::vertex_descriptor vertex_type;
-	typedef graph_traits<Graph>::vertex_iterator vertex_iter;
-	typedef graph_traits<Graph>::adjacency_iterator adj_iter;
-	typedef graph_traits<Graph>::edge_descriptor edge_type;
-	typedef graph_traits<Graph>::edge_iterator edge_iter;  
+	typedef boost::graph_traits<Graph>::vertex_descriptor vertex_type;
+	typedef boost::graph_traits<Graph>::vertex_iterator vertex_iter;
+	typedef boost::graph_traits<Graph>::adjacency_iterator adj_iter;
+	typedef boost::graph_traits<Graph>::edge_descriptor edge_type;
+	typedef boost::graph_traits<Graph>::edge_iterator edge_iter;  
 
-	typedef pair<vertex_iter, vertex_iter> VertexPair;
-	typedef pair<edge_iter, edge_iter> EdgePair;
+	typedef std::pair<vertex_iter, vertex_iter> VertexPair;
+	typedef std::pair<edge_iter, edge_iter> EdgePair;
 
 	typedef std::vector<edge_type> short_path;
-	typedef map<point_type, vertex_type, geometry::less<point_type> > map_type;
-	typedef map<point_int, std::vector<vertex_type>, geometry::less<point_int> > map_vertex_type;
+	typedef std::map<point_type, vertex_type, boost::geometry::less<point_type> > map_type;
+	typedef std::map<point_int, std::vector<vertex_type>, boost::geometry::less<point_int> > map_vertex_type;
 	
 	
-	typedef adjacency_list_traits<boost::vecS, boost::vecS, boost::directedS> DGraphTraits;
+	typedef boost::adjacency_list_traits<boost::vecS, boost::vecS, boost::directedS> DGraphTraits;
 	typedef DGraphTraits::edge_descriptor dedge_type;
 	typedef DGraphTraits::vertex_descriptor dvertex_type;
 	//Structure for a directed vertex, for use in the maximum flow algorithm
 	struct DVertex
 	{
-		point_type location; //the node's physical location
-		bool Enode; //whether or not this node is an end node (off the edge of the raster file)
-		double data; //the data value at the vertex's location
-		long long index;
-		dedge_type predecessor; //store the edge to this vertex's predecessor
-		boost::default_color_type colour; //colour property used by the maximum flow algorithm
-		double distance; //distance from this vertex to the sink
-		DVertex(){};
-		DVertex(point_type loc, bool end, double data, long long ind) : location(loc), Enode(end), data(data), index(ind) {};
+            point_type location; //the node's physical location
+            bool Enode; //whether or not this node is an end node (off the edge of the raster file)
+            double data; //the data value at the vertex's location
+            long long index;
+            dedge_type predecessor; //store the edge to this vertex's predecessor
+            boost::default_color_type colour; //colour property used by the maximum flow algorithm
+            double distance; //distance from this vertex to the sink
+            DVertex(){};
+            DVertex(point_type loc, bool end, double data, long long ind) : location(loc), Enode(end), data(data), index(ind) {};
 	};
 	
 	//Structure for a directed edge, for use in the maximum flow algorithm
 	struct DEdge
 	{
-		double length; //the length of this fault/fracture segment
-		double full_length; //the full length of the fault/fracture that this segment belongs to (used to determine the width of the damage zone)
-		double angle; //the orientation of this edge
-		line_type trace;
-		double capacity; //the capacity for this edge
-		double residual_capacity; //the unused capacity for this edge
-		dedge_type reverse; //holds a link/pointer/whatever to the edge that links the same two vertices, but in the opposite direction
-		DEdge() : length(0), full_length(0), capacity(0), residual_capacity(0) {};
-		DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra), capacity(cap), residual_capacity(cap) {};
-		DEdge(double len, double full_len, line_type tra)             : length(len), full_length(full_len), trace(tra), capacity(  0), residual_capacity(  0) {};
-		friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
+            double length; //the length of this fault/fracture segment
+            double full_length; //the full length of the fault/fracture that this segment belongs to (used to determine the width of the damage zone)
+            double angle; //the orientation of this edge
+            line_type trace;
+            double capacity; //the capacity for this edge
+            double residual_capacity; //the unused capacity for this edge
+            dedge_type reverse; //holds a link/pointer/whatever to the edge that links the same two vertices, but in the opposite direction
+            DEdge() : length(0), full_length(0), capacity(0), residual_capacity(0) {};
+            DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra), capacity(cap), residual_capacity(cap) {};
+            DEdge(double len, double full_len, line_type tra)             : length(len), full_length(full_len), trace(tra), capacity(  0), residual_capacity(  0) {};
+            friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
 	};
 	//<edge list for each vertex, vectex list, un/directed, vertex properties, edge properties, graph properties, (all?) edges list>
-	typedef adjacency_list<boost::vecS, boost::vecS, boost::directedS, DVertex, DEdge> DGraph;
+	typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, DVertex, DEdge> DGraph; //directed graph
 	typedef boost::multi_array<double, 2> Raster_type;
 	typedef std::pair<point_type, size_t> p_index;
 	typedef std::tuple<point_type,size_t, double_t> pl_index;
 
-	typedef geometry::index::rtree<p_index, geometry::index::rstar<16> > p_tree;
-	typedef geometry::index::rtree<pl_index, geometry::index::rstar<16> > pl_tree;
+	typedef boost::geometry::index::rtree<p_index, boost::geometry::index::rstar<16> > p_tree;
+	typedef boost::geometry::index::rtree<pl_index, boost::geometry::index::rstar<16> > pl_tree;
     
-    
-
 }

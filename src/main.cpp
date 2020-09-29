@@ -69,9 +69,9 @@ int main(int argc, char *argv[])
     po::options_description desc("FracG Options");
     desc.add_options()
         ("help", "write help message")
-        (SHAPEFILE, po::value<string>(), "fault/fracture vector data, as a shapefile")
-        (RASTER_FILE, po::value<string>()->default_value(""), "Raster file to use in analysis")
-        (OUT_DIR, po::value<string>()->default_value(""), "Write output to this directory")
+        (SHAPEFILE, po::value<std::string>(), "fault/fracture vector data, as a shapefile")
+        (RASTER_FILE, po::value<std::string>()->default_value(""), "Raster file to use in analysis")
+        (OUT_DIR, po::value<std::string>()->default_value(""), "Write output to this directory")
         //(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
         (DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
         (MAP_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to consider points to be the same in a point-indexed map")
@@ -89,11 +89,11 @@ int main(int argc, char *argv[])
         
         (GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
         
-        (MAX_FLOW_CAP_TYPE, po::value<string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
+        (MAX_FLOW_CAP_TYPE, po::value<std::string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
         
         (PRINT_KMEANS, po::bool_switch(), "Print the progress results for kmeans clustering")
-        (GRAPH_RESULTS_FILE, po::value<string>()->default_value("first"), "Filename to save graph analysis results to")
-        (GRAPH_RESULTS_FOLDER, po::value<string>()->default_value("g"), "Save the resulting graph to this folder")
+        (GRAPH_RESULTS_FILE, po::value<std::string>()->default_value("first"), "Filename to save graph analysis results to")
+        (GRAPH_RESULTS_FOLDER, po::value<std::string>()->default_value("g"), "Save the resulting graph to this folder")
         
         (GMSH_CELL_COUNT, po::value<int>()->default_value(15), "GMSH Cell Count")
         (GMSH_SHOW_OUTPUT, po::bool_switch(), "Show GMSH output in the GMSH viewer")
@@ -111,14 +111,14 @@ int main(int argc, char *argv[])
     
     if (vm.count("help"))
     {
-        cout << desc;
+        std::cout << desc;
     }
     
     if (vm.count(SHAPEFILE))
     {
-        cout << "The shapefile is given as " << vm[SHAPEFILE].as<string>() << endl;
+        std::cout << "The shapefile is given as " << vm[SHAPEFILE].as<std::string>() << std::endl;
     } else {
-        cerr << "ERROR: Need to give a shapefile for the vector data" << endl;
+        std::cerr << "ERROR: Need to give a shapefile for the vector data" << std::endl;
         return EXIT_FAILURE;
     }
     
@@ -126,9 +126,9 @@ int main(int argc, char *argv[])
 	
 	//TODO: Need to put in some variables here to control whether or not to do each of these functions
 	
-	const string shapefile_name = vm[SHAPEFILE].as<string>();
-    string raster_name = vm[RASTER_FILE].as<string>();
-    const string out_dir = vm[OUT_DIR].as<string>();
+	const std::string shapefile_name = vm[SHAPEFILE].as<std::string>();
+    std::string raster_name = vm[RASTER_FILE].as<std::string>();
+    const std::string out_dir = vm[OUT_DIR].as<std::string>();
 //     const string out_subdir = vm[OUT_SUBDIR].as<string>();
 	
 	const double dist_threshold = vm[DIST_THRESH].as<double>(); //NOTE: different things use different distance thresholds, we need to sort out whether or not they should be made consistent, or use separate thresholds
@@ -155,13 +155,13 @@ int main(int argc, char *argv[])
     double raster_stats_dist = vm[RASTER_STATS_DIST].as<double>();
     if (raster_stats_dist < 0) raster_stats_dist = dist_threshold;
     
-    const string max_flow_cap_type = vm[MAX_FLOW_CAP_TYPE].as<string>();
+    const std::string max_flow_cap_type = vm[MAX_FLOW_CAP_TYPE].as<std::string>();
     
     const bool print_kmeans = vm[PRINT_KMEANS].as<bool>();
     const bool save_kde_params = true; //the code that uses this needs to be improved - it should use local variables, not a global
 	
-	const string graph_results_filename = vm[GRAPH_RESULTS_FILE].as<string>();
-    const string graph_results_folder = vm[GRAPH_RESULTS_FOLDER].as<string>(); //we should allow for this to be empty/null, and use that to signify not saving these results
+	const std::string graph_results_filename = vm[GRAPH_RESULTS_FILE].as<std::string>();
+    const std::string graph_results_folder = vm[GRAPH_RESULTS_FOLDER].as<std::string>(); //we should allow for this to be empty/null, and use that to signify not saving these results
     
     const int gmsh_cell_count = vm[GMSH_CELL_COUNT].as<int>();
     const int gmsh_show_output = vm[GMSH_SHOW_OUTPUT].as<bool>();
@@ -234,8 +234,8 @@ int main(int argc, char *argv[])
 	
     fs::path mesh_dir = out_path / "mesh/";
     
-	FracG::dist_tree dtree = FracG::BuildPointTree(graph);
-	FracG::WriteGmsh2D(dtree, gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	FracG::SampleNetwork2D(dtree, gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
+	FracG::p_tree dist_tree = FracG::BuildPointTree(graph);
+	FracG::WriteGmsh2D(dist_tree, gmsh_show_output, graph, gmsh_cell_count, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+	FracG::SampleNetwork2D(dist_tree, gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
 	return EXIT_SUCCESS;
 } 

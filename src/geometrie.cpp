@@ -6,17 +6,18 @@ const std::string geom_subdir = "geometry";
 
 namespace FracG
 {
+	namespace bgm = boost::geometry;
 	//create a polygon around a point (square)------------------------------
 	BUFFER DefineSquareBuffer(point_type POINT, const double Bdistance )
 	{
 		BUFFER buff;
-		geometry::strategy::buffer::point_square point_strategy;
-		geometry::strategy::buffer::distance_symmetric<double> distance_strategy(Bdistance);
-		geometry::strategy::buffer::join_round join_strategy;
-		geometry::strategy::buffer::end_round end_strategy;
-		geometry::strategy::buffer::side_straight side_strategy;
+		bgm::strategy::buffer::point_square point_strategy;
+		bgm::strategy::buffer::distance_symmetric<double> distance_strategy(Bdistance);
+		bgm::strategy::buffer::join_round join_strategy;
+		bgm::strategy::buffer::end_round end_strategy;
+		bgm::strategy::buffer::side_straight side_strategy;
 
-		geometry::buffer(POINT, buff,
+		bgm::buffer(POINT, buff,
 		distance_strategy, side_strategy,
 		join_strategy, end_strategy, point_strategy); 
 		return buff; 
@@ -28,13 +29,13 @@ namespace FracG
 		BUFFER buff;
 		const int points_per_circle = 36;
 
-		geometry::strategy::buffer::distance_symmetric<double> distance_strategy( Bdistance );
-		geometry::strategy::buffer::join_round join_strategy(points_per_circle);
-		geometry::strategy::buffer::end_round end_strategy(points_per_circle);
-		geometry::strategy::buffer::point_circle circle_strategy(points_per_circle);
-		geometry::strategy::buffer::side_straight side_strategy;
+		bgm::strategy::buffer::distance_symmetric<double> distance_strategy( Bdistance );
+		bgm::strategy::buffer::join_round join_strategy(points_per_circle);
+		bgm::strategy::buffer::end_round end_strategy(points_per_circle);
+		bgm::strategy::buffer::point_circle circle_strategy(points_per_circle);
+		bgm::strategy::buffer::side_straight side_strategy;
 
-		geometry::buffer(POINT, buff,
+		bgm::buffer(POINT, buff,
 		distance_strategy, side_strategy,
 		join_strategy, end_strategy, circle_strategy); 
 		return buff; 
@@ -46,11 +47,11 @@ namespace FracG
 		BUFFER buff;
 		const int points_per_circle = 36;
 
-		geometry::strategy::buffer::distance_symmetric<double> distance_strategy( Bdistance );
-		geometry::strategy::buffer::join_round join_strategy(points_per_circle);
-		geometry::strategy::buffer::end_round end_strategy(points_per_circle);
-		geometry::strategy::buffer::point_circle circle_strategy(points_per_circle);
-		geometry::strategy::buffer::side_straight side_strategy;
+		bgm::strategy::buffer::distance_symmetric<double> distance_strategy( Bdistance );
+		bgm::strategy::buffer::join_round join_strategy(points_per_circle);
+		bgm::strategy::buffer::end_round end_strategy(points_per_circle);
+		bgm::strategy::buffer::point_circle circle_strategy(points_per_circle);
+		bgm::strategy::buffer::side_straight side_strategy;
 
 		boost::geometry::buffer(fault, buff,
 						distance_strategy, side_strategy,
@@ -65,45 +66,45 @@ namespace FracG
 		point_type first = Trace.front();
 		BOOST_FOREACH(point_type P, Trace)
 		{
-			if (!geometry::equals(first, P) && (len > geometry::distance(first, P)))
-				len = geometry::distance(first, P);	
+			if (!bgm::equals(first, P) && (len > bgm::distance(first, P)))
+				len = bgm::distance(first, P);	
 			first = P;
 		}
 		return len;
 	}
 
-	line_type ShortestLine(vector <line_type> &Set)
+	line_type ShortestLine(std::vector <line_type> &Set)
 	{
 		double dist = std::numeric_limits<double>::max();
 		line_type shortest;
 		BOOST_FOREACH(line_type l, Set)
 		{
-			if (geometry::length(l) < dist && geometry::length(l) != 0)
+			if (bgm::length(l) < dist && bgm::length(l) != 0)
 			{
-				dist = geometry::length(l) ;
+				dist = bgm::length(l) ;
 				shortest = l;
 			}
 		}
 		return(shortest);
 	}
 
-	box ReturnAOI(vector<line_type> &lines)
+	box ReturnAOI(std::vector<line_type> &lines)
 	{
 		box AOI;
 		polygon_type multiL;
 		BOOST_FOREACH(line_type F, lines)
-			geometry::append(multiL, F);
+			bgm::append(multiL, F);
 
 		AOI = boost::geometry::return_envelope<box>(multiL);
 		return(AOI);
 	}
 
-	polygon_type ReturnTightAOI(vector<line_type> &lines)
+	polygon_type ReturnTightAOI(std::vector<line_type> &lines)
 	{
 		polygon_type hull;
 		polygon_type multiL;
 		BOOST_FOREACH(line_type F, lines)
-			geometry::append(multiL, F);
+			bgm::append(multiL, F);
 
 		boost::geometry::convex_hull(multiL, hull);
 		return(hull);
@@ -119,7 +120,7 @@ namespace FracG
 		 for (line_type::iterator it = Trace.begin(); it != Trace.end(); it++)
 		 {
 			 Segment seg(prev_point, *it);
-			 double distance = geometry::distance(seg, point);
+			 double distance = bgm::distance(seg, point);
 			 //~ cout << "distance between (" << prev_point.x() << ", " << prev_point.y() << ") -> (" << it->x() << ", " << it->y() << ") and point (" << point.x() << ", " << point.y() << ") is " << distance << endl;
 			 if (distance < best_distance)
 			 {
@@ -164,20 +165,20 @@ namespace FracG
 		//if they're in the same segment, the new line segment is just between the two points
 		//we can probably take this part out
 		if (jit == bit){
-			geometry::append(line_seg, first);
-			geometry::append(line_seg, last);
+			bgm::append(line_seg, first);
+			bgm::append(line_seg, last);
 			return line_seg;
 		}
 		//the output line segment is the first point -> any and all entire segments that lie between the two points -> from the last whole segment to the end point
-		geometry::append(line_seg, first);
+		bgm::append(line_seg, first);
 		point_type previous = first;
 		for (auto it = first_segment; it != last_segment; it++)
 		{
-			if (geometry::distance(previous, *it) > threshold) 
-				geometry::append(line_seg, *it);
+			if (bgm::distance(previous, *it) > threshold) 
+				bgm::append(line_seg, *it);
 			previous = *it;
 		}
-		geometry::append(line_seg, last);
+		bgm::append(line_seg, last);
 		return line_seg; 
 	}
 
@@ -188,7 +189,7 @@ namespace FracG
 		template<typename T>
 		bool operator()(T const &t1, T const &t2)
 		{
-			return F<typename tuple_element<index, T>::type>()(std::get<index>(t1), std::get<index>(t2));
+			return F<typename std::tuple_element<index, T>::type>()(std::get<index>(t1), std::get<index>(t2));
 		}
 	};
 
@@ -199,9 +200,9 @@ namespace FracG
 		template<typename T>
 		bool operator()(T const &t1, T const &t2)
 		{
-			bool first_same = G<typename tuple_element<indexa, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
-			if (!first_same) return F<typename tuple_element<indexa, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
-			return F<typename tuple_element<indexb, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
+			bool first_same = G<typename std::tuple_element<indexa, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
+			if (!first_same) return F<typename std::tuple_element<indexa, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
+			return F<typename std::tuple_element<indexb, T>::type>()(std::get<indexa>(t1), std::get<indexa>(t2));
 		}
 	};
 
@@ -219,7 +220,7 @@ namespace FracG
 	};
 
 	//sort a vector of points according to their distances along a line
-	void SortDist(vector <std::tuple<long double, point_type, AttachPoint>>& cross)
+	void SortDist(std::vector <std::tuple<long double, point_type, AttachPoint>>& cross)
 	{
 		std::sort(cross.begin(), cross.end(), FaultDistanceCompare());
 	}
@@ -227,15 +228,15 @@ namespace FracG
 	void CentreDistanceMap(VECTOR lines, float cell_size)
 	{
 		point_type centre;
-		vector<p_index> result;
-		geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
+		std::vector<p_index> result;
+		bgm::index::rtree<p_index, bgm::index::rstar<16>> DistTree;
 
 		int index = 0 ;
 
 		BOOST_FOREACH(line_type l, lines.data)
 		{
-			geometry::centroid(l, centre);
-			DistTree.insert(make_pair(centre, ++index));
+			bgm::centroid(l, centre);
+			DistTree.insert(std::make_pair(centre, ++index));
 		}
 
 	//now we nedd to create a georefernece system based on the bounding box
@@ -244,10 +245,10 @@ namespace FracG
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
 
-		double min_x = geometry::get<geometry::min_corner, 0>(AOI);
-		double min_y = geometry::get<geometry::min_corner, 1>(AOI);
-		double max_x = geometry::get<geometry::max_corner, 0>(AOI);
-		double max_y = geometry::get<geometry::max_corner, 1>(AOI);
+		double min_x = bgm::get<bgm::min_corner, 0>(AOI);
+		double min_y = bgm::get<bgm::min_corner, 1>(AOI);
+		double max_x = bgm::get<bgm::max_corner, 0>(AOI);
+		double max_y = bgm::get<bgm::max_corner, 1>(AOI);
 
 		point_type ll(min_x, min_y);
 		point_type ul(min_x, max_y);
@@ -255,29 +256,29 @@ namespace FracG
 
 		double newGeoTransform[6] = {min_x, cell_size, 0 , max_y, 0, (cell_size * (-1))};
 
-		int x_size = (long int) ceil((geometry::distance(ll, lr) / cell_size));
-		int y_size = (long int) ceil((geometry::distance(ll, ul) / cell_size));
+		int x_size = (long int) ceil((bgm::distance(ll, lr) / cell_size));
+		int y_size = (long int) ceil((bgm::distance(ll, ul) / cell_size));
 
-		vector<vector<double> > vec(x_size , vector<double> (y_size, 0));  
+		std::vector<std::vector<double> > vec(x_size , std::vector<double> (y_size, 0));  
 
 		double cur_y = max_y;
 		double cur_x = min_x;
 
 	// query for distance to fault centre at every grid cell----------------
-		cout << "Calculating distances to lineamnet centres for raster with size \n"
-			 << vec.size()<< " x " << vec[0].size() << endl;
+		std::cout << "Calculating distances to lineamnet centres for raster with size \n"
+			 << vec.size()<< " x " << vec[0].size() << std::endl;
 
-		progress_display * show_progress =  new boost::progress_display(x_size * y_size);
+		boost::progress_display * show_progress =  new boost::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;
 			for (int j = 0; j < y_size; j++)
 			{
 				point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-				if (geometry::within(cur_pos, t_AOI))
+				if (bgm::within(cur_pos, t_AOI))
 				{
-					DistTree.query(geometry::index::nearest(cur_pos, 1), back_inserter(result));
-					vec[i][j] = geometry::distance(cur_pos, result[0].first);
+					DistTree.query(bgm::index::nearest(cur_pos, 1), std::back_inserter(result));
+					vec[i][j] = bgm::distance(cur_pos, result[0].first);
 				}
 				else 
 					vec[i][j] = -256;
@@ -292,23 +293,23 @@ namespace FracG
 
 		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
 		WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
-		cout << " done \n" << endl;
+		std::cout << " done \n" << std::endl;
 	}
 
 	void PMaps(VECTOR lines, float box_size)
 	{
-		geometry::index::rtree<p_index, geometry::index::rstar<16>> DistTree;
-		vector<p_index> result;
+		bgm::index::rtree<p_index, bgm::index::rstar<16>> DistTree;
+		std::vector<p_index> result;
 
 	//now we nedd to create a georefernece system based on the bounding box
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
 
-		double min_x = geometry::get<geometry::min_corner, 0>(AOI);
-		double min_y = geometry::get<geometry::min_corner, 1>(AOI);
-		double max_x = geometry::get<geometry::max_corner, 0>(AOI);
-		double max_y = geometry::get<geometry::max_corner, 1>(AOI);
+		double min_x = bgm::get<bgm::min_corner, 0>(AOI);
+		double min_y = bgm::get<bgm::min_corner, 1>(AOI);
+		double max_x = bgm::get<bgm::max_corner, 0>(AOI);
+		double max_y = bgm::get<bgm::max_corner, 1>(AOI);
 
 		point_type ll(min_x, min_y);
 		point_type ul(min_x, max_y);
@@ -316,18 +317,18 @@ namespace FracG
 
 		double newGeoTransform[6] = {min_x, box_size, 0 , max_y, 0, (box_size * (-1))};
 
-		int x_size = (long int) ceil((geometry::distance(ll, lr) / box_size));
-		int y_size = (long int) ceil((geometry::distance(ll, ul) / box_size));
+		int x_size = (long int) ceil((bgm::distance(ll, lr) / box_size));
+		int y_size = (long int) ceil((bgm::distance(ll, ul) / box_size));
 
-		vector<vector<double> > vec_count (x_size , vector<double> (y_size, 0));
-		vector<vector<double> > vec_length(x_size , vector<double> (y_size, 0));
+		std::vector<std::vector<double> > vec_count (x_size , std::vector<double> (y_size, 0));
+		std::vector<std::vector<double> > vec_length(x_size , std::vector<double> (y_size, 0));
 
 		double cur_y = max_y;
 		double cur_x = min_x;
 
 	//put the segments into an rtree, so we don't need to check each one----
 		typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring, and the linestring
-		geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
+		bgm::index::rtree<box_line, bgm::index::rstar<16>> line_tree;
 		for (auto it = lines.data.begin(); it < lines.data.end(); it++)
 		{
 			box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
@@ -335,9 +336,9 @@ namespace FracG
 		}
 
 	// query intesity and density for every grid cell-----------------------
-		cout << "Calulating P20 and P21 maps for raster with size \n"
-			 << vec_count.size()<< " x " << vec_count[0].size() << endl;
-		progress_display * show_progress =  new boost::progress_display(x_size * y_size);
+		std::cout << "Calulating P20 and P21 maps for raster with size \n"
+			 << vec_count.size()<< " x " << vec_count[0].size() << std::endl;
+		boost::progress_display * show_progress =  new boost::progress_display(x_size * y_size);
 
 		for (int i = 0; i < x_size; i++)
 		{
@@ -345,7 +346,7 @@ namespace FracG
 			for (int j = 0; j < y_size; j++)
 			{
 				point_type cur_pos(cur_x, cur_y); //cur_pos is the bottom-left corner of the pixel
-				if (geometry::within(cur_pos,t_AOI))
+				if (bgm::within(cur_pos,t_AOI))
 				{
 					point_type minBox(cur_x, (cur_y - box_size));
 					point_type maxBox((cur_x + box_size), cur_y );
@@ -356,20 +357,20 @@ namespace FracG
 
 		//get the lines that have intersecting bounding boxes-------------------
 					std::vector<box_line> candidates;
-					line_tree.query(geometry::index::intersects(pixel), std::back_inserter(candidates));
+					line_tree.query(bgm::index::intersects(pixel), std::back_inserter(candidates));
 					for (auto candidate = candidates.begin(); candidate < candidates.end(); candidate++)
 					{
 		//then check the full linestring to see if they intersect with this pixel
-						if (!geometry::disjoint(*candidate->second, pixel))
+						if (!bgm::disjoint(*candidate->second, pixel))
 						{
 							intersec++; //intersection count for the P20 map
 		//and sum the length of the intersection(s) for the P21 map-------------
 
-							geometry::model::multi_linestring<line_type> intersecting;
-							geometry::intersection(pixel, *candidate->second, intersecting);
+							bgm::model::multi_linestring<line_type> intersecting;
+							bgm::intersection(pixel, *candidate->second, intersecting);
 							for (auto intersec_it = intersecting.begin(); intersec_it < intersecting.end(); intersec_it++)
 							{
-								intersection_length += geometry::length(*intersec_it);
+								intersection_length += bgm::length(*intersec_it);
 							}
 						}
 					}
@@ -392,6 +393,6 @@ namespace FracG
 
 		std::string p21_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P21_map", ".tif");
 		WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, p21_name);
-		cout << "done \n" << endl;
+		std::cout << "done \n" << std::endl;
 	}
 }

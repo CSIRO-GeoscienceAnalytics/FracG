@@ -5,10 +5,6 @@
 #define MAX_ANGLE 180
 #define PPG  3 //params per gaussian. amplitude, sigma, position
 
-using namespace boost;
-using namespace std;
-using namespace arma;
-
 namespace FracG
 {
 
@@ -19,11 +15,11 @@ namespace FracG
     template<typename T>
     struct ModelHolder
     {
-            const std::function<T(const vector<double>&,const vector<double>::iterator &)> calculate_params_func; //generate the model parameters from the data and xmin
+            const std::function<T(const std::vector<double>&,const std::vector<double>::iterator &)> calculate_params_func; //generate the model parameters from the data and xmin
             const std::function<double(const double, const double, const T&)> cdf_func; //calculate the cumulative distribution function for a given x value and xmin value
             const std::function<double(const double, const double, const T&)> pdf_func; //calculate the probability distribution function for a given x value and xmin value
             const std::function<double(const double, const double, const T&)> convert_single_func; //convert a single uniform random number (0 to 1) to an element from the distribution (r, xmin, parameters)
-            const std::function<vector<double>(const vector<double>&, const double, const T&)> convert_multi_func; //convert multiple uniform random numbers, to the same number of model samples (r values, xmin, parameters).
+            const std::function<std::vector<double>(const std::vector<double>&, const double, const T&)> convert_multi_func; //convert multiple uniform random numbers, to the same number of model samples (r values, xmin, parameters).
             const bool use_xmin; //whether or not this distriubtion model uses xmin
             const int  samples_per_call; //number of random values to give and receive when generating random values
     };
