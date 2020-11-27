@@ -1,6 +1,5 @@
 #include <boost/program_options.hpp>
 
-
 #include "../include/graph.h"
 #include "../include/GeoRef.h" 
 #include "../include/geometrie.h"
@@ -8,6 +7,7 @@
 #include "../include/stats.h"
 #include "../include/fracg.h"
 #include "../include/model.h"
+#include "../include/convert.h"
 #include "../include/util.h"
 
 //using namespace FracG;
@@ -46,8 +46,8 @@ const char *GMSH_CELL_COUNT="gmsh_cell_count";
 const char *GMSH_SHOW_OUTPUT="gmsh_show_output";
 
 const char *GMSH_MIN_CL="gmsh_min_cl";
-const char *GMSH_MAX_DIST="gmsh_min_dist";
-const char *GMSH_MIN_DIST="gmsh_max_dist";
+const char *GMSH_MAX_DIST="gmsh_max_dist";
+const char *GMSH_MIN_DIST="gmsh_min_dist";
 
 const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
 const char *GMSH_SAMPLE_COUNT="gmsh_sample_count";
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 		(RASTER_SPACING, po::value<double>()->default_value(3000.0), "Pixel size of output raster maps")
 		(ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
 
-		(SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines to check for orientations (?)")
+		(SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines for determining intesity and spacing")
 
 		(ANGLE_PARAM_PENALTY, po::value<double>()->default_value(2), "Penalty per parameter, when fitting Gaussians to the angle distribution")
 
@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 		(GMSH_CELL_COUNT, po::value<int>()->default_value(10), "GMSH Cell Count")
 		(GMSH_SHOW_OUTPUT, po::bool_switch(), "Show GMSH output in the GMSH viewer")
 
-		(GMSH_MIN_CL, po::value<int>()->default_value(4), "Minimum characteristic length for mesh")
+		(GMSH_MIN_CL, po::value<double>()->default_value(-1), "Minimum characteristic length for mesh")
 		(GMSH_MIN_DIST, po::value<double>()->default_value(-1), "Minimum distance for mesh refinemnt around lineament")
 		(GMSH_MAX_DIST, po::value<double>()->default_value(-1), "Maximum distance for mesh refinemnt around lineament")
 
@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
     const int gmsh_cell_count = vm[GMSH_CELL_COUNT].as<int>();
     const bool gmsh_show_output = vm[GMSH_SHOW_OUTPUT].as<bool>();
     
-	int gmsh_min_cl = vm[GMSH_MIN_CL].as<int>();
+	double gmsh_min_cl = vm[GMSH_MIN_CL].as<double>();
     double gmsh_min_dist = vm[GMSH_MIN_DIST].as<double>();
     double gmsh_max_dist = vm[GMSH_MAX_DIST].as<double>();
     
@@ -179,10 +179,9 @@ int main(int argc, char *argv[])
     
     if (raster_name == "") raster_name = (source_dir/"DEM.tif").string();
     
-	// this is the correction of the network
+// this is the correction of the network
 	FracG::VECTOR lines = FracG::ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	FracG::CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
-
 
 	// the following functions analyse statistical properties of the network
  	FracG::GetLengthDist(lines); 							     // test for three distributions of length 
@@ -196,13 +195,11 @@ int main(int argc, char *argv[])
  	FracG::KMCluster(print_kmeans, lines, angle_distribution);							 // KM clustering
  	FracG::ScanLine(lines, scanline_count, angle_distribution);								// sanline analysis of density and spacing (number is number of scalines to generate)
 
- 
  	// Here we create some raster files that characterize the spatial arrangement
 	FracG::CentreDistanceMap(lines, raster_spacing);   //fault centre to fault centre distance (second argument is the pixel resolution)
 	FracG::P_Maps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
 
 	//this creates a geo-referenced graph, analyses it, and writes two shp files containing edges and vertices of the graph
-// 	map_vertex_type map;
     FracG::graph_map<FracG::point_type, FracG::vertex_type, FracG::Graph> gm = FracG::ConvertLinesToGraph(lines.data, lines.refWKT, map_dist_thresh); 	  //convert the faults into a graph
     graph = gm.GetGraph();
 	FracG::graph_map<> split_map = FracG::SplitFaults(gm, split_dist_thresh);//50 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
@@ -224,18 +221,18 @@ int main(int argc, char *argv[])
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
 	FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, angle_param_penalty, raster_name);//5 5, another distance threshold to check
 	
-	FracG::MaximumFlow_R(r_graph, (source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
-//	MaximumFlow_HG(graph, "S_T.shp", 1, 0, "o");			 //maximum flow with horizontal gradient, capacity derived from orientation
-//	MaximumFlow_VG(graph, "S_T.shp", 1, 0, "l");			//maximum flow with vertical gradient, capacity derived from length and orientation 
+	FracG::MaximumFlow_R(r_graph,(source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
+	FracG::MaximumFlow_HG(graph, (source_dir / "S_T.shp").string(), 1, 0, "o", lines.refWKT, (out_path/in_stem).string());			 //maximum flow with horizontal gradient, capacity derived from orientation
+	FracG::MaximumFlow_VG(graph, (source_dir / "S_T.shp").string(), 1, 0, "l", lines.refWKT, (out_path/in_stem).string());			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
 	//create a intersection density map with circular sampling window.
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
 	FracG::IntersectionMap(graph, lines, raster_spacing, isect_search_size);//2000 2500 need to check what values to use here, also need to check the function itself
 	
     fs::path mesh_dir = out_path / "mesh/";
-    
 	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
 	FracG::SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
-
+	FracG::WriteGmsh_3D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, 5000, ( mesh_dir / "a_mesh").string());						 //create a 3D mesh. Number is the target elemnt number in x and y and string is the filename
+	std::string name = "hand.png";
 	return EXIT_SUCCESS;
 } 

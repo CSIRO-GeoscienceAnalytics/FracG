@@ -10,7 +10,6 @@ const std::string graph_subdir="graph";
 
 namespace FracG
 {
-
 	namespace fs = boost::filesystem;
 
 	// // create and open filestream in folder "statistics"
@@ -704,10 +703,7 @@ namespace FracG
 					<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
 					<< "Number of components (c): "  << "\t" << numK << "\n"
 					<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
-					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n"
-					<< "KDE edge orientation" << "\n";
-					//	stat.KDE_estimation_strikes(Edges, txtG);
-				txtG << std::endl;
+					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n";
 
 	//Analyse the different component of the network------------------------
 			std::cout << " Analysing components of graph " << std::endl;
@@ -774,8 +770,8 @@ namespace FracG
 						comp_Lineamants.out_path = lines.out_path;
 						comp_Lineamants.in_path = lines.in_path;
 						
-						GetLengthDist(comp_Lineamants);
-						KdeEstimationStrikes(comp_Lineamants, angle_param_penalty);
+						//GetLengthDist(comp_Lineamants);
+						//KdeEstimationStrikes(comp_Lineamants, angle_param_penalty);
 
 						txtG<< "COMPONENT NO." << "\t" << i << "\n"
 							<< "Branches:" << "\t" << NbB << "\n" 
@@ -789,8 +785,7 @@ namespace FracG
 							<< "CC-Branches: " << "\t" << CC << "\n"
 							<< "Connections (Y +X): " << "\t" << (Ynodes + Xnodes) << "\n"	
 							<< " Total length:" << "\t" << totalLength << "\n"
-							<< " Average length:" << "\t" << totalLength / NbB << "\n" 
-							<< " Strike of underlying lineaments" << std::endl;
+							<< " Average length:" << "\t" << totalLength / NbB << "\n" ;
 					}
 					Fault_in_component.clear();
 					lineaments.clear();
@@ -1348,7 +1343,7 @@ namespace FracG
 		raster.transform[6] = x_dim;
 		raster.transform[7] = y_dim;
 
-		//set reference to teh one of the shp file
+		//set reference to the one of the shp file
 		raster.refWKT = refWKT;
 
 		float change;
@@ -1394,6 +1389,7 @@ namespace FracG
 		delete raster.values;
 	}
 
+
 	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		point_type s, t;
@@ -1417,7 +1413,7 @@ namespace FracG
 		point_type s, t;
 		GetSourceTarget(st_filename.c_str(), s, t);
 		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
-		AssignGrad(G, top, bottom, false, refWKT);
+		AssignGrad(G, top, bottom, true, refWKT);
 
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);

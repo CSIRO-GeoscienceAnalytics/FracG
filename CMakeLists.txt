@@ -25,6 +25,9 @@ include_directories(${GSL_INCLUDE_DIRS})
 find_package(OpenMP REQUIRED)
 include_directories(${OPENMP_INCLUDE_DIRS})
 
+find_package( OpenCV REQUIRED )
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+
 #add gmsh API-----------------------------------------------------------
 find_library(GMSH_LIB gmsh)
 if(NOT GMSH_LIB)
@@ -55,6 +58,7 @@ target_link_libraries(FracG ${ARMADILLO_LIBRARIES})
 target_link_libraries(FracG ${GSL_LIBRARIES})
 target_link_libraries(FracG OpenMP::OpenMP_CXX)
 target_link_libraries(FracG ${GMSH_LIB})
+target_link_libraries(FracG ${OpenCV_LIBS} )
 
 #install to global env (use sudo make install)
 install(TARGETS FracG DESTINATION /usr/local/bin)

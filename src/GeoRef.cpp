@@ -438,7 +438,7 @@ namespace FracG
 
 	//calculate the maximum flow from source s to sink/target t
 	//sets up the parameters needed for boost's max flow algorithm, and executes it
-	double CaalculateMaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t)
+	double CalculateMaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t)
 	{
 		auto capacity_map = boost::get(&DEdge::capacity, dg);
 		auto res_cap_map  = boost::get(&DEdge::residual_capacity, dg);
@@ -455,11 +455,13 @@ namespace FracG
 	//perform the maximum flow from the source location to the target location
 	double MaximumFlow(DGraph &dg, point_type source, point_type target)
 	{
+
 	// 	DGraph::edge_iterator e, eend, eprev;
 	// 	boost::tie(e, eend) = boost::edges(dg);
 		DGraph::vertex_iterator v, vstart, vend;
 		boost::tie(vstart, vend) = boost::vertices(dg);
 		dvertex_type s = *vstart, t = *vstart;
+
 		double sdist, tdist;
 		sdist = geometry::distance(source, dg[*vstart].location);
 		tdist = geometry::distance(target, dg[*vstart].location);
@@ -517,7 +519,7 @@ namespace FracG
 	// 	e++;
 	// 	eprev = e;
 	// 	t = boost::target(*eprev, dg);
-		double max_flow = CaalculateMaximumFlow(dg, s, t);
+		double max_flow = CalculateMaximumFlow(dg, s, t);
 		//now restore capacities
 		//or don't restore capacities, and instead use them to mark the faults as unusuable
 	// 	for (auto p = saved_capacities.begin(); p != saved_capacities.end(); p++)
@@ -529,20 +531,28 @@ namespace FracG
 		return max_flow;
 	}
 
-
-
 	polygon_type BoundingBox(double transform[8], double buffer)
 	{
 		long double Xmax, Xmin, Ymax, Ymin;
 		polygon_type pl;
 		box bx;
 
+		buffer = 10000000;
+
+			
 		//create new box of raster
-		Xmax = transform[0] + transform[1] * transform[6] - buffer;   // west
+		Xmax = (transform[0] + transform[1] * transform[6]) - buffer;   // west
 		Xmin = transform[0] + buffer; 								  // east
 		Ymax = transform[3] + buffer; 								 // north
-		Ymin = transform[3] + transform[5] * transform[7] - buffer ;	// south
+		Ymin = (transform[3] + transform[5] * transform[7]) - buffer ;	// south
 
+		if (buffer != 0)
+		{
+			std::cout << buffer << std::endl;
+			std::cout << std::setprecision(20) << Xmin << " " << Ymin << std::endl;
+			std::cout << std::setprecision(20) << Xmax << " " << Ymax << std::endl;
+		}
+		
 		bx.min_corner().set<0>( Xmin );
 		bx.min_corner().set<1>( Ymin );
 		bx.max_corner().set<0>( Xmax );
@@ -2457,6 +2467,23 @@ namespace FracG
 		std::cout <<"merging split faults - finished" << std::endl;
 		F = merged_faults;
 		std::cout << F.size() << " lines remaining after merging" << std::endl;
+	
+//calculate discrete_frechet distance for all line combinations (only from boost 1.69)
+
+		for (int i = 0; i < F.size(); i++)
+		{
+			line_type i_f = F.at(i);
+			for (int ii = 0; ii < F.size(); ii++)
+			{
+				line_type ii_f = F.at(ii);
+				if (!geometry::equals(i_f, ii_f))
+				{
+					double res = geometry::discrete_frechet_distance(i_f, ii_f);
+					//std::cout << res << std::endl;
+				}
+			}
+		}
+
 	}
 
 

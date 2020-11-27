@@ -9,8 +9,6 @@
 using namespace boost;
 namespace FracG
 {
-
-
     namespace bg  = boost::geometry;
     namespace bgi = boost::geometry::index;
 

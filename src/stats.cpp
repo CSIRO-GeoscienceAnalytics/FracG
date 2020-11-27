@@ -670,14 +670,14 @@ namespace FracG
 				const double ND = N; //save having to convert this multiple times
 
 				fname << "#" << stats.name << ": " << stats.params << ", xmin = " << stats.xmin << ", xmin_ind = " << stats.xmin_ind << " of " << NV << std::endl;
-				fname << "#x_value" << "\t" << "data_pdf_low" <<"\t"<< "data_pdf_high" <<"\t"<< "model_pdf" << std::endl; 
+				fname << "#x_value" << "\t" << "model_pdf" << std::endl; 
 
 				for (int i = stats.xmin_ind; i < NV; i++)
 				{
 					const double data_low = (i     - stats.xmin_ind) / ND;
 					const double data_hi =  (i + 1 - stats.xmin_ind) / ND;
 					const double model_pdf = stats.model.pdf_func(values.at(i), stats.xmin, stats.params);
-					fname << values[i] << "\t" << data_low << "\t" << data_hi << "\t" << model_pdf << std::endl;
+					fname << values[i] << "\t" << model_pdf << std::endl;
 				}
 				fname << std::endl;
 			}

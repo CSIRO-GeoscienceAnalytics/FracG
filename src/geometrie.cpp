@@ -278,10 +278,7 @@ namespace FracG
 				point_type maxBox((cur_x + cell_size), cur_y );
 				box pixel(minBox, maxBox);
 				point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-				if (!bgm::disjoint(pixel, t_AOI))
-				{
-					point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-					if (bgm::within(cur_pos, t_AOI))
+					if (bgm::within(cur_pos, AOI))
 					{
 						DistTree.query(bgm::index::nearest(cur_pos, 1), std::back_inserter(result));
 						vec[i][j] = bgm::distance(cur_pos, result[0].first);
@@ -291,7 +288,6 @@ namespace FracG
 					result.clear();
 					cur_y-= cell_size;
 					 ++(*show_progress);
-				}
 			}
 			cur_x += cell_size;
 		}

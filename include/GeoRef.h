@@ -2,15 +2,7 @@
 #define _geo_h
 #include "../include/fracg.h"
 #include "../include/stats.h"
-
 #include <boost/filesystem.hpp>
-
-
-
-
-/*extern OGRSpatialReference GeoRef;
-extern double GeoTransform[8];
-extern const char *GeoProj;*/
 
 namespace FracG
 {

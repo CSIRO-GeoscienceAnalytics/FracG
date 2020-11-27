@@ -38,6 +38,8 @@
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/random_device.hpp>
 
+
+
 #include <boost/progress.hpp>
 #include "boost/multi_array.hpp"
 
@@ -98,9 +100,6 @@
 
 namespace FracG
 {
-// 	extern vector<std::tuple<double, double, double>> gauss_params;		// orientations obtained from KDE
-// 	extern double split_dist;											//splitting distance fro graph
-// 	extern const char* refWKT_shp;										//reference system of shp file
 	//======================GEOMETRY======================================== 
 	//typedef geometry::model::point<double, 2, geometry::cs::geographic <geometry::degree>> point_type;  
 	typedef boost::geometry::model::d2::point_xy<long double>  point_type;
@@ -248,5 +247,4 @@ namespace FracG
 
 	typedef boost::geometry::index::rtree<p_index, boost::geometry::index::rstar<16> > p_tree;
 	typedef boost::geometry::index::rtree<pl_index, boost::geometry::index::rstar<16> > pl_tree;
-    
 }
