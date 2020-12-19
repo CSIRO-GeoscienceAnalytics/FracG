@@ -224,6 +224,7 @@ namespace FracG
     Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
     Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 
+	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
     void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
     void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename);
     void MaximumFlow_HG(Graph G, std::string st_filename, float left, float rigth, std::string capacity_type, const char *refWKT, std::string out_filename);

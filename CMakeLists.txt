@@ -25,9 +25,6 @@ include_directories(${GSL_INCLUDE_DIRS})
 find_package(OpenMP REQUIRED)
 include_directories(${OPENMP_INCLUDE_DIRS})
 
-find_package( OpenCV REQUIRED )
-include_directories( ${OpenCV_INCLUDE_DIRS} )
-
 #add gmsh API-----------------------------------------------------------
 find_library(GMSH_LIB gmsh)
 if(NOT GMSH_LIB)

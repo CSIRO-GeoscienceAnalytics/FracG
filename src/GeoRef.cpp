@@ -274,7 +274,6 @@ namespace FracG
 			return(0);
 	}
 
-
 	//make a directed graph from an undirected graph
 	//assumes that AssignValuesGraph() has already been called on the graph, and an appropriate raster file, to initialise the height values (which are stored in FVertex.data, not FVertex.elevation)
 	DGraph MakeDirectedGraph(Graph &g)
@@ -402,6 +401,7 @@ namespace FracG
 				} break;
 		}
 
+		std::vector<double> capacities; //need to check for maximum value
 		DGraph::edge_iterator e, estart, eend;
 		boost::tie(estart, eend) = boost::edges(dg);
 		for (e = estart; e != eend; e++)
@@ -432,6 +432,15 @@ namespace FracG
 			}
 			dg[*e].capacity = flow;
 			dg[*e].residual_capacity = flow;
+			capacities.push_back(flow);
+		}
+		
+		double max_cap = *std::max_element(capacities.begin(), capacities.end());
+		for (e = estart; e != eend; e++)
+		{
+			dg[*e].capacity /= max_cap;
+			std::cout << dg[*e].capacity << std::endl;
+			dg[*e].residual_capacity /= max_cap;
 		}
 	}
 
@@ -455,9 +464,6 @@ namespace FracG
 	//perform the maximum flow from the source location to the target location
 	double MaximumFlow(DGraph &dg, point_type source, point_type target)
 	{
-
-	// 	DGraph::edge_iterator e, eend, eprev;
-	// 	boost::tie(e, eend) = boost::edges(dg);
 		DGraph::vertex_iterator v, vstart, vend;
 		boost::tie(vstart, vend) = boost::vertices(dg);
 		dvertex_type s = *vstart, t = *vstart;
@@ -497,8 +503,7 @@ namespace FracG
 			return std::numeric_limits<double>::infinity();
 		}
 
-		std::cout << "Calculating maximum flow from vertex " << s << " (" << dg[s].data << "m) to vertex " << t << " (" << dg[t].data << ")" << std::endl;
-
+		std::cout << "Calculating maximum flow from vertex " << s <<  " to vertex " << t << std::endl;
 		//clear capacities for verticies that are above the source
 		const double start_data = dg[s].data;
 		std::vector<std::pair<dedge_type, double>> saved_capacities;
@@ -515,19 +520,8 @@ namespace FracG
 				dg[*e].residual_capacity = 0;
 			}
 		}
-	// 	s = boost::source(*e, dg); //still testing, so pick two arbitrary locations
-	// 	e++;
-	// 	eprev = e;
-	// 	t = boost::target(*eprev, dg);
+
 		double max_flow = CalculateMaximumFlow(dg, s, t);
-		//now restore capacities
-		//or don't restore capacities, and instead use them to mark the faults as unusuable
-	// 	for (auto p = saved_capacities.begin(); p != saved_capacities.end(); p++)
-	// 	{
-	// 		dedge_type e = p->first;
-	// 		double cap = p->second;
-	// 		dg[e].capacity = cap;
-	// 	}
 		return max_flow;
 	}
 
@@ -537,28 +531,17 @@ namespace FracG
 		polygon_type pl;
 		box bx;
 
-		buffer = 10000000;
-
-			
 		//create new box of raster
 		Xmax = (transform[0] + transform[1] * transform[6]) - buffer;   // west
 		Xmin = transform[0] + buffer; 								  // east
 		Ymax = transform[3] + buffer; 								 // north
 		Ymin = (transform[3] + transform[5] * transform[7]) - buffer ;	// south
 
-		if (buffer != 0)
-		{
-			std::cout << buffer << std::endl;
-			std::cout << std::setprecision(20) << Xmin << " " << Ymin << std::endl;
-			std::cout << std::setprecision(20) << Xmax << " " << Ymax << std::endl;
-		}
-		
 		bx.min_corner().set<0>( Xmin );
 		bx.min_corner().set<1>( Ymin );
 		bx.max_corner().set<0>( Xmax );
 		bx.max_corner().set<1>( Ymax );
 		geometry::convert(bx, pl);
-
 		return(pl);
 	}
 
@@ -902,7 +885,6 @@ namespace FracG
 		GDALClose( poDS );
 	}
 
-
 	//sort the cells by the distance from a point (closest to farthest)
 	template<typename T>
 	struct CellSorter {
@@ -1115,7 +1097,7 @@ namespace FracG
 		 {
 			case Byte:
 			{
-				std::cout	<< "byte (will not perform graph analysis)" << std::endl;
+				std::cout	<< "byte (will not perform analysis)" << std::endl;
 				RASTER<char> R;
 				R = ReadRaster<char>(raster_filename, lines.refWKT);
 				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
@@ -2425,7 +2407,7 @@ namespace FracG
 	void CorrectNetwork(std::vector<line_type>&F, double dist)
 	{
 		//first we need to remove duplicates. We sort the lines by distance to a reference point (from line centroid)
-		//and then remove every duplicates
+		//and then remove duplicates
 		box AOI = ReturnAOI(F);
 		point_type origin(geometry::get<geometry::min_corner, 0>(AOI), geometry::get<geometry::min_corner, 1>(AOI));
 		bool found_dublicate = true;
@@ -2469,6 +2451,8 @@ namespace FracG
 		std::cout << F.size() << " lines remaining after merging" << std::endl;
 	
 //calculate discrete_frechet distance for all line combinations (only from boost 1.69)
+	//first build a centre point tree
+	
 
 		for (int i = 0; i < F.size(); i++)
 		{
@@ -2483,74 +2467,72 @@ namespace FracG
 				}
 			}
 		}
-
 	}
-
-
 
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target)
 	{
-		char* refWKT;
-		GDALAllRegister();
-		GDALDataset *poDS = static_cast<GDALDataset*>
-		(
-			GDALOpenEx( Name, GDAL_OF_VECTOR, NULL, NULL, NULL )
-		);
-		if( poDS == NULL )
-		{
-			printf( " Opening source/target shapefile \"%s\" failed.\n", Name );
-			exit( 1 );
-		}  
+			char* refWKT;
+			GDALAllRegister();
+			GDALDataset *poDS = static_cast<GDALDataset*>
+			(
+				GDALOpenEx( Name, GDAL_OF_VECTOR, NULL, NULL, NULL )
+			);
+			if( poDS == NULL )
+			{
+				printf( " Opening source/target shapefile \"%s\" failed.\n", Name );
+				exit( 1 );
+			}  
 
-		OGRSpatialReference * pOrigSrs = poDS->GetLayer( 0 )-> GetSpatialRef();
-		if ( pOrigSrs )
-		{
-			if (!pOrigSrs->IsProjected() )
+			OGRSpatialReference * pOrigSrs = poDS->GetLayer( 0 )-> GetSpatialRef();
+			if ( pOrigSrs )
 			{
-				std::cout << "ERROR: vector data without spatial reference /not a projected reference system" << std::endl;
-				exit(EXIT_FAILURE);
-			}
-			if ( pOrigSrs->IsProjected() )
-				 pOrigSrs->exportToWkt( &refWKT );
-		}
-		OGRLayer  *poLayer = poDS->GetLayer( 0 );
-
-		poLayer->ResetReading();
-		OGRFeature *poFeature;
-		int p = 0;
-		while( (poFeature = poLayer->GetNextFeature()) != NULL )
-		{
-			if (p > 1)
-			{
-				std::cout << "more than two points in shape file" << std::endl;
-				break;
-			}
-			OGRGeometry *poGeometry = poFeature->GetGeometryRef();
-			if( poGeometry != NULL
-					&& wkbFlatten(poGeometry->getGeometryType()) == wkbPoint )
-			{
-				OGRPoint *poPoint = (OGRPoint *) poGeometry;
-				if ( p == 0)
+				if (!pOrigSrs->IsProjected() )
 				{
-					geometry::set<0>(Source, poPoint->getX());
-					geometry::set<1>(Source, poPoint->getY());
+					std::cout << "ERROR: vector data without spatial reference /not a projected reference system" << std::endl;
+					exit(EXIT_FAILURE);
+				}
+				if ( pOrigSrs->IsProjected() )
+					 pOrigSrs->exportToWkt( &refWKT );
+			}
+			OGRLayer  *poLayer = poDS->GetLayer( 0 );
+
+			poLayer->ResetReading();
+			OGRFeature *poFeature;
+			int p = 0;
+			while( (poFeature = poLayer->GetNextFeature()) != NULL )
+			{
+				if (p > 1)
+				{
+					std::cout << "more than two points in shape file" << std::endl;
+					break;
+				}
+				OGRGeometry *poGeometry = poFeature->GetGeometryRef();
+				if( poGeometry != NULL
+						&& wkbFlatten(poGeometry->getGeometryType()) == wkbPoint )
+				{
+					OGRPoint *poPoint = (OGRPoint *) poGeometry;
+					if ( p == 0)
+					{
+						geometry::set<0>(Source, poPoint->getX());
+						geometry::set<1>(Source, poPoint->getY());
+					}
+					else
+					{
+						geometry::set<0>(Target, poPoint->getX());
+						geometry::set<1>(Target, poPoint->getY());
+					}
 				}
 				else
 				{
-					geometry::set<0>(Target, poPoint->getX());
-					geometry::set<1>(Target, poPoint->getY());
+					printf( "no point geometry\n" );
 				}
+				OGRFeature::DestroyFeature( poFeature );
+				p++;
 			}
-			else
-			{
-				printf( "no point geometry\n" );
-			}
-			OGRFeature::DestroyFeature( poFeature );
-			p++;
+			GDALClose( poDS );
+			std::cout << std::setprecision(10) << "Source: " << Source.x() << ", " << Source.y() << "\n"
+				 << "Target: " << Target.x() << ", " << Target.y() << std::endl;
 		}
-		GDALClose( poDS );
-		std::cout << std::setprecision(10) << "Source: " << Source.x() << ", " << Source.y() << "\n"
-			 << "Target: " << Target.x() << ", " << Target.y() << std::endl;
-	}
-
 }
+
+

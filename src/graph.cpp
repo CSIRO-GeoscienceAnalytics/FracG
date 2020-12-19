@@ -802,8 +802,10 @@ namespace FracG
 	Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename)
 	{
 		Graph shortP;
+		if (!in_filename.empty())
+		{
 		Graph &G = m.GetGraph();
-		line_type SV , TV;
+		line_type SV, TV;
 		point_type source, target;
 
 		GetSourceTarget(in_filename.c_str(), source, target);
@@ -839,8 +841,6 @@ namespace FracG
 					t_nearest = vd;
 				}
 			}
-	// 		geometry::clear(TV);
-	// 		geometry::clear(SV);
 		}
 
 		std::cout << "Adding source and target vertices for shortest path" << std::endl;
@@ -849,7 +849,6 @@ namespace FracG
 		geometry::append(SV, G[s_nearest].location);
 		bool added_source = AddNewEdge(G, S, s_nearest, SV);
 		std::cout << "Added source? " << added_source << std::endl;
-
 
 		geometry::append(TV, target);
 		geometry::append(TV, G[t_nearest].location);
@@ -913,6 +912,10 @@ namespace FracG
 		if (added_target_vertex) m.RemoveVertex(target);
 
 		std::cout << " done " << std::endl;
+		}
+		else
+		std::cout <<"No source and target given. Not caluulating sortest path." << std::endl;
+		
 		return(shortP);
 	}
 
@@ -1313,8 +1316,13 @@ namespace FracG
 			lines.push_back(G[Eg].trace);
 		line_type l = ShortestLine(lines);
 		double min_l = floor(geometry::length(l)/3);
-		std::cout << "Aiming for cell size of: " << min_l << std::endl;
-
+		if (min_l > 0)
+			std::cout << "Aiming for cell size of: " << min_l << std::endl;
+		else
+		{
+			min_l  = 1;
+			std::cout << "Aiming for cell size of: " << min_l << std::endl;
+		}
 		box AOI = ReturnAOI(lines);
 
 		double min_x = geometry::get<geometry::min_corner, 0>(AOI) + 5*min_l ; 
@@ -1377,6 +1385,7 @@ namespace FracG
 			if (!vert)
 				value += change;
 		}
+
 		for (auto Ve : boost::make_iterator_range(vertices(G)))
 		{
 			G[Ve].data = GetRasterValue(G[Ve].location, raster.transform, raster.values);
@@ -1392,26 +1401,38 @@ namespace FracG
 
 	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
-		point_type s, t;
-		GetSourceTarget(st_filename.c_str(), s, t);
-		std::cout<< "Maximum flow with raster data." << std::endl;
-
-		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type);
-		double mf =  MaximumFlow(dg, s, t);
-		std::cout << "maximum flow is: " << mf << std::endl;
-		if (out_filename != "")
+		if (!st_filename.empty())
 		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
-		}
+			point_type s, t;
+			GetSourceTarget(st_filename.c_str(), s, t);
+			std::cout<< "Maximum flow with raster data." << std::endl;
+
+			DGraph dg = MakeDirectedGraph(G);
+			SetupMaximumFlow(dg, capacity_type);
+			
+			double mf =  MaximumFlow(dg, s, t);
+			std::cout << "maximum flow is: " << mf << std::endl;
+			
+			if (out_filename != "")
+			{
+				std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
+				WriteSHP_maxFlow(dg, refWKT, name.c_str());
+			}
+			
 		std::cout << " done \n" << std::endl;
+	}
+	else
+		std::cout << " No raster file given, Cannot solve maximum flow for network" << std::endl;
 	}
 
 	void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		point_type s, t;
-		GetSourceTarget(st_filename.c_str(), s, t);
+		if (st_filename.empty())
+			SetBoundaryPoints(G, s, t, false);
+		else
+			GetSourceTarget(st_filename.c_str(), s, t);
+			
 		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
 		AssignGrad(G, top, bottom, true, refWKT);
 
@@ -1427,15 +1448,57 @@ namespace FracG
 		std::cout << " done \n" << std::endl;
 	}
 
+	//setting boundary points for vertical and horizontal gradients.
+	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad)
+	{
+		std::vector<line_type> all_edges;
+		for (auto Eg : boost::make_iterator_range(edges(G))) 
+			all_edges.push_back(G[Eg].trace);
+
+//getting the boundaries-----------------------------------------------
+		box aoi_graph = ReturnAOI(all_edges);
+		double min_x = geometry::get<bg::min_corner, 0>(aoi_graph); 
+		double min_y = geometry::get<bg::min_corner, 1>(aoi_graph);
+		double max_x = geometry::get<bg::max_corner, 0>(aoi_graph); 
+		double max_y = geometry::get<bg::max_corner, 1>(aoi_graph);
+		
+		point_type ll(min_x, min_y);
+		point_type ul(min_x, max_y);
+		point_type lr(max_x, min_y);
+		point_type ur(max_x, max_y);
+		
+		line_type ub{{ul}, {ur}}; 	//upper boundary
+		line_type lob{{ll}, {lr}};		//lower boundary
+		line_type leb{{ll}, {ul}};	//left boundary
+		line_type rb{{lr}, {ur}};	//rigth boundary
+//----------------------------------------------------------------------
+//assigning coodinates for source and target (will be switched during max flow anyway so no need to distinguish here)
+		if (vert_grad)
+		{
+			geometry::centroid(ub, s);
+			geometry::centroid(lob, t);
+		}
+		else
+		{
+			geometry::centroid(leb, s);
+			geometry::centroid(rb, t);
+		}
+	}
+
 	void MaximumFlow_HG(Graph G, std::string st_filename, float left, float right, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		point_type s, t;
-		GetSourceTarget(st_filename.c_str(), s, t);
+		if (st_filename.empty())
+			SetBoundaryPoints(G, s, t, false);
+		else
+			GetSourceTarget(st_filename.c_str(), s, t);
+			
 		std::cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << std::endl;  
 		AssignGrad(G, left, right, false, refWKT);
 
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);
+
 		double mf =  MaximumFlow(dg, s, t);
 		if (out_filename != "")
 		{

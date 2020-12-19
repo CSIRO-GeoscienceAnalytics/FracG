@@ -465,7 +465,8 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 
 		bgm::unique(line);
 		line_type simpl_line;
-		bgm::simplify(line, simpl_line, 100);
+		
+		bgm::simplify(line, simpl_line, line.size()/4);
 
 		BOOST_FOREACH(point_type p, simpl_line)
 			factory::addPoint(p.x(), p.y(), 0, ( lc ), ++p_tag);

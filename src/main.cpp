@@ -7,7 +7,6 @@
 #include "../include/stats.h"
 #include "../include/fracg.h"
 #include "../include/model.h"
-#include "../include/convert.h"
 #include "../include/util.h"
 
 //using namespace FracG;
@@ -18,6 +17,7 @@ namespace fs = boost::filesystem;
 //string constants for parsing input arguments
 const char *SHAPEFILE="shapefile";
 const char *RASTER_FILE="raster_file";
+const char *SOURCE_FILE="source_file";
 const char *OUT_DIR="out_dir";
 //const char *OUT_SUBDIR="out_subdir";
 const char *DIST_THRESH="dist_thresh";
@@ -53,6 +53,13 @@ const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
 const char *GMSH_SAMPLE_COUNT="gmsh_sample_count";
 const char *GMSH_SAMPLE_SHOW_OUTPUT="gmsh_sample_show_output";
 
+/* TODO:
+ * 1.) kde with length
+ * 2.) attached intersection boundars with boundaryies to directed graph (MAXIMUM FLOW)
+ * 3.) check capacity calculation(maximum flow)
+ * 4.) check shp file generation fro maximum flow(unreferenced)
+ * */
+ 
 int main(int argc, char *argv[])
 { 	 
     //parse input arguments
@@ -61,6 +68,7 @@ int main(int argc, char *argv[])
 		("help", "write help message")
 		(SHAPEFILE, po::value<std::string>(), "fault/fracture vector data, as a shapefile")
 		(RASTER_FILE, po::value<std::string>()->default_value(""), "Raster file to use in analysis")
+		(SOURCE_FILE, po::value<std::string>()->default_value(""), "source-target file to use in max flow")
 		(OUT_DIR, po::value<std::string>()->default_value(""), "Write output to this directory")
 		//(OUT_SUBDIR, po::value<string>()->default_value("fracg_output"), "Write output to this subdirectory")
 		(DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
@@ -99,6 +107,7 @@ int main(int argc, char *argv[])
     po::positional_options_description pdesc;
     pdesc.add(SHAPEFILE, 1); //first positional argument is the shapefile
     pdesc.add(RASTER_FILE, 2); //second positional argument is the raster file
+    pdesc.add(SOURCE_FILE, 3); //third positional argument is the source-targhet fro maximum flow
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).positional(pdesc).run(),  vm);
     po:notify(vm);
@@ -119,9 +128,9 @@ int main(int argc, char *argv[])
 	FracG::Graph graph;			//graph data structure 
 	
 	//TODO: Need to put in some variables here to control whether or not to do each of these functions
-	
 	const std::string shapefile_name = vm[SHAPEFILE].as<std::string>();
     std::string raster_name = vm[RASTER_FILE].as<std::string>();
+    std::string source_name = vm[SOURCE_FILE].as<std::string>();
     const std::string out_dir = vm[OUT_DIR].as<std::string>();
 //     const string out_subdir = vm[OUT_SUBDIR].as<string>();
 	
@@ -178,27 +187,25 @@ int main(int argc, char *argv[])
 //     cout << "in file is " << vector_file << ", in stem=" << in_stem << ", source_dir="<<source_dir<<",our_parent="<<out_parent<<", out_path="<<out_path<<endl;
     
     if (raster_name == "") raster_name = (source_dir/"DEM.tif").string();
+    if (source_name == "") source_name  = (source_dir).string();
     
 // this is the correction of the network
 	FracG::VECTOR lines = FracG::ReadVector(shapefile_name, out_path.string());		  // read the first layer of the shape file
 	FracG::CorrectNetwork(lines.data, dist_threshold);					 // rejoin faults that are incorrectly split in the data file (number is the critical search radius)
-
 	// the following functions analyse statistical properties of the network
  	FracG::GetLengthDist(lines); 							     // test for three distributions of length 
+ 	
  	FracG::DoBoxCount(lines); 								    // Boxcounting algorithm 
  	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty); 				  //kernel density estimation
 
 	FracG::WriteShapefile(lines, angle_distribution, FracG::AddPrefixSuffix(shapefile_name, "corrected_")); // this writes the shp file after correction of orientations (fits gaussians to the data) 
-	
  	FracG::CreateStats(lines, angle_distribution); 								   // statistical analysis of network
  	
- 	FracG::KMCluster(print_kmeans, lines, angle_distribution);							 // KM clustering
  	FracG::ScanLine(lines, scanline_count, angle_distribution);								// sanline analysis of density and spacing (number is number of scalines to generate)
 
  	// Here we create some raster files that characterize the spatial arrangement
 	FracG::CentreDistanceMap(lines, raster_spacing);   //fault centre to fault centre distance (second argument is the pixel resolution)
 	FracG::P_Maps(lines, raster_spacing); 			//create P20 and P21 map (second argument is the pixel resolution)
-
 	//this creates a geo-referenced graph, analyses it, and writes two shp files containing edges and vertices of the graph
     FracG::graph_map<FracG::point_type, FracG::vertex_type, FracG::Graph> gm = FracG::ConvertLinesToGraph(lines.data, lines.refWKT, map_dist_thresh); 	  //convert the faults into a graph
     graph = gm.GetGraph();
@@ -211,7 +218,7 @@ int main(int argc, char *argv[])
 	
 	//simple graph algorithms
 	FracG::Graph m_tree = FracG::MinTree(split_map, map_dist_thresh, (out_path / "minimum_spanning_tree").string());							 //just a minimum spanning tree
-	FracG::Graph s_path = FracG::ShortPath(split_map, (source_dir / "S_T.shp").string(), (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
+	FracG::Graph s_path = FracG::ShortPath(split_map, source_name, (out_path / "shortest_path").string());	//shortest path between points provited by shp-file. number is the merging radius to teh existing graph
 	
 	//create a shp file with lineaments classified based on orientation (from KDE) and intersecions (from graph)
 	FracG::ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());  // number is the vritical distance between lineamnt and intersection point and the string is the filename
@@ -220,19 +227,18 @@ int main(int argc, char *argv[])
 
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
 	FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, angle_param_penalty, raster_name);//5 5, another distance threshold to check
-	
-	FracG::MaximumFlow_R(r_graph,(source_dir / "S_T.shp").string(), max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
-	FracG::MaximumFlow_HG(graph, (source_dir / "S_T.shp").string(), 1, 0, "o", lines.refWKT, (out_path/in_stem).string());			 //maximum flow with horizontal gradient, capacity derived from orientation
-	FracG::MaximumFlow_VG(graph, (source_dir / "S_T.shp").string(), 1, 0, "l", lines.refWKT, (out_path/in_stem).string());			//maximum flow with vertical gradient, capacity derived from length and orientation 
+
+	FracG::MaximumFlow_R(r_graph, source_name, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				  //maximum flow with raster data, capacity derived from length
+	FracG::MaximumFlow_HG(graph,  source_name, 10, 0, "l", lines.refWKT, (out_path/in_stem).string());			 //maximum flow with horizontal gradient, capacity derived from orientation
+	FracG::MaximumFlow_VG(graph,  source_name, 1, 0, "l", lines.refWKT, (out_path/in_stem).string());			//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
 	//create a intersection density map with circular sampling window.
 	//First number is pixel size and second number is the search radius.(this is quite slow at the moment; ?smth wrong with the tree?)
 	FracG::IntersectionMap(graph, lines, raster_spacing, isect_search_size);//2000 2500 need to check what values to use here, also need to check the function itself
-	
-    fs::path mesh_dir = out_path / "mesh/";
-	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, ( mesh_dir / "a_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+
+	fs::path mesh_dir = out_path / "mesh/";
+	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, ( mesh_dir / "2D_mesh").string());						 //create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
 	FracG::SampleNetwork_2D(gmsh_sample_show_output, lines, gmsh_sample_cell_count, gmsh_sample_count, map_dist_thresh, (mesh_dir / "a_messample").string());	//sample the network and create random subnetworks. First number is target elemnt number in x and y and second number is the number of samples.
-	FracG::WriteGmsh_3D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, 5000, ( mesh_dir / "a_mesh").string());						 //create a 3D mesh. Number is the target elemnt number in x and y and string is the filename
-	std::string name = "hand.png";
+	FracG::WriteGmsh_3D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, 5000, ( mesh_dir / "3D_mesh").string());						 //create a 3D mesh. Number is the target elemnt number in x and y and string is the filename
 	return EXIT_SUCCESS;
 } 

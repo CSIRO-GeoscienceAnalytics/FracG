@@ -145,7 +145,6 @@ namespace FracG
             int best_match; //a single best match (for convenience)
     };
 
-
 	void CreateStats(VECTOR &lines, AngleDistribution &angle_dist);
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
 	StatsModelData GetLengthDist(VECTOR lines);
@@ -154,7 +153,6 @@ namespace FracG
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty = 2);
 	int CheckGaussians(AngleDistribution &angle_dist, double angle);
 	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist);
-	void KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist);
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename);
 };
 #endif
