@@ -344,7 +344,6 @@ namespace FracG
 		double mean = sig1 + 90;
 		double flow = 1/ (stddev * sqrt(2*math::constants::pi<double>())) * exp(-0.5 * (std::pow( ((angle - mean) / stddev),2)));
 		flow *= 1000;
-		std::cout << "angle " << angle << " " << flow << std::endl;
 		return(flow);
 	}
 
@@ -439,11 +438,9 @@ namespace FracG
 		for (e = estart; e != eend; e++)
 		{
 			dg[*e].capacity /= max_cap;
-			std::cout << dg[*e].capacity << std::endl;
 			dg[*e].residual_capacity /= max_cap;
 		}
 	}
-
 
 	//calculate the maximum flow from source s to sink/target t
 	//sets up the parameters needed for boost's max flow algorithm, and executes it
@@ -547,23 +544,10 @@ namespace FracG
 
 	VECTOR ReadVector(std::string in_filename, std::string out_directory)
 	{
-		//this needs to be re-written
-	//     if (argc < 1)
-	//     {
-	//         cerr << "ERROR: need at least one argument (shapefile to read)" << endl;
-	//         exit (EXIT_FAILURE);
-	//     }
 		VECTOR lineaments;
 		fs::path in_file(in_filename);
-	// 	string file = f; //this crashes if there are no arrguments
 		std::string ext, name;
-
-
-
-	// 	if (argc == 1+1 )
-	// 	{
 		ext = in_file.extension().string();
-	//     name = file.substr(0, file.find_last_of("."));
 
 		if (ext == ".txt" ||  ext == ".shp") //we don't read from text files
 			std::cout << "Reading fault data from a " << ext << "-file." << std::endl;
@@ -572,38 +556,21 @@ namespace FracG
 			std::cout << "ERROR: Wrong vector format provided  (" << ext << ")" << std::endl;
 			exit (EXIT_FAILURE);
 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		cout << " ERROR: Not enough input argmuments! (Please provide a vector file)" << endl;
-	// 		exit (EXIT_FAILURE);
-	// 	}
-
-
-	// 	size_t first_folder = name.find_first_of("/\\");
-	// 	while (first_folder != std::string::npos && first_folder + 1 < name.size() && (name[first_folder+1] == '/' || name[first_folder+1] == '\\')) name.erase(first_folder+1, 1);
-	// 	
-	// 	
-	// 	size_t folder_index = name.find_last_of("/\\"); //this should work on both linux (/) and windows (\\) 
-	// 	string folder = (folder_index != std::string::npos) ? name.substr(0               , folder_index + 1 ) : "./";
-	// 	name          = (folder_index != std::string::npos) ? name.substr(folder_index + 1, std::string::npos) : name;
-
 		lineaments.folder = in_file.parent_path().string();
 		lineaments.name = in_file.stem().string();
 		lineaments.out_folder = (out_directory == "") ? lineaments.folder : out_directory;
 		lineaments.in_path = in_file.parent_path();
 		lineaments.out_path = fs::path(lineaments.out_folder);
 
-	//     cout << " folder = " << lineaments.folder << ", name = " << lineaments.name << ", out_folder = " << lineaments.out_folder << ", in_path = " << lineaments.in_path << ", out_path = " << lineaments.out_path << std::endl;
-
 		//read information from the vector file
 		if (ext == ".shp")
 			ReadShapefile(in_filename, lineaments);
 		else
 			std::cerr << "ERROR: no shape file definend" << std::endl;
-
-		//set variable in FracG namespace
-	// 	refWKT_shp = lineaments.refWKT; //TODO: store this in the local variables, not a global. or rather, read it from local varaibles
+			
+		if (!lineaments.data.size() > 2)
+			std::cerr << "ERROR: input data contains less than two lineaments! " << std::endl;
+		
 		return(lineaments);
 	}
 
@@ -1046,7 +1013,6 @@ namespace FracG
 	template<typename T>
 	void AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster)
 	{
-
 		//two things are happening here:
 		//1.) building a shape file 
 		//2.) creating a txt file containing profiles and cross profiles
@@ -1054,7 +1020,6 @@ namespace FracG
 		raster = ReadRaster<T>(raster.name, lines.refWKT);
 		std::string raster_shp_filename = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"raster_shp"}, "raster_augmented_shapefile", ".shp", true);
 		WriteSHP_r<T>(lines, dist, raster, raster_shp_filename);
-
 		std::string raster_tsv_filename = FracG::AddPrefixSuffixSubdirs(lines.out_path, {raster_subdir}, "raster_parallel_cross_profiles", ".tsv", true);
 		WriteTXT(lines, dist, raster, raster_tsv_filename);
 	 }
@@ -1437,9 +1402,7 @@ namespace FracG
 		}
 
 		OGRFieldDefn oField( "ID", OFTString );
-
-		oField.SetWidth(32);
-
+		oField.SetWidth(10);
 		if( poLayer->CreateField( &oField ) != OGRERR_NONE )
 		{
 			printf( "Creating ID field failed.\n" );
@@ -2056,12 +2019,39 @@ namespace FracG
 			printf( "Creating 'Component' field failed.\n" );
 			exit( 1 );
 		}
+		
+		OGRFieldDefn oField3( "Rel_bc", OFTReal );
+		oField3.SetWidth(10);
+		if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
+		{
+			printf( "Creating betweeness centrality field failed.\n" );
+			exit( 1 );
+		}
+		
+		OGRFieldDefn oField4( "Abs_bc", OFTReal );
+		oField4.SetWidth(10);
+		if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+		{
+			printf( "Creating betweeness centrality field failed.\n" );
+			exit( 1 );
+		}
 
+		//Absolute betweeness centrality-------------------------------
+		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
+		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
+		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
+		brandes_betweenness_centrality(G, vertex_property_map);
+		
 		int NO = 0;
 		poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
 		//write shp file----------------------------------------------------
 		for (auto Ve : boost::make_iterator_range(vertices(G))) 
 		{
+			int n = num_vertices(G);
+			double scale = (double) 2 / (n*n - 3*n + 2); //fractor to scale to relative betweeness centrality
+			double rel_bc = vertex_property_map[Ve] * scale;
+			double abs_bc = vertex_property_map[Ve] ;
+
 			point = G[Ve].location;
 			int de = degree(Ve, G);
 			int co = G[Ve].component;
@@ -2070,6 +2060,8 @@ namespace FracG
 			poFeature->SetField( "No", NO);
 			poFeature->SetField( "Degree", de);
 			poFeature->SetField( "Component", co);
+			poFeature->SetField( "Rel_bc", rel_bc);
+			poFeature->SetField( "Abs_bc", abs_bc);
 
 			OGRPoint PO;
 			PO.setX(point.x());
@@ -2157,8 +2149,6 @@ namespace FracG
 	 }         
 	}
 
-
-
 	//calculate the angle (in radians) between the connecting end points of two line_type's that sharea  common point
 	//the x_front boolean values are true if the user is checking the front of that line segment, and false if the user wants to know the angle from the end of that line segment
 	//returns close to 0 if the lines are close to having the same angle, or larger angles if the line_types are not in line with each other
@@ -2216,7 +2206,7 @@ namespace FracG
 	//sometimes the data has faults that are split into different entries in the shapefile
 	//this function checks the vector of input line_types for faults that were split, and merges them back together
 	//this checks for any and all fault segments that should be merged back with base
-	bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, line_type &base, double distance_threshold)
+	bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, line_type &base, double distance_threshold, double angl)
 	{
 		//our thresholds for merging fault segments together are:
 		//1) Their endpoints are within threshold distance of each other
@@ -2228,7 +2218,7 @@ namespace FracG
 		//and we choose to merge the segment with the smallest angle difference
 
 		bool changed;
-		const double angle_threshold = 45 * math::constants::pi<double>() / 180; //25 degrees, in radians
+		const double angle_threshold = angl * math::constants::pi<double>() / 180; 
 
 		const double dt = distance_threshold; //convenience name
 
@@ -2401,11 +2391,14 @@ namespace FracG
 			  return false;
 		}
 	};
+	
 
 	//sometimes the data has faults that are split into different entries in the shapefile
 	//this function checks the vector of input line_types for faults that were split, and merges them back together
-	void CorrectNetwork(std::vector<line_type>&F, double dist)
+	void CorrectNetwork(std::vector<line_type>&F, double dist, double angl_threshold, double dfd_thres)
 	{
+		typedef std::pair<box, std::vector<line_type>::iterator> box_line; //a bounding box around the linestring and its iterator
+		std::vector<box_line> result;
 		//first we need to remove duplicates. We sort the lines by distance to a reference point (from line centroid)
 		//and then remove duplicates
 		box AOI = ReturnAOI(F);
@@ -2443,28 +2436,52 @@ namespace FracG
 			line_type base = unmerged_faults.front();
 			RemoveEndpoints(endpoint_tree, unmerged_faults.begin());
 			unmerged_faults.pop_front(); //I don't know why this doesn't also return the value being pop'd
-			MergeConnections(unmerged_faults, endpoint_tree, base, dist);
+			MergeConnections(unmerged_faults, endpoint_tree, base, dist, angl_threshold);
 			merged_faults.push_back(base);
 		}
 		std::cout <<"merging split faults - finished" << std::endl;
 		F = merged_faults;
 		std::cout << F.size() << " lines remaining after merging" << std::endl;
 	
-//calculate discrete_frechet distance for all line combinations (only from boost 1.69)
-	//first build a centre point tree
-	
-
-		for (int i = 0; i < F.size(); i++)
+		//calculate discrete_frechet distance  (only from boost 1.69)
+		//first build an rtree containing boxes of lineaments
+		geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
+		for (auto it = F.begin(); it < F.end(); it++)
 		{
-			line_type i_f = F.at(i);
-			for (int ii = 0; ii < F.size(); ii++)
+			box line_bounding_box = geometry::return_envelope<box>(*it);
+			line_tree.insert(std::make_pair(line_bounding_box, it));
+		}
+		
+		int nb;
+		if (F.size() > 5)
+			nb = 5;
+			else
+		nb = 2;
+		
+		std::vector<line_type> line_remove;
+		for (auto l : F)
+		{
+			line_tree.query(geometry::index::nearest(l, 5), std::back_inserter(result));
+			for(auto it : result)
 			{
-				line_type ii_f = F.at(ii);
-				if (!geometry::equals(i_f, ii_f))
+				if (!geometry::equals(l, *it.second))
 				{
-					double res = geometry::discrete_frechet_distance(i_f, ii_f);
-					//std::cout << res << std::endl;
+					if (boost::geometry::discrete_frechet_distance(l, *it.second) < dfd_thres)
+						line_remove.push_back(*it.second);
 				}
+			}
+			result.clear();
+		}
+		
+		for (auto l : line_remove)
+		{
+			for (int i = 0; i < F.size(); i++)
+			{
+				if (geometry::equals(l,F.at(i)))
+				{
+					 F.erase (F.begin()+i);
+					 break;
+				 }
 			}
 		}
 	}
@@ -2533,6 +2550,135 @@ namespace FracG
 			std::cout << std::setprecision(10) << "Source: " << Source.x() << ", " << Source.y() << "\n"
 				 << "Target: " << Target.x() << ", " << Target.y() << std::endl;
 		}
-}
 
+
+	void MutiplyRasterbyCoefficient(const char* input, double coeff)
+	{
+		CPLErr eErr;
+		GDALAllRegister();
+		GDALDatasetH srcDataset;
+		srcDataset = GDALOpen( input, GA_Update );
+		
+
+		
+		
+		CPLAssert( eErr == CE_None) ;
+		GDALClose( (GDALDatasetH) input ); 
+	}
+
+
+	void gdal_resample( std::string srcfname, std::string dstfname)
+	{
+		GDALAllRegister();
+		GDALDatasetH srcDataset;
+		GDALDatasetH dstDataset;
+		CPLErr eErr;
+		
+		int dstnrows, dstncols;
+		int outnrows = 0;
+		int outncols = 0;
+		
+		const char* srcProjection;
+		const char* dstProjection;
+		double srcGeoTransform[6];
+		double dstGeotransform[6];
+
+		const char *input = srcfname.c_str();
+		const char *output= dstfname.c_str();
+
+		srcDataset = GDALOpen( input, GA_ReadOnly );
+		CPLAssert( srcDataset != NULL );
+		 
+		srcProjection = GDALGetProjectionRef( srcDataset ) ;
+		CPLAssert( srcProjection != NULL && strlen( srcProjection ) > 0) ;
+		GDALDataType sourceDatatype;
+		sourceDatatype = GDALGetRasterDataType( GDALGetRasterBand(srcDataset,1) );
+
+		dstProjection = GDALGetProjectionRef( srcDataset ); // set destination projection to source projection
+		GDALGetGeoTransform(srcDataset, srcGeoTransform
+);		//get the intitial geotransfrom
+		//define new geotransform with a 10th of teh intitial pixel size
+		dstGeotransform[0] = srcGeoTransform[0];
+		dstGeotransform[1] = srcGeoTransform[1] / 10;
+		dstGeotransform[2] = srcGeoTransform[2];
+		dstGeotransform[3] = srcGeoTransform[3];
+		dstGeotransform[4] = srcGeoTransform[4];
+		dstGeotransform[5] = srcGeoTransform[5] / 10;
+
+	std::cout << output << std::endl;
+		dstncols  = (int)( GDALGetRasterXSize( srcDataset ) * srcGeoTransform[1] ) / dstGeotransform[1];
+		dstnrows = (int)( GDALGetRasterYSize( srcDataset ) * srcGeoTransform[5] ) / dstGeotransform[5];
+
+		std::cout << "resampling from " << GDALGetRasterXSize( srcDataset ) << " x " << GDALGetRasterYSize( srcDataset ) << " to " <<
+		dstncols << " x " << dstnrows << std::endl;
+
+		// create geotransform object ... pass in following parameters:
+	  void *handleTransformArg;
+	  handleTransformArg = GDALCreateGenImgProjTransformer( srcDataset, srcProjection,
+	  NULL, dstProjection, FALSE, 0, 1);
+	  CPLAssert( handleTransformArg != NULL);
+
+	  eErr = GDALSuggestedWarpOutput( srcDataset,
+		GDALGenImgProjTransform,
+		handleTransformArg,
+		srcGeoTransform,
+		&outncols ,
+		&outnrows );
+	  CPLAssert( eErr == CE_None);
+	  GDALDestroyGenImgProjTransformer( handleTransformArg );
+	 
+	  GDALDriverH outHandleDriver;
+	  GDALDatasetH outDataset;
+	  outHandleDriver = GDALGetDriverByName("GTiff");
+	  outDataset = GDALCreate( outHandleDriver ,
+	  output,
+	  dstncols, dstnrows , 1 ,
+	  sourceDatatype, NULL);
+	  
+	  GDALSetProjection( outDataset , dstProjection) ;
+	  GDALSetGeoTransform( outDataset, dstGeotransform) ;
+	  GDALWarpOptions *options;
+
+	  eErr = GDALReprojectImage( srcDataset ,
+		srcProjection,
+		outDataset ,
+		dstProjection ,
+	  GRA_CubicSpline, 0.0, 0.0, NULL,NULL,NULL);
+	  CPLAssert( eErr == CE_None) ;
+	  GDALClose(outDataset); 
+	  
+	  //now rescale to initial max values--------------------------------
+	  	GDALAllRegister();
+		GDALDataset  *poDataset, *poDataset2;
+		poDataset = (GDALDataset *) GDALOpen(input, GA_ReadOnly );
+		poDataset2 = (GDALDataset *) GDALOpen(input, GA_ReadOnly );
+		
+		double pdfMin, pdfMax, pdfMean, pdfStdDev, pdfMin2, pdfMax2, pdfMean2, pdfStdDev2;
+		if( poDataset == NULL || poDataset2 == NULL)
+		{
+			std::cout << "\n ERROR: cannot open raster file " << std::endl;
+			exit(EXIT_FAILURE);
+		}
+		else
+		{
+				GDALRasterBand *band = poDataset -> GetRasterBand(1);  
+				GDALRasterBand *band2 = poDataset -> GetRasterBand(1);  
+				 if (band->ComputeStatistics(false, &pdfMin, &pdfMax, &pdfMean,  &pdfStdDev, NULL, NULL))
+						std::cout << "WARNING: cannot compute raster statistics" << std::endl;
+				if (band2->ComputeStatistics(false, &pdfMin2, &pdfMax2, &pdfMean2,  &pdfStdDev2, NULL, NULL))
+						std::cout << "WARNING: cannot compute raster stGA_Updateatistics" << std::endl;
+		}
+		GDALClose( poDataset );
+		
+		std::cout << pdfMax << " " << pdfMax2 << std::endl;
+		
+		double scale_coef = 1;
+		if (pdfMax > pdfMax2)
+			scale_coef = pdfMax / pdfMax2;
+		else if  (pdfMax < pdfMax2)
+			scale_coef = pdfMax2 / pdfMax;
+	
+	  
+	}
+}
 

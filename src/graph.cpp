@@ -12,26 +12,6 @@ namespace FracG
 {
 	namespace fs = boost::filesystem;
 
-	// // create and open filestream in folder "statistics"
-	// ofstream CreateGraphFileStream(string name)
-	// {
-	// // 	string folder_name = folder + "/graph/";
-	// // 	const char* stats_dir = folder_name.c_str();
-	// // 		if(!opendir(stats_dir))
-	// 		
-	// // 	mkdir(stats_dir, 0777);
-	//     
-	//     fs::path file(name);
-	//     system::error_code ec;
-	//     fs::create_directories(file.parent_path(), ec);
-	//     
-	// // 	string tsv_file = stats_dir + name + (string);
-	// 	ofstream txtF; 
-	// 	txtF.open (name, ios::out | ios::app); 
-	// 	return(txtF);
-	// }
-
-
 	//take a location, and return the corresponding graph vertex, and the list of possible vertices
 	//remember that locations can be slightly different due to floating point calculations, so this function checks for vertices within a certain distance of the specified point
 	//this is a helper function for getting vertices from the graph
@@ -597,6 +577,7 @@ namespace FracG
 		Area = geometry::area(envBox) * 1e-6 ; 
 	}
 
+
 	//Topolgy analysis of graph---------------------------------------------
 	void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string out_filename)
 	{
@@ -682,7 +663,7 @@ namespace FracG
 			if (txtG.is_open())  
 			{ 
 				txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
-					<< "EDGES: " << "\t" 			 << num_edges(G) << "\n"
+					<< "Edges " << "\t" 			 << num_edges(G) << "\n"
 					<< "Edgenodes: " 				 << "\t" << Enodes << "\n"
 					<< "Inodes: " 			 		 << "\t" << Inodes <<  "\n" 
 					<< "Ynodes: " 			 		 << "\t" << Ynodes <<  "\n" 
@@ -692,12 +673,12 @@ namespace FracG
 					<< "IC-Branches: "				 << "\t" << IC << "\n"
 					<< "CC-Branches: "				 << "\t" << CC << "\n"
 					<<" Connections (Y +X): "		 << "\t" << (Ynodes + Xnodes) << "\n"
-					<<" Total length:				"<< "\t" << totalLength << "\n"
-					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n" 
-					<< "Connecting node frequency: " << "\t" << NCfreq << "\n"
+					<<" Total length:"				 << "\t" << totalLength << "\n"
+					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n \n" 
+					<< "Connecting node frequency:"<< "\t" << NCfreq << "\n"
 					<< "Branch frequency: " << "\t"  << B20 << "\n"
 					<< "Line frequency: " << "\t" 	 << P20 << "\n"
-					<< "2D Intesnsity: " << "\t" 	 << P21 << "\n"
+					<< "2D intensity: " << "\t" 	 << P21 << "\n"
 					<< "Dimensionless intesity: " 	 << "\t" << B22 << "\n"
 					<< "Average degree of network: " << "\t" << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
 					<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
@@ -784,8 +765,8 @@ namespace FracG
 							<< "IC-Branches: " << "\t" << IC << "\n"
 							<< "CC-Branches: " << "\t" << CC << "\n"
 							<< "Connections (Y +X): " << "\t" << (Ynodes + Xnodes) << "\n"	
-							<< " Total length:" << "\t" << totalLength << "\n"
-							<< " Average length:" << "\t" << totalLength / NbB << "\n" ;
+							<< "Total length:" << "\t" << totalLength << "\n"
+							<< "Average length:" << "\t" << totalLength / NbB << "\n" ;
 					}
 					Fault_in_component.clear();
 					lineaments.clear();
@@ -815,15 +796,13 @@ namespace FracG
 
 		std::tie(S, added_source_vertex) = m.AddVertexIsNew(source);
 		std::tie(T, added_target_vertex) = m.AddVertexIsNew(target);
-	// 	BUFFER BS = DefinePointBuffer(source, radius);
-	// 	BUFFER BT = DefinePointBuffer(target, radius);
 
 		double s_dist = std::numeric_limits<double>::infinity(), t_dist = std::numeric_limits<double>::infinity();
 		vertex_type s_nearest, t_nearest;
 
 		for (auto vd : boost::make_iterator_range(vertices(G))) //these vertices aren't being added properly //they're being attached to theirselves
 		{
-			if ((S != vd)/* && geometry::within(G[vd].location, BS)*/)
+			if (S != vd)
 			{
 				double dist = geometry::distance(G[S].location, G[vd].location);
 				if (dist < s_dist)
@@ -832,7 +811,7 @@ namespace FracG
 					s_nearest = vd;
 				}
 			}
-			if((T != vd)/* && geometry::within(G[vd].location, BT)*/)
+			if(T != vd)
 			{
 				double dist = geometry::distance(G[T].location, G[vd].location);
 				if (dist < t_dist)
@@ -848,12 +827,12 @@ namespace FracG
 		geometry::append(SV, source);
 		geometry::append(SV, G[s_nearest].location);
 		bool added_source = AddNewEdge(G, S, s_nearest, SV);
-		std::cout << "Added source? " << added_source << std::endl;
+		std::cout << "Added source: " << added_source << std::endl;
 
 		geometry::append(TV, target);
 		geometry::append(TV, G[t_nearest].location);
 		bool added_target = AddNewEdge(G, T, t_nearest, TV);
-		std::cout << "Added target? " << added_target << std::endl;
+		std::cout << "Added target: " << added_target << std::endl;
 
 		std::vector<double> distances( boost::num_vertices(G));
 		std::vector<edge_type> path;
@@ -887,8 +866,6 @@ namespace FracG
 			auto ud = add_vertex(G[u_tmp], shortP);
 			auto vd = add_vertex(G[v_tmp], shortP);
 
-	//         cout << "Added vertices " << ud << " -> " << vd << endl;
-
 			auto added_edge = add_edge(ud, vd, G[e_tmp], shortP); //<- this causes the segmentation fault //u_tmp and v_tmp are the same
 
 			distance += G[e_tmp].length;
@@ -907,15 +884,15 @@ namespace FracG
 			}
 		}
 
-		//remove the source and target vertices that we added earlier (if we added them)
+		std::cout << m.GetRefWKT() << std::endl;
+
 		if (added_source_vertex) m.RemoveVertex(source);
 		if (added_target_vertex) m.RemoveVertex(target);
 
 		std::cout << " done " << std::endl;
 		}
 		else
-		std::cout <<"No source and target given. Not caluulating sortest path." << std::endl;
-		
+		std::cout <<"No source and target given. Returning empty graph!." << std::endl;
 		return(shortP);
 	}
 
@@ -996,12 +973,11 @@ namespace FracG
 		return(extr_lines);
 	}
 
-	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size)
+	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample)
 	{
 		//create intersection density maps
 		//(one qualitative(intersections per area) and one quantitative(sum of vertex degrees per area))
 		std::vector<std::pair<point_type, int>> graph_vertices;
-
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
@@ -1095,6 +1071,14 @@ namespace FracG
 
 		std::string isec_intens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
 		WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, isec_intens_name);
+		
+		if (resample)
+		{
+			std::string i20_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density_resample", ".tif");
+			std::string i21_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity_resample", ".tif");
+			gdal_resample(isec_dens_name, i20_name_res);
+			gdal_resample(isec_intens_name , i21_name_res);
+		}
 		std::cout << " done \n" << std::endl;
 	}
 
@@ -1363,7 +1347,7 @@ namespace FracG
 
 		if (p1 == p2)
 		{
-			std::cout << "no differntial pressure" << std::endl;
+			std::cout << "no differntial defined for maximum flow" << std::endl;
 			change = 0;
 		}
 
@@ -1439,6 +1423,7 @@ namespace FracG
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);
 		double mf =  MaximumFlow(dg, s, t);
+		
 		std::cout << "maximum flow is: " << mf << std::endl;
 		if (out_filename != "")
 		{
@@ -1448,6 +1433,33 @@ namespace FracG
 		std::cout << " done \n" << std::endl;
 	}
 
+	void MaximumFlow_HG(Graph G, std::string st_filename, float left, float right, std::string capacity_type, const char *refWKT, std::string out_filename)
+	{
+		point_type s, t;
+		if (st_filename.empty())
+			SetBoundaryPoints(G, s, t, false);
+		else
+			GetSourceTarget(st_filename.c_str(), s, t);
+			
+		std::cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << std::endl;  
+		AssignGrad(G, left, right, false, refWKT);
+
+		DGraph dg = MakeDirectedGraph(G);
+		SetupMaximumFlow(dg, capacity_type);
+		double mf =  MaximumFlow(dg, s, t);
+		
+		std::cout << "maximum flow is: " << mf << std::endl;
+		if (out_filename != "")
+		{
+			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
+			WriteSHP_maxFlow(dg, refWKT, name.c_str());
+		}
+		std::cout << " done \n" << std::endl;
+	}
+	
+	
+	
+	
 	//setting boundary points for vertical and horizontal gradients.
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad)
 	{
@@ -1484,28 +1496,4 @@ namespace FracG
 			geometry::centroid(rb, t);
 		}
 	}
-
-	void MaximumFlow_HG(Graph G, std::string st_filename, float left, float right, std::string capacity_type, const char *refWKT, std::string out_filename)
-	{
-		point_type s, t;
-		if (st_filename.empty())
-			SetBoundaryPoints(G, s, t, false);
-		else
-			GetSourceTarget(st_filename.c_str(), s, t);
-			
-		std::cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << std::endl;  
-		AssignGrad(G, left, right, false, refWKT);
-
-		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type);
-
-		double mf =  MaximumFlow(dg, s, t);
-		if (out_filename != "")
-		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
-		}
-		std::cout << " done \n" << std::endl;
-	}
-
 }

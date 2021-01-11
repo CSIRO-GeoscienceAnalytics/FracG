@@ -67,8 +67,6 @@ namespace FracG
             }
     };
 
-
-
     BUFFER DefineSquareBuffer(point_type POINT, const double Bdistance );
     BUFFER DefinePointBuffer(point_type POINT, const double Bdistance );
     BUFFER DefineLineBuffer(line_type fault, const double Bdistance);
@@ -76,8 +74,8 @@ namespace FracG
     line_type GetSegment( line_type Trace, point_type Junction, point_type Begin);
     void SortDist(std::vector<std::tuple<long double, point_type, AttachPoint>>& cross);
 
-    void CentreDistanceMap (VECTOR lines, float cell_size);
-    void P_Maps(VECTOR lines, float cell_size);
+    void D_Maps (VECTOR lines, float cell_size, bool resample);
+    void P_Maps(VECTOR lines, float cell_size, bool resample);
 
 
     box ReturnAOI(std::vector<line_type> &lines);

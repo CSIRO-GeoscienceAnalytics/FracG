@@ -152,7 +152,7 @@ namespace FracG
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty = 2);
 	int CheckGaussians(AngleDistribution &angle_dist, double angle);
-	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist);
+	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist, double min_spaceing);
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename);
 };
 #endif

@@ -1515,10 +1515,6 @@ namespace FracG
 			pdf[i] = KDE[i].second;
 		}
 
-		//cout << "fitting a kde for " << fault_angles.size() << " faults" << std::endl;
-
-	// 	const double err_thresh = 1e-6;//1e-3;
-
 		arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
 		//the frequency order isn't specified in the arma documentation, assuming that it's 0-freq -> +ve freqs -> most negative freqs -> -1/N
 		arma::vec freqs(ft.size());
@@ -1573,14 +1569,6 @@ namespace FracG
 		//	positions = follow_scale_image(scale_image, KDE.size(), nGaussians);
 			positions = SimpleLocationDetection(scale_image.back());//base_crossings
 
-			//now use the initial values to fit the (sum of) gaussians properly
-			//debug output
-	//  		for (auto it = positions.begin(); it < positions.end(); it++)
-	//  		{
-	//  			std::cout << "Gaussian " << it - positions.begin() << " is at " << angle[it->first] << ", " << angle[it->second] << "; ";
-	//  		}
-	//  		std::cout << std::endl;
-
 			results = FitGaussians(positions, pdf, angle, false);
 			results_unif = FitGaussians(positions, pdf, angle, true);
 
@@ -1619,7 +1607,6 @@ namespace FracG
 			[](const decltype(ic)::value_type &a, const decltype(ic)::value_type &b){ return a.first < b.first;}); //get the set of Gaussians with the minimum aicc value
 		return result_it->second; //previous_results
 	}
-
 
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty)
 	{
@@ -1695,55 +1682,6 @@ namespace FracG
 		return AngleDistribution(gauss_p);
 	}
 
-	std::vector<double> BootStrapping(std::vector<double>data)
-	{
-		const int n = data.size();
-		std::vector<double> bt_data(data);
-
-		boost::random_device dev;
-		boost::mt19937 rng(dev);
-		boost::random::uniform_int_distribution<> rand_bt(0,n-1);
-
-		for (int i = 0; i < n; i++)
-			bt_data[i] = data[rand_bt(rng)];
-
-		return(bt_data);
-	}
-
-	std::vector<double> PearsonCorrelation(std::vector<double>data1, std::vector<double>data2, size_t nb_iter)
-	{
-		assert(data1.size() == data2.size());
-
-		double init_pearson;
-		const size_t stride = 1;
-		size_t n = data1.size();
-		std::vector <double> BootsTrapping_Cor;
-		BootsTrapping_Cor.reserve(nb_iter + 1);
-
-		gsl_vector_const_view D1 = gsl_vector_const_view_array( &data1[0], data1.size() );
-		gsl_vector_const_view D2 = gsl_vector_const_view_array( &data2[0], data2.size() );
-
-		//first correlation coefficinet without bootstrapping
-		BootsTrapping_Cor.push_back(gsl_stats_correlation((double*) D1.vector.data, stride,
-											   (double*) D2.vector.data, stride,
-												n ));
-
-		 //now perform bootstrapping analysis for iterations = nb_iter                                     
-		for (int i = 0; i < nb_iter; i++)
-		{
-			std::vector<double> bt_data1 = BootStrapping(data1);
-			std::vector<double> bt_data2 = BootStrapping(data2);
-
-			gsl_vector_const_view bt_D1 = gsl_vector_const_view_array( &bt_data1[0], bt_data1.size() );
-			gsl_vector_const_view bt_D2 = gsl_vector_const_view_array( &bt_data2[0], bt_data2.size() );
-
-			BootsTrapping_Cor.push_back(gsl_stats_correlation((double*) bt_D1.vector.data, stride,
-											   (double*) bt_D2.vector.data, stride,
-																						n ));
-		}
-		return(BootsTrapping_Cor);
-	}
-
 	//what does this do? //I think the chooses the id of the gaussians that 
 	int CheckGaussians(AngleDistribution &angle_dist, double angle)
 	{
@@ -1772,7 +1710,7 @@ namespace FracG
 			return(0);
 	}
 
-	line_type RandomLine(box AOI, polygon_type t_AOI, double angle)
+	line_type RandomLine(std::vector<std::pair<int, line_type>> all_lines, box AOI, polygon_type t_AOI, double angle, double min_spaceing, int d)
 	{
 		line_type basis, r_line;
 		boost::random_device dev;
@@ -1789,19 +1727,14 @@ namespace FracG
 		geometry::append(basis, ll);
 		geometry::append(basis, lr);
 
-		double basis_strike = (float)(atan2(basis.front().x() - basis.back().x(), basis.front().y() - basis.back().y())) 
-									* (180 / math::constants::pi<double>());
-		if (basis_strike  < 0) 
-			basis_strike  += 180;
-
 		boost::random::uniform_real_distribution<double> rand_x(min_x, max_x);
 		boost::random::uniform_real_distribution<double> rand_y(min_y, max_y);
 
 		bool search = true;
-		double divide = 2;
-		int iter = 0;
+		double divide = 1.01;
+		int iter = 0, iter_2 = 0, iter_total = 0;
 		do{
-			boost::random::uniform_real_distribution<double> rand_l(geometry::length(basis)/divide, geometry::length(basis)-1);
+			boost::random::uniform_real_distribution<double> rand_l(geometry::length(basis) / divide, geometry::length(basis));
 			r_line.clear();
 			double x1  = rand_x(rng);
 			double y1  = rand_y(rng);
@@ -1810,16 +1743,38 @@ namespace FracG
 			{
 				double len = rand_l(rng);
 
-				double x2 = x1 + len * cos(angle + 90 * math::constants::pi<double>() / 180.0);
-				double y2 = y1 + len * sin(angle + 90 * math::constants::pi<double>() / 180.0);
+				//double x2 = x1 + len * cos((angle + 90) * math::constants::pi<double>() / 180.0);
+				double x2 = x1 + len * cos(angle + 90) ;
+				double y2 = y1 + len * sin(angle + 90) ;
 
 				if(!geometry::disjoint(point_type(x2, y2), t_AOI))
 				{
 					geometry::append(r_line, point_type(x1, y1));
 					geometry::append(r_line, point_type(x2, y2));
-					search = false;
-				}
+					if(all_lines.size() > 0)
+					{
+					//check the line spacing of lines with the same orientation
+						double space = std::numeric_limits<double>::max();
+						for(auto it : all_lines)
+						{
+							if (it.first == d)
+							{
+								double cur_spacing = geometry::distance(it.second, r_line);
+								if (cur_spacing < space)
+									space = cur_spacing;
+							}
+						}
 
+						if (space >= min_spaceing)
+							search = false;
+					}
+					else	
+						search = false;
+					
+					if (search)
+						iter_2++;
+				}
+				
 				if(geometry::disjoint(point_type(x2, y2), t_AOI));
 					iter++;
 
@@ -1827,13 +1782,25 @@ namespace FracG
 				{
 					divide += 1;
 					iter = 0;
+					iter_total += 1;
+				}
+				if (iter_2 > 100)
+				{
+					min_spaceing -=1;
+					iter_2= 0;
+					iter_total += 1;
+				}
+				if (iter_total > 100)
+				{
+					std::cout << "Error: Maximum number of iterations fro scaline sampling reached." << std::endl;
+					exit (EXIT_FAILURE);
 				}
 			}
 		} while(search);
 		return(r_line);
 	}
 
-	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist)
+	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist, double scanline_spaceing)
 	{
 		if (angle_dist.gaussians.size() <= 0)
 		{
@@ -1845,35 +1812,39 @@ namespace FracG
 		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
 		txtF << lines.name << std::endl;
 
-		for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-		{
-			float frac = std::ceil((std::get<0>(*it) - 0.05) * 10.0) / 10.0; 
-			if (frac > 0)
-				direc_nb.push_back(std::make_pair(frac * nb_scanlines, std::get<2>(*it)));
-		}
-		std::cout << "Scanline analysis for " << direc_nb.size() << " orientations " << std::endl;
-		txtF << "Orientation \t Scanline begin \t Scaline end \t Length \t Intersection number \t Intesity \t Spacing"<< std::endl;
+		int nb_direct = angle_dist.gaussians.size();
+		std::cout << "Scanline analysis for " << nb_direct << " orientations " << std::endl;
+		txtF << "Orientation \t Scanline \t Length \t Intersection number \t Intensity \t Spacing"<< std::endl;
 
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
 		box AOI = ReturnAOI(lines.data);
+		
+		boost::random_device dev_d;
+		boost::mt19937 rng_d(dev_d);
+		boost::random::uniform_int_distribution<int> rand_direc(0, nb_direct - 1);
 
-		int g = 0;
-		for (auto it = direc_nb.begin(); it < direc_nb.end(); it++)
+		std::vector<std::pair<int, line_type>> all_lines;
+		for (int s_line = 0; s_line < nb_scanlines; s_line++)
 		{
-			for (int i = 0; i < it->first;)
-			{
-				line_type scanline = RandomLine(AOI, t_AOI, it->second);
+				int d ;
+				if (angle_dist.gaussians.size() > 1)
+					d = rand_direc(rng_d); //randomly choose a principal orientation
+				else
+					d = 0;
+					
+				line_type scanline = RandomLine(all_lines, AOI, t_AOI, std::get<2>(angle_dist.gaussians.at(d)), scanline_spaceing, d);
+				all_lines.push_back(std::make_pair(d, scanline));
+				
+				//find intersections with lineamnts
 				std::vector<point_type> output;
 				for (auto l = lines.data.begin(); l < lines.data.end(); l++)
-				{
-					line_type line = *l;
 					geometry::intersection(*l, scanline, output);
-				}
+				
 				if (output.size() > 0)
 				{
 					density.push_back(output.size() / geometry::length(scanline));
-					txtF 	<< g << "\t" << std::setprecision(25)	<< scanline.front().x() << ", " 
-							<< scanline.front().y()		<< "\t" << scanline.back().x() 
+					txtF 	<< d  << "\t" << std::setprecision(25)	<< scanline.front().x() << ", " 
+							<< scanline.front().y()		<< ", " << scanline.back().x() 
 							<< ", " << scanline.back().y() << "\t" << std::setprecision(10)
 							<< geometry::length(scanline) << "\t" << output.size() << "\t"
 							<< output.size()/geometry::length(scanline) <<"\t";
@@ -1887,7 +1858,6 @@ namespace FracG
 						std::sort(distances.begin(), distances.end(), [](const std::pair<point_type,double> &left, const std::pair<point_type, double> &right) {
 							return left.second < right.second;});
 
-
 						double spaceing = 0;
 						for (auto d = distances.begin(); d < distances.end()-1;d++)
 						{
@@ -1900,12 +1870,10 @@ namespace FracG
 					}
 					else 	
 						txtF << " " << std::endl;
-				i++;
 				}
-			}
-			g++;
+				else
+					s_line -=1;
 		}
-
 		std::cout << "Analysed " << nb_scanlines << " scalines \n" << std::endl;
 	}
 
@@ -2018,173 +1986,6 @@ namespace FracG
 			 << "Range:    " << "\t" << arma::range(arma::vec(Angle))	<< "\t" << arma::range(arma::vec(Length))	<< "\t" << arma::range(arma::vec (Sinuosity))	<< "\t" << "\t" << "\t" << arma::range(distance)	<< "\t" << "\t" << arma::range(distance2)	<< "\n"
 			 << std::endl;
 		txtF.close(); 
-
-		txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_orientations_correlations.tsv"));
-
-	txtF << "\n Linear correlations "
-		 << "\n Parameters " << "\t" << " Correlation Coefficient "<< "\t" << "StdDev" << std::endl; 
-
-	//testing for linear correlations---------------------------------------
-		std::vector<double> p_dist  = arma::conv_to< std::vector<double> >::from(distance);
-		std::vector<double> p_dist2 = arma::conv_to< std::vector<double> >::from(distance2);
-
-		std::vector<double> len_sin_cor = PearsonCorrelation(Length, Sinuosity, 50);
-		txtF << "length sinuosity: \t" << arma::mean(arma::vec((len_sin_cor))) << "\t" << arma::stddev(arma::vec (len_sin_cor)) << std::endl;
-
-		std::vector<double> len_orient_cor = PearsonCorrelation(Length, Angle, 50);
-		txtF << "length orientation: \t" << arma::mean(arma::vec((len_orient_cor))) << "\t" << arma::stddev(arma::vec (len_orient_cor)) << std::endl;
-
-		std::vector<double> orient_sin_cor = PearsonCorrelation(Length, Angle, 50);
-		txtF << "orientation sinuosity: \t" << arma::mean(arma::vec((orient_sin_cor))) << "\t" << arma::stddev(arma::vec (orient_sin_cor)) << std::endl;
-
-		std::vector<double> len_p_dist_cor = PearsonCorrelation(Length, p_dist, 50);
-		txtF << "length distance: \t" << arma::mean(arma::vec((len_p_dist_cor))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor)) << std::endl;
-
-		std::vector<double> len_p_dist_cor2 = PearsonCorrelation(Length, p_dist2, 50);
-		txtF << "length distanse (larger): \t" << arma::mean(arma::vec((len_p_dist_cor2))) << "\t" << arma::stddev(arma::vec (len_p_dist_cor2)) << std::endl;
-
 		std::cout << "Wrote geometric statisics to file" << std::endl; 
 	}
-
-	int GetCluster(std::pair<double, double> point, std::vector<std::pair<double,double>> clusters)
-	{
-		//checking the euclidian distance between the data point and every centroid
-		int  n = 0, c;
-		double d = std::numeric_limits<double>::max();
-
-		for (auto i : clusters)
-		{
-			double D = sqrt( pow((point.first - i.first) ,2) + pow((point.second - i.second) ,2));
-			if ( D < d)
-			{
-				d = D; 
-				c = n;
-			}
-			n++;
-		}
-		return(c);
-	}
-
-
-	void KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist)
-	{
-		int No = angle_dist.gaussians.size();
-		if (No > 1)
-		{
-			std::cout <<"k-means clustering of geometric properties" << std::endl;
-			std::ofstream txtF;
-			std::vector<double> Angle, Length, Sinuosity;
-			BOOST_FOREACH(line_type F, lines.data)
-			{ 
-				double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
-									* (180 / math::constants::pi<double>());
-				if (strike  < 0) 
-					strike  += 180;
-
-				double length = (double) geometry::length(F) / 1000;
-				double sinuosity =   geometry::length(F) / geometry::distance(F.front(), F.back());
-
-				Angle.push_back(strike);
-				Length.push_back(length);
-				Sinuosity.push_back(sinuosity);
-			}
-
-			bool status;
-			arma::mat means;
-			arma::mat a = arma::conv_to<arma::rowvec>::from(Angle);
-			arma::mat l = arma::conv_to<arma::rowvec>::from(Length);
-			arma::mat s = arma::conv_to<arma::rowvec>::from(Sinuosity);
-
-	//Angle and Length------------------------------------------------------
-			auto ang_len = arma::join_cols(a,l);
-			status = kmeans(means, ang_len, No, arma::random_subset, 20, output);
-			if(status == false) 
-				std::cout << "clustering angle and lenght failed" << std::endl;
-			else
-			{
-				txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_angle_length.tsv"));
-				txtF << lines.name << std::endl;
-				txtF << "km-means clustering of orientation and length" << std::endl;
-				txtF << "Amplitude\tSigma\tMean" << std::endl;
-				for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
-				txtF << "Cluster centroids" << std::endl;
-				std::vector<std::pair<double, double>> clusters;
-				int j = 0;
-				for (int i = 0; i < means.size()-1;i++) 
-				{
-					j = i + 1;
-					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << std::endl;
-					clusters.push_back(std::make_pair(means[i], means[i++]));
-				}
-
-				txtF << "No \t Angle \t Length" << std::endl;
-				for (int i = 0; i < lines.data.size(); i++)
-					txtF << i << "\t" << Angle[i] << "\t" << Length[i] << "\t" << GetCluster(std::make_pair(Angle[i], Length[i]), clusters) << std::endl;
-				means.clear();
-			}
-
-	//Angle and Sinuosity----------------------------------------------------
-			auto ang_sin = arma::join_cols(a,s);
-			status = arma::kmeans(means, ang_sin, No, arma::random_subset, 20, output);
-			if(status == false) 
-				std::cout << "clustering angle and lenght failed" << std::endl;
-			else
-			{
-				txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_angle_sinuosity.tsv"));
-				txtF << lines.name << std::endl;
-				txtF << "km-means clustering of orientation and sinuosity" << std::endl;
-				txtF << "Amplitude\tSigma\tMean" << std::endl;
-				for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
-				txtF << "Cluster centroids" << std::endl;
-
-				std::vector<std::pair<double, double>> clusters;
-				int j = 0;
-				for (int i = 0; i < means.size()-1;i++) 
-				{
-					j = i + 1;
-					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << std::endl;
-					clusters.push_back(std::make_pair(means[i], means[i++]));
-				}
-
-				txtF << "No \t Angle \t Sinuosity" << std::endl;
-				for (int i = 0; i < lines.data.size(); i++)
-					txtF << i << "\t" << Angle[i] << "\t" << Sinuosity[i] << "\t" << GetCluster(std::make_pair(Angle[i], Sinuosity[i]), clusters) << std::endl;
-				means.clear();
-			}
-
-	//Length and Sinuosity--------------------------------------------------
-			auto len_sin = arma::join_cols(l,s);
-			status = arma::kmeans(means, len_sin, No, arma::random_subset, 20, output);
-			if(status == false) 
-				std::cout << "clustering angle and lenght failed" << std::endl;
-			else
-			{
-				txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("kmeans_clustering_length_sinuosity.tsv"));
-				txtF << lines.name << std::endl;
-				txtF << "km-means clustering of length and sinuosity" << std::endl;
-				txtF << "Amplitude\tSigma\tMean" << std::endl;
-				for (auto it = angle_dist.gaussians.begin(); it < angle_dist.gaussians.end(); it++)
-					txtF << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
-				txtF << "Cluster centroids" << std::endl;
-				std::vector<std::pair<double, double>> clusters;
-				int j = 0;
-				for (int i = 0; i < means.size()-1;i++) 
-				{
-					j = i + 1;
-					txtF << j-1 << "\t" << means[i] << "\t" << means[j] << std::endl;
-					clusters.push_back(std::make_pair(means[i], means[i++]));
-				}
-				txtF << "No \t Angle \t Sinuosity" << std::endl;
-				for (int i = 0; i < lines.data.size(); i++)
-					txtF << i << "\t" << Length[i] << "\t" << Sinuosity[i] << "\t" << GetCluster(std::make_pair(Length[i], Sinuosity[i]), clusters) << std::endl;
-				means.clear();
-			}
-		}
-		else
-			std::cout << "Insufficinet number of clusters derived from orientation data" << std::endl;
-		std::cout << " done \n" << std::endl;
-	}
-
 }

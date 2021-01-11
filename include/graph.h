@@ -4,8 +4,6 @@
 #include "../include/fracg.h"
 #include "../include/stats.h"
 
-
-
 using namespace boost;
 namespace FracG
 {
@@ -218,9 +216,10 @@ namespace FracG
     void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string name);
 
     VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
-    void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);
+    void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample);
     void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, std::string name);
 
+	void Betweeness_centrality(Graph G);
     Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
     Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 

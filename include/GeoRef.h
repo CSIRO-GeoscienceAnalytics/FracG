@@ -6,8 +6,6 @@
 
 namespace FracG
 {
-
-		
 	struct different_id_p
 	{
 		different_id_p(size_t i) : id(i) {}
@@ -43,7 +41,7 @@ namespace FracG
 	void Point_Tree3(std::vector<p_index> points,  std::vector<p_index>& closest, int nb);
 
 	void WriteShapefile(VECTOR &lineaments, AngleDistribution &angle_dist, std::string name);
-	void CorrectNetwork(std::vector<line_type>&F, double dist);
+	void CorrectNetwork(std::vector<line_type>&F, double dist, double angl_threshold, double dfd_thres);
 	
 	void WriteSHP_lines(std::vector<line_type>lineaments, const char* refWKT, std::string name);
 	void WriteSHP_maxFlow(DGraph G, const char* refWKT, std::string name );
@@ -64,9 +62,9 @@ namespace FracG
 	template<typename T> double CrossGradient(line_type F, RASTER<T> raster);
 	template<typename T> double ParallelGradient(line_type F, RASTER<T> raster);
 
-	void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string suffix = "");
 	template<typename T> void WriteRasterStruct(RASTER<T> raster);
-	
+	void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string suffix = "");
+	void gdal_resample(std::string srcfname, std::string dstfname);
 //Maximum Flow----------------------------------------------------------
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target);
 	DGraph MakeDirectedGraph(Graph &g);
