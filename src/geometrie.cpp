@@ -309,7 +309,6 @@ namespace FracG
 
 //----------------------------------------------------------------------
 					vec[i][j] = bgm::distance(cur_pos, result[0].first);
-					//vec2[i][j] = bgm::distance(cur_pos, *result2[0].second);
 					vec2[i][j] = space;
 				}
 				else 
@@ -327,12 +326,20 @@ namespace FracG
 		}
 		
 	//write the raster file---------------------------------------------
-		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
+		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Centre_distance_map", ".tif");
 		WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
 		
-		std::string out_name2 = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "distance_map", ".tif");
+		std::string out_name2 = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Distance_map", ".tif");
 		WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, out_name2);
 		std::cout << " done \n" << std::endl;
+		
+		if (resample)
+		{
+			std::string CD_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Centre_distance_map_resampled", ".tif");
+			std::string D_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Distance_map_resampled", ".tif");
+			gdal_resample(out_name , CD_name_res);
+			gdal_resample(out_name2, D_name_res);
+		}
 	}
 
 	void P_Maps(VECTOR lines, float box_size, bool resample)

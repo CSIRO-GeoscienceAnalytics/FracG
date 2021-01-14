@@ -23,7 +23,6 @@ namespace FracG
 		}
 	}
 
-
 	// create and open filestream in folder "statistics"
 	std::string CreateDir(VECTOR &input_file, std::initializer_list<std::string> folders)
 	{
@@ -700,9 +699,8 @@ namespace FracG
 	template<typename T>
 	void WriteSHP_r(VECTOR lines, double dist, RASTER<T> raster, std::string save_name)
 	{
-		FracG::CreateDir(save_name);
-
 		GDALAllRegister();
+		FracG::CreateDir(save_name);
 		const char* ref = raster.refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
@@ -1367,19 +1365,19 @@ namespace FracG
 	}
 	  void WriteSHP_lines(std::vector<line_type> lineaments, const char* refWKT, std::string name)
 	 {
+		GDALAllRegister();
+		const char* ref = refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
-		GDALAllRegister();
-
 		GDALDataset *poDS;
 		OGRLayer *poLayer;
+		OGRSpatialReference oSRS;
+		oSRS.importFromWkt(&ref);
 
 		name = FracG::AddPrefixSuffix(name, "", ".shp");
 		FracG::CreateDir(name);
 		const char* Name = name.c_str();
 
-		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&refWKT);
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
 		if( poDriver == NULL )
 		{
@@ -1833,19 +1831,20 @@ namespace FracG
 
 	void WriteSHP_maxFlow(DGraph G, const char* refWKT, std::string name)
 	{
+		GDALAllRegister();
+		const char* ref = refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
-		GDALAllRegister();
-
 		GDALDataset *poDS;
 		OGRLayer *poLayer;
+
+		OGRSpatialReference oSRS;
+		oSRS.importFromWkt(&ref);
 
 		name = FracG::AddPrefixSuffix(name, "", ".shp");
 		FracG::CreateDir(name);
 		const char* Name = name.c_str();
 
-		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&refWKT);
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
 		if( poDriver == NULL )
 		{
@@ -1968,9 +1967,9 @@ namespace FracG
 	//convert graph edges to shp-file---------------------------------------
 	void WriteSHP_g_points(Graph G, char* refWKT, const char* Name)
 	{
+		GDALAllRegister();
 		point_type point;
 		std::string Point;
-		GDALAllRegister();
 		GDALDataset *poDS;
 		GDALDriver *poDriver;
 		OGRLayer *poLayer;
@@ -2556,14 +2555,42 @@ namespace FracG
 	{
 		CPLErr eErr;
 		GDALAllRegister();
-		GDALDatasetH srcDataset;
-		srcDataset = GDALOpen( input, GA_Update );
-		
-
-		
-		
+		GDALDataset  *poDataset;
+		poDataset = (GDALDataset *) GDALOpen( input, GA_Update );
 		CPLAssert( eErr == CE_None) ;
-		GDALClose( (GDALDatasetH) input ); 
+		
+		int X  = GDALGetRasterXSize( poDataset );
+		int Y = GDALGetRasterYSize( poDataset );
+		GDALRasterBand* poBand = poDataset ->GetRasterBand(1);
+		GDALDataType gdalType = poBand->GetRasterDataType();
+		
+		for (int x =0; x < X; x++)
+		{
+			for (int y = 0; y < Y; y++)
+			{
+			float* value = (float *) CPLMalloc(sizeof(float));
+			eErr = poBand->RasterIO( GF_Read, x, y, 
+								1, 1,
+								value, 
+								1, 
+								1, 
+								gdalType ,
+								0, 0 );
+
+			
+			value[0] = (float) coeff * value[0];
+
+			eErr = poBand->RasterIO( GF_Write, x, y, 
+								1, 1,
+								value, 
+								1, 
+								1, 
+								gdalType ,
+								0, 0 );
+								
+			}
+		}
+		GDALClose( poDataset ); 
 	}
 
 
@@ -2584,7 +2611,7 @@ namespace FracG
 		double dstGeotransform[6];
 
 		const char *input = srcfname.c_str();
-		const char *output= dstfname.c_str();
+		const char *output = dstfname.c_str();
 
 		srcDataset = GDALOpen( input, GA_ReadOnly );
 		CPLAssert( srcDataset != NULL );
@@ -2651,7 +2678,7 @@ namespace FracG
 	  	GDALAllRegister();
 		GDALDataset  *poDataset, *poDataset2;
 		poDataset = (GDALDataset *) GDALOpen(input, GA_ReadOnly );
-		poDataset2 = (GDALDataset *) GDALOpen(input, GA_ReadOnly );
+		poDataset2 = (GDALDataset *) GDALOpen(output, GA_ReadOnly );
 		
 		double pdfMin, pdfMax, pdfMean, pdfStdDev, pdfMin2, pdfMax2, pdfMean2, pdfStdDev2;
 		if( poDataset == NULL || poDataset2 == NULL)
@@ -2662,23 +2689,22 @@ namespace FracG
 		else
 		{
 				GDALRasterBand *band = poDataset -> GetRasterBand(1);  
-				GDALRasterBand *band2 = poDataset -> GetRasterBand(1);  
+				GDALRasterBand *band2 = poDataset2 -> GetRasterBand(1);  
 				 if (band->ComputeStatistics(false, &pdfMin, &pdfMax, &pdfMean,  &pdfStdDev, NULL, NULL))
 						std::cout << "WARNING: cannot compute raster statistics" << std::endl;
 				if (band2->ComputeStatistics(false, &pdfMin2, &pdfMax2, &pdfMean2,  &pdfStdDev2, NULL, NULL))
-						std::cout << "WARNING: cannot compute raster stGA_Updateatistics" << std::endl;
+						std::cout << "WARNING: cannot compute raster statistics" << std::endl;
 		}
 		GDALClose( poDataset );
-		
-		std::cout << pdfMax << " " << pdfMax2 << std::endl;
 		
 		double scale_coef = 1;
 		if (pdfMax > pdfMax2)
 			scale_coef = pdfMax / pdfMax2;
 		else if  (pdfMax < pdfMax2)
 			scale_coef = pdfMax2 / pdfMax;
-	
-	  
+		std::cout << pdfMax << " " << pdfMax2 << " " << scale_coef << std::endl;
+		
+		MutiplyRasterbyCoefficient(output, scale_coef);
 	}
 }
 

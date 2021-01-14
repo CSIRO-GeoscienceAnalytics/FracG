@@ -236,7 +236,7 @@ int main(int argc, char *argv[])
 	FracG::MaximumFlow_HG(graph,  source_name, 10, 0, "l", lines.refWKT, (out_path/in_stem).string());			 //maximum flow with horizontal gradient, capacity derived from orientation
 	FracG::MaximumFlow_VG(graph,  source_name, 10, 0, "l", lines.refWKT, (out_path/in_stem).string());			//maximum flow with vertical gradient, capacity derived from length and orientation 
 
-/*
+	/*
 	FracG::RasterStatistics(lines, raster_stats_dist, raster_name);		//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 	//building a graph with raster values assigned to elemnets. Numbers are splitting distance and minimum length
 	FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, map_dist_thresh, angle_param_penalty, raster_name);//5 5, another distance threshold to check
