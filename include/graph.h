@@ -70,11 +70,6 @@ namespace FracG
         //get the nearest value to the given point, if it is within the specified distance
         std::optional<VT> GetValue(PT &point, double dist = -1)
         {
-    //         if (values_found < 1)
-    //         {
-    //             //found no points
-    //             return std::nullopt;
-    //         }
             std::optional<element> nearest = GetNearestElement(point, dist);
             if (!nearest) return std::nullopt;
             return nearest->second;
@@ -198,8 +193,6 @@ namespace FracG
         const char *GetRefWKT() { return reference_wkt.c_str(); }
     };
 
-
-
     void RemoveSpurs(graph_map<> & map, double minDist);
 
     vertex_type AddNewVertex(map_vertex_type& map, point_type const& key, Graph& graph);
@@ -215,7 +208,7 @@ namespace FracG
     graph_map<> SplitFaults(graph_map<>& map, double minDist );
     void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string name);
 
-    VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
+    void ComponentExtract(Graph G, VECTOR lines, int nb);
     void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample);
     void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, std::string name);
 
@@ -225,7 +218,7 @@ namespace FracG
 
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
     void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_HG(Graph G, std::string st_filename, float left, float rigth, std::string capacity_type, const char *refWKT, std::string out_filename);
+    void MaximumFlow_VG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
+    void MaximumFlow_HG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
 }
 #endif

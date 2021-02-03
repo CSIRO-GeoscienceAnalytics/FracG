@@ -423,13 +423,11 @@ namespace FracG
 			{
 				if (I == cross.begin()) continue;
 				point_type intersect = get<1>(*I);
-				//bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
-				//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
-				//if (is_start || is_end) continue;
+
 				NewV = split_map.AddVertex(intersect);
 				if (NewV == prev_vertex) continue;
 
-				AddNewEdge(split_graph, prev_vertex, NewV, GetSegment(fault, split_graph[prev_vertex].location, split_graph[NewV].location), fault_length);//also remember the length of the original fault
+				AddNewEdge(split_graph, prev_vertex, NewV, GetSegment(fault, split_graph[prev_vertex].location, split_graph[NewV].location), fault_length/1000);//also remember the length of the original fault
 
 				if(boost::edge(prev_vertex, NewV, split_graph).second) //if an edge exists between prev_vertex and NewV
 				{
@@ -657,7 +655,7 @@ namespace FracG
 	//write results---------------------------------------------------------
 			//string graphFile =  + ;
 	//         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-			std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
+			std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
 	//         cout << "the resulting name is " << save_name << endl;
 			txtG = FracG::CreateFileStream(save_name);
 			if (txtG.is_open())  
@@ -883,16 +881,12 @@ namespace FracG
 				WriteSHP_lines(edges_shortPath, m.GetRefWKT(), save_filename);
 			}
 		}
-
-		std::cout << m.GetRefWKT() << std::endl;
-
 		if (added_source_vertex) m.RemoveVertex(source);
 		if (added_target_vertex) m.RemoveVertex(target);
-
 		std::cout << " done " << std::endl;
 		}
 		else
-		std::cout <<"No source and target given. Returning empty graph!." << std::endl;
+			std::cout <<"No source and target given. Returning empty graph!." << std::endl;
 		return(shortP);
 	}
 
@@ -939,38 +933,46 @@ namespace FracG
 		return(min_graph);
 	}
 
-	VECTOR ComponentExtract(Graph G, VECTOR lines, int component)
+//extracting all the features that buit up connected component of gaph-
+	void ComponentExtract(Graph G, VECTOR lines, int component)
 	{
-		VECTOR extr_lines;
-		std::vector <line_type> Extractor;
-	//here we extract the initial lineaments--------------------------------
-		bool extract;
-		for (auto Eg : make_iterator_range(edges(G)))
+		if( component == 0 || component > 0 )
 		{
-			extract = true;
-			if (G[Eg].component == component)
+			VECTOR extr_lines;
+			std::vector <line_type> Extractor;
+//here we extract the initial lineaments--------------------------------
+			bool extract;
+			for (auto Eg : make_iterator_range(edges(G)))
 			{
-				line_type extr_line = G[Eg].trace;
-				for (auto ext_line : Extractor)
+				extract = true;
+				if (G[Eg].component == component)
 				{
-					if (geometry::equals(ext_line, extr_line))
+					line_type extr_line = G[Eg].trace;
+					for (auto ext_line : Extractor)
 					{
-						extract = false;
-						break;
+						if (geometry::equals(ext_line, extr_line))
+						{
+							extract = false;
+							break;
+						}
 					}
+					if (extract)
+						Extractor.push_back(lines.data.at(G[Eg].FaultNb));
 				}
-				if (extract)
-					Extractor.push_back(lines.data.at(G[Eg].FaultNb));
+			}
+			std::cout << " Found " << Extractor.size() << " lineaments for component " << component << std::endl;
+
+			//build the struct from the extracted data-----------------------
+			extr_lines.name =  "component_" + to_string(component); 
+			extr_lines.refWKT = lines.refWKT;
+			for (auto i : Extractor)
+				extr_lines.data.push_back(i);
+			if (extr_lines.data.size() > 0)
+			{
+				std::string comp_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "test");
+				WriteSHP_lines(extr_lines.data, extr_lines.refWKT, comp_name);
 			}
 		}
-		std::cout << " Found " << Extractor.size() << " lineaments for component " << component << std::endl;
-
-		//build the struct from the extracted data and return it------------
-		extr_lines.name = lines.name + "_component_" + to_string(component);
-		extr_lines.refWKT = lines.refWKT;
-		for (auto i : Extractor)
-			extr_lines.data.push_back(i);
-		return(extr_lines);
 	}
 
 	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample)
@@ -1067,10 +1069,10 @@ namespace FracG
 
 	//write the raster file---------------------------------------------
 		std::string isec_dens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density", ".tif");
-		WriteRASTER(vec,  lines.refWKT, newGeoTransform, lines, isec_dens_name);
+		WriteRASTER(vec,  lines.refWKT, newGeoTransform, isec_dens_name);
 
 		std::string isec_intens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
-		WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, isec_intens_name);
+		WriteRASTER(vec2, lines.refWKT, newGeoTransform, isec_intens_name);
 		
 		if (resample)
 		{
@@ -1289,7 +1291,7 @@ namespace FracG
 	}
 
 	//parameters: graph, pressure1 , pressure2, adn bool whether vertical or horizontal gradient (vertical if true)
-	void AssignGrad(Graph G, float p1, float p2, bool vert, const char *refWKT)
+	void AssignGrad(Graph G, double cell_size, float p1, float p2, bool vert, const char *refWKT)
 	{
 		//creating a gradient raster with a buffer of 5 cell sizes around the AOI
 		//float** values[x_dim][y_dim];
@@ -1299,12 +1301,22 @@ namespace FracG
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
 			lines.push_back(G[Eg].trace);
 		line_type l = ShortestLine(lines);
-		double min_l = floor(geometry::length(l)/3);
-		if (min_l > 0)
-			std::cout << "Aiming for cell size of: " << min_l << std::endl;
+		
+		double min_l ;
+		if (cell_size < 0)
+		{
+			min_l = geometry::length(l)/2;
+			if (min_l > 0)
+				std::cout << "Aiming for cell size of: " << min_l << std::endl;
+			else
+			{
+				min_l  = 1;
+				std::cout << "Aiming for cell size of: " << min_l << std::endl;
+			}
+		}
 		else
 		{
-			min_l  = 1;
+			min_l = cell_size;
 			std::cout << "Aiming for cell size of: " << min_l << std::endl;
 		}
 		box AOI = ReturnAOI(lines);
@@ -1382,43 +1394,47 @@ namespace FracG
 		delete raster.values;
 	}
 
-
 	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
-		if (!st_filename.empty())
+		if (boost::num_vertices(G) > 0 && boost::num_edges(G) > 0)
 		{
 			point_type s, t;
-			GetSourceTarget(st_filename.c_str(), s, t);
-			std::cout<< "Maximum flow with raster data." << std::endl;
+			if (st_filename.empty())
+				SetBoundaryPoints(G, s, t, false);
+			else
+				GetSourceTarget(st_filename.c_str(), s, t);
 
+			std::cout<< "Maximum flow with raster data." << std::endl;
+				
 			DGraph dg = MakeDirectedGraph(G);
 			SetupMaximumFlow(dg, capacity_type);
-			
+				
 			double mf =  MaximumFlow(dg, s, t);
 			std::cout << "maximum flow is: " << mf << std::endl;
-			
+				
 			if (out_filename != "")
 			{
 				std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
 				WriteSHP_maxFlow(dg, refWKT, name.c_str());
+				std::cout << " done \n" << std::endl;
 			}
+			else
+				std::cout << " No raster file given, Cannot solve maximum flow for network" << std::endl;
 			
-		std::cout << " done \n" << std::endl;
-	}
-	else
-		std::cout << " No raster file given, Cannot solve maximum flow for network" << std::endl;
+		}
 	}
 
-	void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename)
+	void MaximumFlow_VG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
+		float top =0,  bottom = 10;
 		point_type s, t;
 		if (st_filename.empty())
-			SetBoundaryPoints(G, s, t, false);
+			SetBoundaryPoints(G, s, t, true);
 		else
 			GetSourceTarget(st_filename.c_str(), s, t);
 			
 		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
-		AssignGrad(G, top, bottom, true, refWKT);
+		AssignGrad(G, cell_size, top, bottom, true, refWKT);
 
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);
@@ -1433,16 +1449,17 @@ namespace FracG
 		std::cout << " done \n" << std::endl;
 	}
 
-	void MaximumFlow_HG(Graph G, std::string st_filename, float left, float right, std::string capacity_type, const char *refWKT, std::string out_filename)
+	void MaximumFlow_HG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
+		float left = 10, right = 0;
 		point_type s, t;
 		if (st_filename.empty())
 			SetBoundaryPoints(G, s, t, false);
 		else
 			GetSourceTarget(st_filename.c_str(), s, t);
 			
-		std::cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << std::endl;  
-		AssignGrad(G, left, right, false, refWKT);
+		std::cout<< "Maximum flow with horizontal gradient" << std::endl;  
+		AssignGrad(G, cell_size, left, right, false, refWKT);
 
 		DGraph dg = MakeDirectedGraph(G);
 		SetupMaximumFlow(dg, capacity_type);
@@ -1456,10 +1473,7 @@ namespace FracG
 		}
 		std::cout << " done \n" << std::endl;
 	}
-	
-	
-	
-	
+
 	//setting boundary points for vertical and horizontal gradients.
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad)
 	{

@@ -327,10 +327,10 @@ namespace FracG
 		
 	//write the raster file---------------------------------------------
 		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Centre_distance_map", ".tif");
-		WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
+		WriteRASTER(vec, lines.refWKT, newGeoTransform, out_name);
 		
 		std::string out_name2 = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Distance_map", ".tif");
-		WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, out_name2);
+		WriteRASTER(vec2, lines.refWKT, newGeoTransform, out_name2);
 		std::cout << " done \n" << std::endl;
 		
 		if (resample)
@@ -428,10 +428,10 @@ namespace FracG
 		}
 	//write the raster files---------------------------------------------
 		std::string p20_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P20_map", ".tif");
-		WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, p20_name);
+		WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, p20_name);
 
 		std::string p21_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P21_map", ".tif");
-		WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, p21_name);
+		WriteRASTER(vec_length, lines.refWKT, newGeoTransform, p21_name);
 		
 		if (resample)
 		{

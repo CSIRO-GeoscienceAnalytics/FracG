@@ -10,10 +10,8 @@ namespace factory = gmsh::model::occ;
 
 namespace FracG
 {
-
-	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, std::string out_filename);
-	void WriteGmsh_3D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, double z, std::string out_filename);
+	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, bool name_ss, std::string out_filename);
+	void WriteGmsh_3D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, double z, bool name_ss, std::string out_filename);
 	void SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, std::string out_filename);
-	
 }
 #endif

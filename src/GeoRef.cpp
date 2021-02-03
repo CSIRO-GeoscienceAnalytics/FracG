@@ -1018,7 +1018,7 @@ namespace FracG
 		raster = ReadRaster<T>(raster.name, lines.refWKT);
 		std::string raster_shp_filename = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"raster_shp"}, "raster_augmented_shapefile", ".shp", true);
 		WriteSHP_r<T>(lines, dist, raster, raster_shp_filename);
-		std::string raster_tsv_filename = FracG::AddPrefixSuffixSubdirs(lines.out_path, {raster_subdir}, "raster_parallel_cross_profiles", ".tsv", true);
+		std::string raster_tsv_filename = FracG::AddPrefixSuffixSubdirs(lines.out_path, {raster_subdir}, "raster_parallel_cross_profiles", ".csv", true);
 		WriteTXT(lines, dist, raster, raster_tsv_filename);
 	 }
 	template void AnalyseRaster<int>(VECTOR lines, double dist, RASTER<int> raster);
@@ -1027,128 +1027,132 @@ namespace FracG
 
 	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, const double angle_param_penalty, std::string raster_filename)
 	{
-		std::cout << "Generating graph linked to raster " << raster_filename << std::endl;
 		Graph raster_graph;
-		//switch case based on raster type
-		const char * name = raster_filename.c_str();
-
-		//build a map to use switch case for differnt data types
-		enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
-		static std::map<std::string, int> d_type;
-		if ( d_type.empty() )
+		if (!raster_filename.empty())
 		{
-			d_type["Byte"] = Byte;
-			d_type["UInt16"] = UInt16;
-			d_type["Int16"] = Int16;
-			d_type["UInt32"] = UInt32;
-			d_type["Int32"] = Int32;
-			d_type["Float32"] = Float32;
-			d_type["Float64"] = Float64;
-		}
+			std::cout << "Generating graph linked to raster " << raster_filename << std::endl;
 
-		GDALDataset  *poDataset;
-		GDALAllRegister();
-		poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
-		GDALRasterBand  *poBand;
-		poBand = poDataset->GetRasterBand( 1 );
-		std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
-		GDALClose( poDataset );
+			//switch case based on raster type
+			const char * name = raster_filename.c_str();
 
-		std::cout << "Raster datatype is " ;
-		int type = d_type[datatype];
-		 switch (type) 
-		 {
-			case Byte:
+			//build a map to use switch case for differnt data types
+			enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
+			static std::map<std::string, int> d_type;
+			if ( d_type.empty() )
 			{
-				std::cout	<< "byte (will not perform analysis)" << std::endl;
-				RASTER<char> R;
-				R = ReadRaster<char>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				WriteGraph_R(raster_graph, lines, "raster");
-			} break;
-
-			case UInt16:
-			{
-				std::cout << "uint16" << std::endl;
-				RASTER<int> R;
-				R = ReadRaster<int>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				AssignValuesGraph<int>(raster_graph, R);
-				GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
-				WriteGraph_R(raster_graph, lines, "raster");
-			} break;
-
-			case Int16:
-			{
-				std::cout << "int16" << std::endl;
-				RASTER<int> R;
-				R = ReadRaster<int>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				AssignValuesGraph<int>(raster_graph, R);
-				GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
-				WriteGraph_R(raster_graph, lines, "raster");
-			} break;
-
-			case UInt32:
-			{
-				std::cout << "uint32" << std::endl;
-				RASTER<int> R;
-				R = ReadRaster<int>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				AssignValuesGraph<int>(raster_graph, R);
-				GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
-				WriteGraph_R(raster_graph, lines, "raster");
-			} break;
-
-			case Int32:
-			{
-				std::cout << "int32" << std::endl;
-				RASTER<int> R;
-				R = ReadRaster<int>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				AssignValuesGraph<int>(raster_graph, R);
-				GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
-				WriteGraph_R(raster_graph, lines, "raster");
-			} break;
-
-			case Float32:
-			{
-				std::cout << "Float32" << std::endl;
-				RASTER<float> R;
-				R = ReadRaster<float>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				AssignValuesGraph<float>(raster_graph, R);
-				GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
-				WriteGraph_R(raster_graph, lines, "raster");
-			} break;
-
-			case Float64:
-			{
-				std::cout << "Float64" << std::endl;
-				RASTER<double> R;
-				R = ReadRaster<double>(raster_filename, lines.refWKT);
-				graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
-				raster_graph = map.GetGraph();
-				AssignValuesGraph<double>(raster_graph, R);
-				GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
-				WriteGraph_R(raster_graph, lines, "raster");
-
-			} break;
-
-			default: 
-			{
-				std::cout << " unknown" << std::endl;
-				std::cout << "ERROR: Could not determine dataype of raster" << std::endl;
+				d_type["Byte"] = Byte;
+				d_type["UInt16"] = UInt16;
+				d_type["Int16"] = Int16;
+				d_type["UInt32"] = UInt32;
+				d_type["Int32"] = Int32;
+				d_type["Float32"] = Float32;
+				d_type["Float64"] = Float64;
 			}
-			break;
-		 }
-		std::cout << " done \n" << std::endl;
+
+			GDALDataset  *poDataset;
+			GDALAllRegister();
+			poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
+			GDALRasterBand  *poBand;
+			poBand = poDataset->GetRasterBand( 1 );
+			std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
+			GDALClose( poDataset );
+
+			std::cout << "Raster datatype is " ;
+			int type = d_type[datatype];
+			 switch (type) 
+			 {
+				case Byte:
+				{
+					std::cout	<< "byte (will not perform analysis)" << std::endl;
+					RASTER<char> R;
+					R = ReadRaster<char>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					WriteGraph_R(raster_graph, lines, "raster");
+				} break;
+
+				case UInt16:
+				{
+					std::cout << "uint16" << std::endl;
+					RASTER<int> R;
+					R = ReadRaster<int>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					AssignValuesGraph<int>(raster_graph, R);
+					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					WriteGraph_R(raster_graph, lines, "raster");
+				} break;
+
+				case Int16:
+				{
+					std::cout << "int16" << std::endl;
+					RASTER<int> R;
+					R = ReadRaster<int>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					AssignValuesGraph<int>(raster_graph, R);
+					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					WriteGraph_R(raster_graph, lines, "raster");
+				} break;
+
+				case UInt32:
+				{
+					std::cout << "uint32" << std::endl;
+					RASTER<int> R;
+					R = ReadRaster<int>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					AssignValuesGraph<int>(raster_graph, R);
+					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					WriteGraph_R(raster_graph, lines, "raster");
+				} break;
+
+				case Int32:
+				{
+					std::cout << "int32" << std::endl;
+					RASTER<int> R;
+					R = ReadRaster<int>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					AssignValuesGraph<int>(raster_graph, R);
+					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					WriteGraph_R(raster_graph, lines, "raster");
+				} break;
+
+				case Float32:
+				{
+					std::cout << "Float32" << std::endl;
+					RASTER<float> R;
+					R = ReadRaster<float>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					AssignValuesGraph<float>(raster_graph, R);
+					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					WriteGraph_R(raster_graph, lines, "raster");
+				} break;
+
+				case Float64:
+				{
+					std::cout << "Float64" << std::endl;
+					RASTER<double> R;
+					R = ReadRaster<double>(raster_filename, lines.refWKT);
+					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
+					raster_graph = map.GetGraph();
+					AssignValuesGraph<double>(raster_graph, R);
+					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					WriteGraph_R(raster_graph, lines, "raster");
+
+				} break;
+
+				default: 
+				{
+					std::cout << " unknown" << std::endl;
+					std::cout << "ERROR: Could not determine dataype of raster" << std::endl;
+				}
+				break;
+			 }
+			std::cout << " done \n" << std::endl;
+		}
 		return(raster_graph);
 	}
 
@@ -1318,7 +1322,7 @@ namespace FracG
 	template void WriteRasterStruct<float>(RASTER<float> raster);
 	template void WriteRasterStruct<double>(RASTER<double> raster);
 
-	 void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string out_filename)
+	 void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], std::string out_filename)
 	{
 	  //get the path of the current directory
 		char cur_path[256];
@@ -1363,6 +1367,7 @@ namespace FracG
 		GDALClose( (GDALDatasetH) poDstDS );
 		chdir(cur_path);
 	}
+	
 	  void WriteSHP_lines(std::vector<line_type> lineaments, const char* refWKT, std::string name)
 	 {
 		GDALAllRegister();
@@ -1392,7 +1397,7 @@ namespace FracG
 			exit( 1 );
 		}
 
-		poLayer = poDS->CreateLayer(Name, NULL, wkbLineString, NULL );
+		poLayer = poDS->CreateLayer(Name, &oSRS, wkbLineString, NULL );
 		if( poLayer == NULL )
 		{
 			printf( "Layer creation failed.\n" );
@@ -1609,7 +1614,7 @@ namespace FracG
 		}
 
 		OGRFieldDefn oField2( "Component", OFTInteger );
-		oField1.SetWidth(20);
+		oField2.SetWidth(20);
 		if( poLayer->CreateField( &oField2 ) != OGRERR_NONE )
 		{
 			printf( "Creating 'Component' field failed.\n" );
@@ -1617,14 +1622,34 @@ namespace FracG
 		}
 
 		OGRFieldDefn oField3( "Angle", OFTReal );
-		oField2.SetWidth(10);
-		oField2.SetPrecision(3);
+		oField3.SetWidth(10);
+		oField3.SetPrecision(3);
 		if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
 		{
 			printf( "Creating 'Angle' field failed.\n" );
 			exit( 1 );
 		}
-
+		
+		OGRFieldDefn oField4( "BC_abs[length]", OFTReal );
+		oField4.SetWidth(15);
+		oField4.SetPrecision(5);
+		if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+		{
+			printf( "Creating 'BC_abs[length]' field failed.\n" );
+			exit( 1 );
+		}
+		
+		/*
+		//Absolute betweeness centrality-------------------------------
+		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
+		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
+		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
+		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map_rel(vertex_property_vec.begin(), v_index);
+		brandes_betweenness_centrality(G, vertex_property_map);
+		relative_betweenness_centrality(G, vertex_property_map_rel);
+		*/
+	//	brandes_betweenness_centrality(G, boost::weight_map(boost::get(&FEdge::length, G)));
+		
 		int id = 0;
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
 		{
@@ -1645,6 +1670,8 @@ namespace FracG
 			poFeature->SetField( "BranchType", G[Eg].BranchType.c_str());
 			poFeature->SetField( "Component", C);
 			poFeature->SetField( "Angle", strike);
+		//	poFeature->SetField( "BC_abs[length]", G[Eg].distance_map);
+			
 
 			BOOST_FOREACH(point_type P, line) 
 				l.addPoint(P.x(), P.y());
@@ -1740,6 +1767,8 @@ namespace FracG
 				printf( "Creating 'Angle' field failed.\n" );
 				exit( 1 );
 			}
+			
+			
 
 		// raster---------------------------------------------------------------
 				OGRFieldDefn oField4( "Centre", OFTReal );
@@ -1859,7 +1888,7 @@ namespace FracG
 			exit( 1 );
 		}
 
-		poLayer = poDS->CreateLayer(Name, NULL, wkbLineString, NULL );
+		poLayer = poDS->CreateLayer(Name, &oSRS, wkbLineString, NULL );
 		if( poLayer == NULL )
 		{
 			printf( "Layer creation failed.\n" );
@@ -2039,7 +2068,9 @@ namespace FracG
 		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
 		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
 		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
+		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map_rel(vertex_property_vec.begin(), v_index);
 		brandes_betweenness_centrality(G, vertex_property_map);
+		relative_betweenness_centrality(G, vertex_property_map_rel);
 		
 		int NO = 0;
 		poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
@@ -2047,8 +2078,7 @@ namespace FracG
 		for (auto Ve : boost::make_iterator_range(vertices(G))) 
 		{
 			int n = num_vertices(G);
-			double scale = (double) 2 / (n*n - 3*n + 2); //fractor to scale to relative betweeness centrality
-			double rel_bc = vertex_property_map[Ve] * scale;
+			double rel_bc = vertex_property_map_rel[Ve];
 			double abs_bc = vertex_property_map[Ve] ;
 
 			point = G[Ve].location;
@@ -2632,7 +2662,6 @@ namespace FracG
 		dstGeotransform[4] = srcGeoTransform[4];
 		dstGeotransform[5] = srcGeoTransform[5] / 10;
 
-	std::cout << output << std::endl;
 		dstncols  = (int)( GDALGetRasterXSize( srcDataset ) * srcGeoTransform[1] ) / dstGeotransform[1];
 		dstnrows = (int)( GDALGetRasterYSize( srcDataset ) * srcGeoTransform[5] ) / dstGeotransform[5];
 
@@ -2698,12 +2727,7 @@ namespace FracG
 		GDALClose( poDataset );
 		
 		double scale_coef = 1;
-		if (pdfMax > pdfMax2)
-			scale_coef = pdfMax / pdfMax2;
-		else if  (pdfMax < pdfMax2)
-			scale_coef = pdfMax2 / pdfMax;
-		std::cout << pdfMax << " " << pdfMax2 << " " << scale_coef << std::endl;
-		
+		scale_coef = pdfMax / pdfMax2;
 		MutiplyRasterbyCoefficient(output, scale_coef);
 	}
 }

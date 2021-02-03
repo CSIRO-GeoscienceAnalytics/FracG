@@ -63,7 +63,7 @@ namespace FracG
 	template<typename T> double ParallelGradient(line_type F, RASTER<T> raster);
 
 	template<typename T> void WriteRasterStruct(RASTER<T> raster);
-	void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], VECTOR &input_file, std::string suffix = "");
+	void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], std::string suffix = "");
 	void gdal_resample(std::string srcfname, std::string dstfname);
 //Maximum Flow----------------------------------------------------------
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target);

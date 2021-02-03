@@ -207,7 +207,7 @@ namespace FracG
 	void DoBoxCount(VECTOR lines)
 	{
 		std::cout << "Box Counting (QuadTree Method)" << std::endl;
-		std::ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / ("box_count.tsv"));
+		std::ofstream txtF = CreateFileStream(lines.out_path / stats_subdir / ("box_count.csv"));
 
 		std::clock_t startcputime = std::clock();
 		auto t_start = std::chrono::high_resolution_clock::now();
@@ -949,7 +949,7 @@ namespace FracG
 		random::random_device rd{};
 		std::vector <double> values;
 
-		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_distributions.tsv"));
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_distributions.csv"));
 
 		BOOST_FOREACH(line_type l , lines.data)
 			values.push_back(geometry::length(l));
@@ -1078,96 +1078,99 @@ namespace FracG
 
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename)
 	{
-		std::cout << "Generating raster statisics " << std::endl;
-		const char * name = raster_filename.c_str();
-		enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
-		static std::map<std::string, int> d_type;
-		if ( d_type.empty() )
+		if (!raster_filename.empty())
 		{
-			d_type["Byte"] = Byte;
-			d_type["UInt16"] = UInt16;
-			d_type["Int16"] = Int16;
-			d_type["UInt32"] = UInt32;
-			d_type["Int32"] = Int32;
-			d_type["Float32"] = Float32;
-			d_type["Float64"] = Float64;
-		}
-
-		GDALDataset  *poDataset;
-		GDALAllRegister();
-		std::cout << "RasterStatistics is opening \"" << name << "\"" << std::endl;
-		poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
-		GDALRasterBand  *poBand;
-		poBand = poDataset->GetRasterBand( 1 );
-		std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
-		GDALClose( poDataset );
-
-		std::cout << "Raster datatype is " ;
-		int type = d_type[datatype];
-		 switch (type) 
-		 {
-			case Byte:
+			std::cout << "Generating raster statisics " << std::endl;
+			const char * name = raster_filename.c_str();
+			enum {ERROR, Byte, UInt16, Int16, UInt32, Int32, Float32, Float64 };
+			static std::map<std::string, int> d_type;
+			if ( d_type.empty() )
 			{
-				std::cout	<< "byte (will not perform analysis)" << std::endl;
-			} break;
-
-			case UInt16:
-			{
-				std::cout << "uint16" << std::endl;
-				RASTER<int> R;
-				R.name = raster_filename;
-				AnalyseRaster<int>(lines, dist, R);
-			} break;
-
-			case Int16:
-			{
-				std::cout << "int16" << std::endl;
-				RASTER<int> R;
-				R.name = raster_filename;
-				AnalyseRaster<int>(lines, dist, R);
-			} break;
-
-			case UInt32:
-			{
-				std::cout << "uint32" << std::endl;
-				RASTER<int> R;
-				R.name = raster_filename;
-				AnalyseRaster<int>(lines, dist, R);
-
-			} break;
-
-			case Int32:
-			{
-				std::cout << "int32" << std::endl;
-				RASTER<int> R;
-				R.name = raster_filename;
-				AnalyseRaster<int>(lines, dist, R);
-			} break;
-
-			case Float32:
-			{
-				std::cout << "Float32" << std::endl;
-				RASTER<float> R;
-				R.name = raster_filename;
-				AnalyseRaster<float>(lines, dist, R);
-			} break;
-
-			case Float64:
-			{
-				std::cout << "Float64" << std::endl;
-				RASTER<double> R;
-				R.name = raster_filename;
-				AnalyseRaster<double>(lines, dist, R);
-			} break;
-
-			default: 
-			{
-				std::cout << " unknown" << std::endl;
-				std::cout << "ERROR: Could not determine dataype of raster" << std::endl;
+				d_type["Byte"] = Byte;
+				d_type["UInt16"] = UInt16;
+				d_type["Int16"] = Int16;
+				d_type["UInt32"] = UInt32;
+				d_type["Int32"] = Int32;
+				d_type["Float32"] = Float32;
+				d_type["Float64"] = Float64;
 			}
-			break;
-		 }
-		 std::cout << " done \n" << std::endl;
+
+			GDALDataset  *poDataset;
+			GDALAllRegister();
+			std::cout << "RasterStatistics is opening \"" << name << "\"" << std::endl;
+			poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
+			GDALRasterBand  *poBand;
+			poBand = poDataset->GetRasterBand( 1 );
+			std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
+			GDALClose( poDataset );
+
+			std::cout << "Raster datatype is " ;
+			int type = d_type[datatype];
+			 switch (type) 
+			 {
+				case Byte:
+				{
+					std::cout	<< "byte (will not perform analysis)" << std::endl;
+				} break;
+
+				case UInt16:
+				{
+					std::cout << "uint16" << std::endl;
+					RASTER<int> R;
+					R.name = raster_filename;
+					AnalyseRaster<int>(lines, dist, R);
+				} break;
+
+				case Int16:
+				{
+					std::cout << "int16" << std::endl;
+					RASTER<int> R;
+					R.name = raster_filename;
+					AnalyseRaster<int>(lines, dist, R);
+				} break;
+
+				case UInt32:
+				{
+					std::cout << "uint32" << std::endl;
+					RASTER<int> R;
+					R.name = raster_filename;
+					AnalyseRaster<int>(lines, dist, R);
+
+				} break;
+
+				case Int32:
+				{
+					std::cout << "int32" << std::endl;
+					RASTER<int> R;
+					R.name = raster_filename;
+					AnalyseRaster<int>(lines, dist, R);
+				} break;
+
+				case Float32:
+				{
+					std::cout << "float32" << std::endl;
+					RASTER<float> R;
+					R.name = raster_filename;
+					AnalyseRaster<float>(lines, dist, R);
+				} break;
+
+				case Float64:
+				{
+					std::cout << "float64" << std::endl;
+					RASTER<double> R;
+					R.name = raster_filename;
+					AnalyseRaster<double>(lines, dist, R);
+				} break;
+
+				default: 
+				{
+					std::cout << " unknown" << std::endl;
+					std::cout << "ERROR: Could not determine dataype of raster" << std::endl;
+				}
+				break;
+			 }
+			 std::cout << " done \n" << std::endl;
+		}
 	}
 
 	void MA_filter(std::vector< std::pair<double,double>> &KDE, int window)
@@ -1611,7 +1614,7 @@ namespace FracG
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty)
 	{
 		std::vector<line_type> &lineaments = lines.data;
-		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".tsv");
+		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".csv");
 		std::ofstream txtF = FracG::CreateFileStream(out_name);
 		int index = 0 ;
 		arma::vec ANGLE(lineaments.size(), arma::fill::zeros);
@@ -1809,7 +1812,7 @@ namespace FracG
 		}
 		std::vector <double> density;
 		std::vector<std::pair<int, double>> direc_nb;
-		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.tsv"));
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("scaline_analysis.csv"));
 		txtF << lines.name << std::endl;
 
 		int nb_direct = angle_dist.gaussians.size();
@@ -1948,7 +1951,7 @@ namespace FracG
 		arma::vec distance2(points.size(), arma::fill::zeros);
 
 	//write data to file----------------------------------------------------
-		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.tsv"));//statistics
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("vector_properties.csv"));//statistics
 		txtF << lines.name <<std::endl;
 		if (angle_dist.gaussians.size() > 0)
 		{

@@ -352,21 +352,27 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 		factory::fuse(bb_lines, l_lines, ov, fused_lines, -1, true, true);
 	}
 
-	std::vector<int> EmbedLineaments_all(Graph G, std::vector< std::vector<std::pair<int, int>>> fused_lines, std::vector<int> intersec, int nb_bb_pts, std::string name)
+	std::vector<int> EmbedLineaments_all(Graph G, std::vector< std::vector<std::pair<int, int>>> fused_lines, std::vector<int> intersec, int nb_bb_pts, std::string name, bool name_ss)
 	{
-		std::ofstream ss_names, lowD_ss_name, interface_ss_name;
+			
+		std::ofstream ss_names, lowD_ss_name, interface_ss_name, ss_properties;
 		std::string full_path  = FracG::AddPrefixSuffix(name, "", ".txt", true);
 		std::string full_path2 = FracG::AddPrefixSuffix(name, "", "_lowD.txt", true);
 		std::string full_path3 = FracG::AddPrefixSuffix(name, "", "_interface.txt", true);
+		std::string full_path4 = FracG::AddPrefixSuffix(name, "", "_propertiestxt", true);
 		ss_names.open (full_path); 
 		lowD_ss_name.open (full_path2); 
 		interface_ss_name.open (full_path3); 
+		ss_properties.open(full_path4);
+		ss_properties <<"line_tag \t ID \t length \t parent_length"<< std::endl;
 		factory::synchronize();
 
 		std::vector<int> line_tags;
+		std::vector<int> all_lines_tags;
 	   //get the tags of lineaments that are not the bounding box
-	   for (int i = 0; i < num_edges(G); i++)
-	   {
+		int i =0;
+		for (auto Eg : make_iterator_range(edges(G)))
+		{
 			std::vector<int>phys_group;
 			std::vector<std::pair<int,int>> this_line_tags = fused_lines[i + nb_bb_pts];
 			if (this_line_tags.empty())
@@ -376,15 +382,34 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 			{
 				line_tags.push_back(ii.second);
 				if (find(intersec.begin(), intersec.end(), ii.second) != intersec.end())
+				{
 					phys_group.push_back(ii.second);
+					all_lines_tags.push_back(ii.second);
+				}
+			}
+			
+			if (name_ss)
+			{
+				model::addPhysicalGroup(1, phys_group, nb_bb_pts+i+1);
+				model::setPhysicalName(1, nb_bb_pts+i+1, "line_"+ to_string(i));
+				model::mesh::embed(1, phys_group, 2, 1);
+				ss_names << " line_"+ to_string(i);
+				lowD_ss_name << " lowerD_line_"+ to_string(i);
+				interface_ss_name << " interface_line_"+ to_string(i);
+				ss_properties <<"line_"+ to_string(i) <<"\t"<< G[Eg].FaultNb <<"\t"<<  G[Eg].length <<"\t"<< G[Eg].fault_length << std::endl;	
+			}
+		i++;
 		}
-		  model::addPhysicalGroup(1, phys_group, nb_bb_pts+i+1);
-		  model::setPhysicalName(1, nb_bb_pts+i+1, "lineament_"+ to_string(i));
-		  model::mesh::embed(1, phys_group, 2, 1);
-		  ss_names << " lineament_"+ to_string(i);
-		  lowD_ss_name << " lowerD_lineament_"+ to_string(i);
-		  interface_ss_name << " interface_lineament_"+ to_string(i);
+		if(!name_ss)
+		{
+			model::addPhysicalGroup(1, all_lines_tags, nb_bb_pts+num_edges(G)+1);
+			model::setPhysicalName(1, nb_bb_pts+num_edges(G)+1, "lines");
+			model::mesh::embed(1, all_lines_tags, 2, 1);
+			ss_names << " lines";
+			lowD_ss_name << " lowerD_lines";
+			interface_ss_name << " interface_lines";
 		}
+		
 		model::addPhysicalGroup(2, {1}, 1);
 		model::setPhysicalName(2, 1, "host_rock");
 		ss_names.close();
@@ -486,7 +511,10 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 			
 		for (auto newE : new_entities)
 			if(newE.first == 2)
+			{
 				extruded_lines.push_back(newE);
+				
+			}
 		
 		return(extruded_lines);
 	}
@@ -517,7 +545,7 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 		}
 	}
 	
-	std::vector<int> Fragment_and_cut(gmsh::vectorpair &toolDimTags, int bb_faces, float lc)
+	std::vector<int> Fragment_and_cut(gmsh::vectorpair &toolDimTags, int bb_faces, float lc, bool name_ss)
 	{
 		gmsh::vectorpair  dimTags;
 		std::vector<std::pair<int, int> > ov, volume_tag, face_tag;
@@ -537,20 +565,36 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 		factory::synchronize();
 		GetTags(ovv, volume_tag, face_tag, v_tag, f_tag);
 		
-	
 		int i = 1;
 		std::vector<int> surface_tag;
-		for (auto Ftag : f_tag)
+		if (!name_ss)
 		{
-			for (auto surface : Ftag)
-				surface_tag.push_back(surface);
+			for (auto Ftag : f_tag)
+			{
+				for (auto surface : Ftag)
+					surface_tag.push_back(surface);
+			}
+			model::addPhysicalGroup(2, surface_tag, surface_tag.size());
+			model::setPhysicalName(2, surface_tag.size(), "surfaces");
 		}
-		model::addPhysicalGroup(2, surface_tag, 10);
-		model::setPhysicalName(2, 10, "surface_");
+		else
+		{
+			int tag = f_tag.size();
+			for (auto Ftag : f_tag)
+			{
+				std::vector<int> surface_tag;
+				for (auto surface : Ftag)
+					surface_tag.push_back(surface);
+					
+				model::addPhysicalGroup(2, surface_tag, tag++);
+				model::setPhysicalName(2, tag, "surface_"+ to_string(tag));
+			}
+			
+		}
 		return(surface_tag);
 	}
 	
-	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, std::string out_filename)
+	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, bool name_ss, std::string out_filename)
 	{
 		float lc;
 		int nb_bb_pts;
@@ -576,7 +620,7 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 			
 		MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
 		NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-		std::vector<int> line_tags = EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FracG::AddPrefixSuffix(out_filename, "", "_SideSet_names", true));
+		std::vector<int> line_tags = EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FracG::AddPrefixSuffix(out_filename, "", "_SideSet_names", true), name_ss);
 		MeshRefine_line(line_tags , lc, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist);
 
 		model::mesh::generate(2);
@@ -588,13 +632,14 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 	}
 	
 	
-	void WriteGmsh_3D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, double z, std::string out_filename)
+	void WriteGmsh_3D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, double z, bool name_ss, std::string out_filename)
 	{
 		float lc;
 		int nb_bb_pts;
 		int p_tag = 0;
 		int l_tag = 0;
 		gmsh::vectorpair line_dim_tags, face_dim_tags;
+		std::vector<std::pair<edge_type, int>> edge_tag;
 		
 		std::cout << "creating 3D mesh for lineament set" << std::endl;
 		out_filename = FracG::AddPrefixSuffix(out_filename, "", ".msh");
@@ -611,6 +656,7 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 		{
 			AddLineament(G[Eg].trace, degree(source(Eg, G), G), degree(target(Eg, G),G), p_tag, l_tag, lc);
 			line_dim_tags.push_back(std::make_pair(1, l_tag));
+			edge_tag.push_back(std::make_pair(Eg, l_tag));
 		}
 		factory::synchronize();
 		
@@ -618,7 +664,7 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 		std::cout << "surfaces: " << face_dim_tags.size() << std::endl;
 		
 		factory::synchronize();
-		std::vector<int> surf_tags = Fragment_and_cut(face_dim_tags, l_tag, lc);
+		std::vector<int> surf_tags = Fragment_and_cut(face_dim_tags, l_tag, lc, name_ss);
 		factory::synchronize();
 	
 		TagBoundaries_3D(xyz);
@@ -692,7 +738,7 @@ std::vector<double> BoundingBox_3D(Graph G, int nb_cells, int &p_tag, int &l_tag
 
 				MangeIntersections_bb(l_tag,  nb_bb_pts, fused_lines);
 				NameBoundingBox(nb_bb_pts, fused_lines, intersec);
-				EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, output_filename);
+				EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, output_filename, false);
 
 				factory::synchronize();
 				model::mesh::generate(2);
