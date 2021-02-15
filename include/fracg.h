@@ -134,24 +134,28 @@ namespace FracG
             double transform[8];
             T** values;
 	}; 
-	
+    
+    //enum for directions, used for specifiying borders of the area of interest
+	enum Direction: char {LEFT='l', RIGHT='r', TOP='t', BOTTOM='b', NONE='\0'};
 	//=======================GRAPH==========================================
 	// Fault Vetex Properties
 	template <typename Point>
 	struct FVertex
 	{
-            FVertex()
-            {
-                    boost::geometry::assign_zero(location);
-            }
-            FVertex(Point const& loc)
-                    : location(loc)
-            {
-            }
-            Point location;
-            bool Enode = false;
-            int component;
-            double data;
+        
+        FVertex()
+        {
+                boost::geometry::assign_zero(location);
+        }
+        FVertex(Point const& loc)
+                : location(loc)
+        {
+        }
+        Point location;
+        bool Enode = false;
+        Direction enode_dir = Direction::NONE; //which edge of bounding box that this vertex intersects
+        int component;
+        double data;
 	};
 
 	// Fault Edges Properties
@@ -216,13 +220,14 @@ namespace FracG
 	{
             point_type location; //the node's physical location
             bool Enode; //whether or not this node is an end node (off the edge of the raster file)
-            double data; //the data value at the vertex's location
-            long long index;
+            Direction direction = Direction::NONE;
+            double data = 0; //the data value at the vertex's location
+            long long index = 0;
             dedge_type predecessor; //store the edge to this vertex's predecessor
             boost::default_color_type colour; //colour property used by the maximum flow algorithm
-            double distance; //distance from this vertex to the sink
+            double distance = 0; //distance from this vertex to the sink
             DVertex(){};
-            DVertex(point_type loc, bool end, double data, long long ind) : location(loc), Enode(end), data(data), index(ind) {};
+            DVertex(point_type loc, bool end, Direction dir, double data, long long ind) : location(loc), Enode(end), direction(dir), data(data), index(ind) {};
 	};
 	
 	//Structure for a directed edge, for use in the maximum flow algorithm
@@ -238,6 +243,8 @@ namespace FracG
             DEdge() : length(0), full_length(0), capacity(0), residual_capacity(0) {};
             DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra), capacity(cap), residual_capacity(cap) {};
             DEdge(double len, double full_len, line_type tra)             : length(len), full_length(full_len), trace(tra), capacity(  0), residual_capacity(  0) {};
+            
+            DEdge(double cap) : capacity(cap), residual_capacity(cap) {};
             friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
 	};
 	//<edge list for each vertex, vectex list, un/directed, vertex properties, edge properties, graph properties, (all?) edges list>

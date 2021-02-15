@@ -11,6 +11,7 @@ const std::string graph_subdir="graph";
 namespace FracG
 {
 	namespace fs = boost::filesystem;
+    namespace bgm = boost::geometry;
 
 	//take a location, and return the corresponding graph vertex, and the list of possible vertices
 	//remember that locations can be slightly different due to floating point calculations, so this function checks for vertices within a certain distance of the specified point
@@ -144,6 +145,20 @@ namespace FracG
 		return map;
 	}
 
+	//get the index of the segment that is closest to the given point
+	int closest_segment(std::vector<Segment> segments, point_type point){
+        int idx = -1;
+        double closest_dist = std::numeric_limits<double>::infinity();
+        for (decltype(segments)::iterator it = segments.begin(); it < segments.end(); it++){
+            const double dist = geometry::distance(*it, point);
+            if (dist < closest_dist)
+            {
+                idx = it - segments.begin();
+                closest_dist = dist;
+            }
+        }
+        return idx;
+    }
 
 	graph_map<> ReadVEC4raster(double transform[8], VECTOR &lines, double map_distance_threshold)
 	{
@@ -151,7 +166,9 @@ namespace FracG
 		graph_map<> map(map_distance_threshold, lines.refWKT);
 		Graph& graph = map.GetGraph();
 		geometry::model::multi_linestring<line_type> intersection;
-		std::vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
+        //start and end points of the in-boundary portion of the fault, the trace of the fault, whether or not either end is a end node, the directions that either end intersects the bounding box, the total length of the original fault
+        typedef std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, std::pair<int, int>, double > edge_data;
+		std::vector<edge_data> G;
 		std::pair <point_type, point_type> NODES;
 		line_type TRACE;
 		long double Xmax, Xmin, Ymax, Ymin;
@@ -165,6 +182,18 @@ namespace FracG
 
 		//we crop the graph 
 		polygon_type pl = BoundingBox(transform, transform[1]);
+        box border = bgm::return_envelope<box>(pl);
+        double left_pos = border.min_corner().get<0>();
+        double bottom_pos = border.min_corner().get<1>();
+        double right_pos = border.max_corner().get<0>();
+        double top_pos = border.max_corner().get<1>();
+        Segment left_edge(point_type(left_pos, bottom_pos), point_type(left_pos, top_pos));
+        Segment right_edge(point_type(right_pos, bottom_pos), point_type(right_pos, top_pos));
+        Segment bottom_edge(point_type(left_pos, bottom_pos), point_type(right_pos, bottom_pos));
+        Segment top_edge(point_type(left_pos, top_pos), point_type(right_pos, top_pos));
+        std::vector<Segment> raster_edges = {left_edge, right_edge, bottom_edge, top_edge};
+        std::vector<Direction> raster_edge_directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
+        
 
 		//check for edge nodes (crop faults by raster area)---------------------
 		BOOST_FOREACH(line_type const& Fault, faults)
@@ -179,21 +208,33 @@ namespace FracG
 			for (auto it = intersection.begin(); it != intersection.end(); it++)
 			{
 				line_type &segment = *it;
+                int front_isect_dir = -1, back_isect_dir = -1;
+                
 				//use the distance from the original fault's end points to determine if this segment's end points are from the original fault segment, or are cut off by the boundaries of the area of interest
-				if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold) type |= FRONT_ENODE;
-				if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold) type |=  BACK_ENODE;
-				G.push_back(std::make_tuple(std::make_pair(segment.front(),segment.back()), segment, type, fault_length));
+				if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold)
+                {
+                    type |= FRONT_ENODE;
+                    front_isect_dir = closest_segment(raster_edges, segment.front());
+                }
+				if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold)
+                {
+                    type |=  BACK_ENODE;
+                    back_isect_dir = closest_segment(raster_edges, segment.back());
+                }
+				G.push_back(std::make_tuple(std::make_pair(segment.front(),segment.back()), segment, type, std::make_pair(front_isect_dir, back_isect_dir), fault_length));
+                
 			}
 			intersection.clear();
 		}
 
 		//create edges and nodes for faults in the graph-------------------------
-		for (typename std::vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double>>::const_iterator it = G.begin(); it != G.end(); ++it)
+		for (typename std::vector<edge_data>::const_iterator it = G.begin(); it != G.end(); ++it)
 		{
 			NODES = get<0> (*it);
 			TRACE = get<1> (*it);
 			type  = get<2> (*it);
-			const double fault_length = get<3>(*it);
+            std::pair<int, int> isect_dirs = get<3>(*it);
+			const double fault_length = get<4>(*it);
 
 			VA = map.AddVertex(NODES.first);
 			VB = map.AddVertex(NODES.second);
@@ -201,8 +242,15 @@ namespace FracG
 			//if( (degree(VA, graph) == 0) && (degree(VB, graph) == 0) )
 			AddNewEdge(graph, VA, VB, TRACE, fault_length);
 
-			if (type & FRONT_ENODE) graph[VA].Enode = true;
-			if (type &  BACK_ENODE) graph[VB].Enode = true;
+			if (type & FRONT_ENODE){
+                graph[VA].Enode = true;
+                graph[VA].enode_dir = raster_edge_directions[isect_dirs.first];
+            }
+			if (type &  BACK_ENODE)
+            {
+                graph[VB].Enode = true;
+                graph[VB].enode_dir = raster_edge_directions[isect_dirs.second];
+            }
 		}
 
 		std::cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << std::endl;
@@ -471,7 +519,7 @@ namespace FracG
 					G[Eg].component = comp_it->second;
 			}
 
-			if (G[U].Enode == false || G[u].Enode == false)
+			if (!G[U].Enode || !G[u].Enode)
 			{
 				G[Eg].component = G[U].component;
 				it = COUNT.find(G[U].location);
@@ -550,7 +598,7 @@ namespace FracG
 					}
 
 	//deal with edge nodes--------------------------------------------------
-				if (G[U].Enode == true || G[u].Enode == true)
+				if (G[U].Enode || G[u].Enode)
 					Enodes++;
 
 				if ((G[U].Enode == true && degree(u, G) == 1) ||
@@ -1320,7 +1368,14 @@ namespace FracG
 			std::cout << "Aiming for cell size of: " << min_l << std::endl;
 		}
 		box AOI = ReturnAOI(lines);
+        double x_start = AOI.min_corner().get<0>();
+        double y_start = AOI.min_corner().get<1>();
+        double dist = vert ? AOI.max_corner().get<1>() - y_start : AOI.max_corner().get<0>() - x_start;
+        dist = std::fabs(dist);
+        double pressure_diff = p2 - p1;
+        
 
+        /*
 		double min_x = geometry::get<geometry::min_corner, 0>(AOI) + 5*min_l ; 
 		double max_y = geometry::get<geometry::max_corner, 1>(AOI) - 5*min_l ; 
 
@@ -1355,7 +1410,7 @@ namespace FracG
 			change = -(p1 - p2) / x_dim;
 
 		if (p1 < p2)
-			change = (p2 - p1) / x_dim;
+			change = (p2 - p1) / x_dim; //these are the same
 
 		if (p1 == p2)
 		{
@@ -1381,17 +1436,21 @@ namespace FracG
 			if (!vert)
 				value += change;
 		}
+		*/
 
+		//why this, instead of interpolating between the two end pressures?
 		for (auto Ve : boost::make_iterator_range(vertices(G)))
 		{
-			G[Ve].data = GetRasterValue(G[Ve].location, raster.transform, raster.values);
+            point_type location = G[Ve].location;
+            double this_dist = vert ? location.get<1>() - y_start : location.get<0>() - x_start;
+			G[Ve].data = p1 + pressure_diff * this_dist / dist;//GetRasterValue(G[Ve].location, raster.transform, raster.values);
 			if (std::isnan(G[Ve].data)) 
 			{
 				std::cout <<"Error: vertex " << Ve << " read a value of nan" << std::endl;
 				std::cout << G[Ve].location.x() << " " << G[Ve].location.y() << std::endl;
 			}
 		}
-		delete raster.values;
+// 		delete raster.values;
 	}
 
 	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
@@ -1449,21 +1508,163 @@ namespace FracG
 		std::cout << " done \n" << std::endl;
 	}
 
-	void MaximumFlow_HG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
+	void MakeCroppedGraph(Graph &g, box AOI, double crop_amount)
+    {
+        Graph out;
+        double min_x = AOI.min_corner().get<0>();
+        double max_x = AOI.max_corner().get<0>();
+        double min_y = AOI.min_corner().get<1>();
+        double max_y = AOI.max_corner().get<1>();
+        double diff_x = max_x - min_x;
+        double diff_y = max_y - min_y;
+        double shift_x = crop_amount * diff_x / 2;
+        double shift_y = crop_amount * diff_y / 2;
+        double new_min_x = min_x + shift_x;
+        double new_max_x = max_x - shift_x;
+        double new_min_y = min_y + shift_y;
+        double new_max_y = max_y - shift_y;
+        box new_AOI = box(point_type(new_min_x, new_min_y), point_type(new_max_x, new_max_y));
+        Segment    left(point_type(new_min_x, new_min_y), point_type(new_min_x, new_max_y));
+        Segment   right(point_type(new_max_x, new_min_y), point_type(new_max_x, new_max_y));
+        Segment  bottom(point_type(new_min_x, new_min_y), point_type(new_max_x, new_min_y));
+        Segment     top(point_type(new_min_x, new_max_y), point_type(new_max_x, new_max_y));
+        std::vector<Segment> aoi_edges = {left, right, bottom, top};
+        std::vector<Direction> directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
+        Graph::edge_iterator e, estart, eend;
+        boost::tie(estart, eend) = boost::edges(g);
+        for (e = estart; e != eend; e++)
+        {
+            line_type trace = g[*e].trace;
+            if (!geometry::intersects(new_AOI, trace)) continue; //crosses is not implemented
+            for (int i = 0; i < aoi_edges.size(); i++)
+            {
+                Segment compare = aoi_edges[i];
+                if (!geometry::intersects(compare, trace)) continue; //crosses
+                vertex_type s = boost::source(*e, g), t = boost::target(*e, g);
+                double s_dist = geometry::distance(compare, g[s].location);
+                double t_dist = geometry::distance(compare, g[t].location);
+                if (s_dist < t_dist) {g[s].Enode = true; g[s].enode_dir = directions[i];}
+                else {g[t].Enode = true; g[t].enode_dir = directions[i];}
+            }
+            
+        }
+        
+    }
+	
+	//add artificial source and target nodes to a graph, to have the max flow involve all features that cross the boundary of the area of interest
+	void AddGradientSourceSink(DGraph &dg, Direction source, Direction target, dvertex_type &s, dvertex_type &t)
+    {
+        if (target == Direction::NONE)
+        {
+            switch(source) {
+                case LEFT: target = Direction::RIGHT; break;
+                case RIGHT: target = Direction::LEFT; break;
+                case TOP: target = Direction::BOTTOM; break;
+                case BOTTOM: target = Direction::TOP; break;
+                case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a source" << std::endl; break;
+            }
+        }
+        DVertex dummy;
+        s = boost::add_vertex(dummy, dg);
+        t = boost::add_vertex(dummy, dg);
+        DGraph::vertex_iterator v, vstart, vend;
+        boost::tie(vstart, vend) = boost::vertices(dg);
+        int num_source = 0, num_target = 0;
+        for (v = vstart; v < vend; v++)
+        {
+            if (*v == s || *v == t) continue;
+            DVertex vert = dg[*v];
+            bool added;
+            dedge_type fwd, bkw;
+            if (vert.direction == source)
+            {
+                boost::tie(fwd, added) = boost::add_edge(s, *v, DEdge(std::numeric_limits<double>::infinity()), dg);
+                boost::tie(bkw, added) = boost::add_edge(*v, s, DEdge(0), dg);
+                dg[fwd].reverse = bkw;
+                dg[bkw].reverse = fwd;
+                num_source++;
+            }
+            if (vert.direction == target)
+            {
+                boost::tie(fwd, added) = boost::add_edge(*v, t, DEdge(std::numeric_limits<double>::infinity()), dg);
+                boost::tie(bkw, added) = boost::add_edge(t, *v, DEdge(0), dg);
+                dg[fwd].reverse = bkw;
+                dg[bkw].reverse = fwd;
+                num_target++;
+            }
+        }
+        //std::cout << "For gradient max flow, there are "<<num_source<<" source nodes and "<<num_target<<" target nodes" << std::endl;
+    }
+    
+    //remove the artificial source and target nodes
+    void RemoveGradientSourceSink(DGraph &dg, dvertex_type &s, dvertex_type &t)
+    {
+        boost::clear_vertex(s, dg);
+        boost::clear_vertex(t, dg);
+        boost::remove_vertex(s, dg);
+        boost::remove_vertex(t, dg);
+    }
+    
+    void AssignDistances(DGraph &dg, Direction target_direction, box &AOI, dvertex_type &s, dvertex_type &t)
+    {
+        double min_x = AOI.min_corner().get<0>();
+        double max_x = AOI.max_corner().get<0>();
+        double min_y = AOI.min_corner().get<1>();
+        double max_y = AOI.max_corner().get<1>();
+        double mid_x = (min_x + max_x) / 2;
+        double mid_y = (min_y + max_y) / 2;
+        DGraph::vertex_iterator v, vstart, vend;
+        boost::tie(vstart, vend) = boost::vertices(dg);
+        for (v = vstart; v < vend; v++)
+        {
+            if (*v == s) { dg[*v].distance = std::max(max_x - min_x, max_y - min_y); continue;}
+            if (*v == t) { dg[*v].distance = 0; continue;}
+            double distance;
+            const point_type v_loc = dg[*v].location;
+            switch (target_direction){
+                LEFT: distance = v_loc.get<0>() - min_x; break;
+                RIGHT: distance = max_x - v_loc.get<0>(); break;
+                BOTTOM: distance = v_loc.get<1>() - min_y; break;
+                TOP: distance = max_y - v_loc.get<1>(); break;
+            }
+            dg[*v].distance = distance;
+        }
+    }
+	
+	double MaximumFlowGradient(graph_map<> G, Direction target, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
 		float left = 10, right = 0;
-		point_type s, t;
-		if (st_filename.empty())
-			SetBoundaryPoints(G, s, t, false);
-		else
-			GetSourceTarget(st_filename.c_str(), s, t);
+        bool is_vertical = target == Direction::TOP || target == Direction::BOTTOM;
+        
+        Direction source;
+        switch(target) {
+            case LEFT: source = Direction::RIGHT; break;
+            case RIGHT: source = Direction::LEFT; break;
+            case TOP: source = Direction::BOTTOM; break;
+            case BOTTOM: source = Direction::TOP; break;
+            case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a target" << std::endl; return 0;
+        }
+        box bbox = G.GetBoundingBox();
+        Graph &g = G.GetGraph();
+        
+// 		if (st_filename.empty())
+// 			SetBoundaryPoints(G, s, t, is_vertical);
+// 		else
+// 			GetSourceTarget(st_filename.c_str(), s, t);
 			
-		std::cout<< "Maximum flow with horizontal gradient" << std::endl;  
-		AssignGrad(G, cell_size, left, right, false, refWKT);
+		std::cout<< "Maximum flow with horizontal gradient" << std::endl;
+//         if (source == Direction::RIGHT or source == Direction::BOTTOM) std::swap(start_pressure, end_pressure);
+		AssignGrad(g, cell_size, start_pressure, end_pressure, is_vertical, refWKT);
+        MakeCroppedGraph(g, bbox, border_amount);
 
-		DGraph dg = MakeDirectedGraph(G);
+		DGraph dg = MakeDirectedGraph(g);
+        
 		SetupMaximumFlow(dg, capacity_type);
-		double mf =  MaximumFlow(dg, s, t);
+		dvertex_type s, t;
+        AddGradientSourceSink(dg, source, target, s, t);
+        AssignDistances(dg, target, bbox, s, t);
+		double mf = CalculateMaximumFlow(dg, s, t);
+        RemoveGradientSourceSink(dg, s, t);
 		
 		std::cout << "maximum flow is: " << mf << std::endl;
 		if (out_filename != "")
@@ -1472,6 +1673,7 @@ namespace FracG
 			WriteSHP_maxFlow(dg, refWKT, name.c_str());
 		}
 		std::cout << " done \n" << std::endl;
+        return mf;
 	}
 
 	//setting boundary points for vertical and horizontal gradients.

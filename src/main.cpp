@@ -43,6 +43,12 @@ const char *GRAPH_COMPONENT="component";
 const char *MAX_FLOW_CAP_TYPE="max_flow_cap_type";
 const char* MAX_FLOW_CELL_SIZE="max_flow_cell_size";
 
+const char *MAX_FLOW_GRADIENT_DIRECTION="max_flow_gradient_direction";
+const char *MAX_FLOW_GRADIENT_BORDER_AMOUNT="max_flow_gradient_border_amount";
+const char *MAX_FLOW_GRADIENT_PRESSURE_MAX="max_flow_gradient_pressure_max";
+const char *MAX_FLOW_GRADIENT_PRESSURE_MIN="max_flow_gradient_pressure_min";
+
+
 const char *GRAPH_RESULTS_FILE="graph_results_file";
 const char *GRAPH_RESULTS_FOLDER="graph_results_folder";
 
@@ -107,6 +113,11 @@ int main(int argc, char *argv[])
 
 		(MAX_FLOW_CAP_TYPE, po::value<std::string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
 		(MAX_FLOW_CELL_SIZE, po::value<double>()->default_value(-1), "Pixel size for maximum flow gradient raster")
+        
+        (MAX_FLOW_GRADIENT_DIRECTION, po::value<std::string>()->default_value("right"), "Target direction of the gradient-based maximum flow (towards left, right, top, or bottom")
+        (MAX_FLOW_GRADIENT_BORDER_AMOUNT, po::value<double>()->default_value(0.2), "For gradient-based maximum flow, the border features are those that intersect with the bounding box that is reduced by this amount (0 to 1)")
+        (MAX_FLOW_GRADIENT_PRESSURE_MAX, po::value<double>()->default_value(10), "The gradient-based maximum flow has this amount of pressure at the source edge")
+        (MAX_FLOW_GRADIENT_PRESSURE_MIN, po::value<double>()->default_value(0), "The gradient-based maximum flow has this amount of pressure at the target edge")
 
 		(GRAPH_RESULTS_FILE, po::value<std::string>()->default_value("first"), "Filename to save graph analysis results to")
 		(GRAPH_RESULTS_FOLDER, po::value<std::string>()->default_value("g"), "Save the resulting graph to this folder")
@@ -186,6 +197,11 @@ int main(int argc, char *argv[])
     
     const std::string max_flow_cap_type = vm[MAX_FLOW_CAP_TYPE].as<std::string>();
     const double max_flow_cell_size = vm[MAX_FLOW_CELL_SIZE].as<double>();
+    
+    const FracG::Direction max_flow_gradient_direction = FracG::ReadDirection(vm[MAX_FLOW_GRADIENT_DIRECTION].as<std::string>());
+    const double max_flow_gradient_border_amount = vm[MAX_FLOW_GRADIENT_BORDER_AMOUNT].as<double>();
+    const double max_flow_gradient_pressure_max = vm[MAX_FLOW_GRADIENT_PRESSURE_MAX].as<double>();
+    const double max_flow_gradient_pressure_min = vm[MAX_FLOW_GRADIENT_PRESSURE_MIN].as<double>();
 
     const bool save_kde_params = true; //the code that uses this needs to be improved - it should use local variables, not a global
 	
@@ -251,7 +267,7 @@ int main(int argc, char *argv[])
 	//simple graph algorithms
 	FracG::Graph m_tree = FracG::MinTree(split_map, map_dist_thresh, (out_path / "minimum_spanning_tree").string() );							   //minimum spanning tree
 	//FracG::Graph s_path = FracG::ShortPath(split_map, source_name, (out_path / "shortest_path").string());											  //shortest path between points provited by shp-file. number is the merging radius to teh existing graph
-	//FracG::MaximumFlow_HG(graph, source_name, max_flow_cell_size, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				 //maximum flow with horizontal gradient, capacity derived from orientation
+	FracG::MaximumFlowGradient(split_map, FracG::Direction::LEFT, max_flow_gradient_pressure_max, max_flow_gradient_pressure_min, max_flow_gradient_border_amount, max_flow_cell_size, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				 //maximum flow with horizontal gradient, capacity derived from orientation
 	//FracG::MaximumFlow_VG(graph, source_name, max_flow_cell_size, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());				//maximum flow with vertical gradient, capacity derived from length and orientation 
 	
 	//building a graph with raster values assigned to elemnets. 

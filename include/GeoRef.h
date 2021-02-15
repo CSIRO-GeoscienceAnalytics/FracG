@@ -71,5 +71,6 @@ namespace FracG
 	void SetupMaximumFlow(DGraph &dg, std::string type);
 	double MaximumFlow(DGraph &dg, point_type source, point_type target);
 	double MaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t);
+    double CalculateMaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t);
 };
 #endif

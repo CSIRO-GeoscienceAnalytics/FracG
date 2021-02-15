@@ -123,7 +123,7 @@ namespace FracG
         point_map<VT, PT> pm; //map to associate points (locations) with vertices in the graph
         GT &graph; //graph object to which the vertices belong
         GT graph_holder; //if the user doesn't supply a graph reference, use this to hold the data
-        std::string reference_wkt; //well-known-text which describes the 
+        std::string reference_wkt; //well-known-text which describes the reference
 
     public:
         graph_map(GT &graph_obj, double dist, std::string ref_str="") : pm(dist), graph(graph_obj), reference_wkt(ref_str)
@@ -191,6 +191,19 @@ namespace FracG
 
         //get the Well Known Text which reference information for this graph
         const char *GetRefWKT() { return reference_wkt.c_str(); }
+        
+        //calculate and return the bounding box of the edges in the graph
+        box GetBoundingBox()
+        {
+            polygon_type holder;
+            typename GT::edge_iterator e, estart, eend;
+            boost::tie(estart, eend) = boost::edges(graph);
+            for (e = estart; e != eend; e++)
+            {
+                bg::append(holder, graph[*e].trace);
+            }
+            return bg::return_envelope<box>(holder);
+        }
     };
 
     void RemoveSpurs(graph_map<> & map, double minDist);
@@ -219,6 +232,6 @@ namespace FracG
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
     void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
     void MaximumFlow_VG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_HG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
+    double MaximumFlowGradient(graph_map<> G, Direction target, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
 }
 #endif

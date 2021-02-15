@@ -4,6 +4,7 @@
 #include <string>
 #include <initializer_list>
 #include <boost/filesystem.hpp>
+#include "fracg.h"
 
 namespace FracG
 {
@@ -20,6 +21,7 @@ namespace FracG
     std::ofstream CreateFileStream(boost::filesystem::path file);
     std::ofstream CreateFileStream(std::string filename);
     
+    Direction ReadDirection(std::string direction_string);
 }
 
 #endif

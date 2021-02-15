@@ -288,7 +288,7 @@ namespace FracG
 		for (v = vstart; v < vend; v++)
 		{
 			FVertex<point_type> fv = g[*v];
-			DVertex dv(fv.location, fv.Enode, fv.data, v - vstart);
+			DVertex dv(fv.location, fv.Enode, fv.enode_dir, fv.data, v - vstart);
 			dvertex_type dvd = boost::add_vertex(dv, dg);
 			vertex_map[*v] = dvd;
 			dg[dvd].index = index++; //initialise vertex index list
