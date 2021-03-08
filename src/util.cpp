@@ -104,4 +104,18 @@ namespace FracG
         }
         return direction;
     }
+    
+    double DirectionAngleDegrees(Direction d)
+    {
+        switch (d)
+        {
+            case 'l': return 180;
+            case 'r': return 0;
+            case 't': return 90;
+            case 'b': return -90;
+            default:
+                std::cerr << "Error: None direction has no angle" << std::endl;
+                return std::nan("");
+        }
+    }
 }

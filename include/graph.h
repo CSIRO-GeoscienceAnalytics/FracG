@@ -232,6 +232,6 @@ namespace FracG
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
     void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
     void MaximumFlow_VG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
-    double MaximumFlowGradient(graph_map<> G, Direction target, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
+    double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
 }
 #endif

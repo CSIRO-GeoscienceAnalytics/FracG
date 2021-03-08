@@ -1339,12 +1339,15 @@ namespace FracG
 	}
 
 	//parameters: graph, pressure1 , pressure2, adn bool whether vertical or horizontal gradient (vertical if true)
-	void AssignGrad(Graph G, double cell_size, float p1, float p2, bool vert, const char *refWKT)
+	void AssignGrad(Graph &G, double cell_size, float p1, float p2, Direction pressure_direction, const char *refWKT)
 	{
 		//creating a gradient raster with a buffer of 5 cell sizes around the AOI
 		//float** values[x_dim][y_dim];
 		RASTER<float> raster;
 		std::vector<line_type> lines;
+        bool is_vertical = pressure_direction == Direction::TOP || pressure_direction == Direction::BOTTOM;
+        bool should_reverse = pressure_direction == Direction::LEFT || pressure_direction == Direction::BOTTOM;
+        if (should_reverse) std::swap(p1, p2);
 
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
 			lines.push_back(G[Eg].trace);
@@ -1370,7 +1373,7 @@ namespace FracG
 		box AOI = ReturnAOI(lines);
         double x_start = AOI.min_corner().get<0>();
         double y_start = AOI.min_corner().get<1>();
-        double dist = vert ? AOI.max_corner().get<1>() - y_start : AOI.max_corner().get<0>() - x_start;
+        double dist = is_vertical ? AOI.max_corner().get<1>() - y_start : AOI.max_corner().get<0>() - x_start;
         dist = std::fabs(dist);
         double pressure_diff = p2 - p1;
         
@@ -1425,15 +1428,15 @@ namespace FracG
 		float value = p1;
 		for (int x = 0; x < x_dim ; x++)
 		{
-			if (vert)
+			if (is_vertical)
 				value = p1;
 			for (int y = 0; y < y_dim ; y++)
 			{
 				raster.values[x][y] = value;
-				if (vert)
+				if (is_vertical)
 					value += change;
 			}
-			if (!vert)
+			if (!is_vertical)
 				value += change;
 		}
 		*/
@@ -1442,8 +1445,9 @@ namespace FracG
 		for (auto Ve : boost::make_iterator_range(vertices(G)))
 		{
             point_type location = G[Ve].location;
-            double this_dist = vert ? location.get<1>() - y_start : location.get<0>() - x_start;
+            double this_dist = is_vertical ? location.get<1>() - y_start : location.get<0>() - x_start;
 			G[Ve].data = p1 + pressure_diff * this_dist / dist;//GetRasterValue(G[Ve].location, raster.transform, raster.values);
+// 			std::cout << "Vertex " <<Ve<< " is at location x " << location.get<0>() << ", y " << location.get<1>() << ", is at scaled distance " << this_dist / dist << " resulting in a pressure of " << G[Ve].data <<std::endl;
 			if (std::isnan(G[Ve].data)) 
 			{
 				std::cout <<"Error: vertex " << Ve << " read a value of nan" << std::endl;
@@ -1493,10 +1497,10 @@ namespace FracG
 			GetSourceTarget(st_filename.c_str(), s, t);
 			
 		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
-		AssignGrad(G, cell_size, top, bottom, true, refWKT);
+		AssignGrad(G, cell_size, top, bottom, Direction::TOP, refWKT);//true
 
 		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type);
+		SetupMaximumFlow(dg, capacity_type, 90);
 		double mf =  MaximumFlow(dg, s, t);
 		
 		std::cout << "maximum flow is: " << mf << std::endl;
@@ -1564,9 +1568,10 @@ namespace FracG
                 case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a source" << std::endl; break;
             }
         }
-        DVertex dummy;
-        s = boost::add_vertex(dummy, dg);
-        t = boost::add_vertex(dummy, dg);
+        const double max_flow_amount = 10 * num_edges(dg); //can't set this to be infinite
+        DVertex dummy_s, dummy_t;
+        s = boost::add_vertex(dummy_s, dg);
+        t = boost::add_vertex(dummy_t, dg);
         DGraph::vertex_iterator v, vstart, vend;
         boost::tie(vstart, vend) = boost::vertices(dg);
         int num_source = 0, num_target = 0;
@@ -1578,7 +1583,8 @@ namespace FracG
             dedge_type fwd, bkw;
             if (vert.direction == source)
             {
-                boost::tie(fwd, added) = boost::add_edge(s, *v, DEdge(std::numeric_limits<double>::infinity()), dg);
+//                 std::cout << "Adding source vertex to vertex " << *v << " at xy "<<dg[*v].location.get<0>()<<", "<<dg[*v].location.get<1>() << std::endl;
+                boost::tie(fwd, added) = boost::add_edge(s, *v, DEdge(max_flow_amount), dg);
                 boost::tie(bkw, added) = boost::add_edge(*v, s, DEdge(0), dg);
                 dg[fwd].reverse = bkw;
                 dg[bkw].reverse = fwd;
@@ -1586,7 +1592,8 @@ namespace FracG
             }
             if (vert.direction == target)
             {
-                boost::tie(fwd, added) = boost::add_edge(*v, t, DEdge(std::numeric_limits<double>::infinity()), dg);
+//                 std::cout << "Adding target vertex to vertex " << *v << " at xy "<<dg[*v].location.get<0>()<<", "<<dg[*v].location.get<1>() << std::endl;
+                boost::tie(fwd, added) = boost::add_edge(*v, t, DEdge(max_flow_amount), dg);
                 boost::tie(bkw, added) = boost::add_edge(t, *v, DEdge(0), dg);
                 dg[fwd].reverse = bkw;
                 dg[bkw].reverse = fwd;
@@ -1631,17 +1638,17 @@ namespace FracG
         }
     }
 	
-	double MaximumFlowGradient(graph_map<> G, Direction target, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
+	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
+//         std::cout << "Maximum Flow based on pressure gradient, measuring flow towards "<< flow_direction << " and pressure towards " << pressure_direction << std::endl;
 		float left = 10, right = 0;
-        bool is_vertical = target == Direction::TOP || target == Direction::BOTTOM;
         
-        Direction source;
-        switch(target) {
-            case LEFT: source = Direction::RIGHT; break;
-            case RIGHT: source = Direction::LEFT; break;
-            case TOP: source = Direction::BOTTOM; break;
-            case BOTTOM: source = Direction::TOP; break;
+        Direction flow_source;
+        switch(flow_direction) {
+            case LEFT: flow_source = Direction::RIGHT; break;
+            case RIGHT: flow_source = Direction::LEFT; break;
+            case TOP: flow_source = Direction::BOTTOM; break;
+            case BOTTOM: flow_source = Direction::TOP; break;
             case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a target" << std::endl; return 0;
         }
         box bbox = G.GetBoundingBox();
@@ -1652,24 +1659,25 @@ namespace FracG
 // 		else
 // 			GetSourceTarget(st_filename.c_str(), s, t);
 			
-		std::cout<< "Maximum flow with horizontal gradient" << std::endl;
+		std::cout<< "Maximum flow with flow direction " << flow_direction << " and gradient pressure direction" << pressure_direction << std::endl;
 //         if (source == Direction::RIGHT or source == Direction::BOTTOM) std::swap(start_pressure, end_pressure);
-		AssignGrad(g, cell_size, start_pressure, end_pressure, is_vertical, refWKT);
+		AssignGrad(g, cell_size, start_pressure, end_pressure, pressure_direction, refWKT);
         MakeCroppedGraph(g, bbox, border_amount);
 
 		DGraph dg = MakeDirectedGraph(g);
         
-		SetupMaximumFlow(dg, capacity_type);
+        double pressure_angle = DirectionAngleDegrees(pressure_direction);
+		SetupMaximumFlow(dg, capacity_type, pressure_angle);
 		dvertex_type s, t;
-        AddGradientSourceSink(dg, source, target, s, t);
-        AssignDistances(dg, target, bbox, s, t);
+        AddGradientSourceSink(dg, flow_source, flow_direction, s, t);
+        AssignDistances(dg, flow_direction, bbox, s, t);
 		double mf = CalculateMaximumFlow(dg, s, t);
         RemoveGradientSourceSink(dg, s, t);
 		
 		std::cout << "maximum flow is: " << mf << std::endl;
 		if (out_filename != "")
 		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
+			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Gradient_");
 			WriteSHP_maxFlow(dg, refWKT, name.c_str());
 		}
 		std::cout << " done \n" << std::endl;

@@ -228,6 +228,8 @@ namespace FracG
             double distance = 0; //distance from this vertex to the sink
             DVertex(){};
             DVertex(point_type loc, bool end, Direction dir, double data, long long ind) : location(loc), Enode(end), direction(dir), data(data), index(ind) {};
+            DVertex(FVertex<point_type> v) : location(v.location), Enode(v.Enode), direction(v.enode_dir), data(v.data) {};
+            DVertex(FVertex<point_type> v, long long ind) : location(v.location), Enode(v.Enode), direction(v.enode_dir), data(v.data), index(ind) {};
 	};
 	
 	//Structure for a directed edge, for use in the maximum flow algorithm

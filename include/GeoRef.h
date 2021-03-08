@@ -68,7 +68,7 @@ namespace FracG
 //Maximum Flow----------------------------------------------------------
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target);
 	DGraph MakeDirectedGraph(Graph &g);
-	void SetupMaximumFlow(DGraph &dg, std::string type);
+	void SetupMaximumFlow(DGraph &dg, std::string type, double gradient_angle = 0);
 	double MaximumFlow(DGraph &dg, point_type source, point_type target);
 	double MaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t);
     double CalculateMaximumFlow(DGraph &dg, dvertex_type s, dvertex_type t);

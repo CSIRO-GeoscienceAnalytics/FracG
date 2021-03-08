@@ -22,6 +22,7 @@ namespace FracG
     std::ofstream CreateFileStream(std::string filename);
     
     Direction ReadDirection(std::string direction_string);
+    double DirectionAngleDegrees(Direction d);
 }
 
 #endif

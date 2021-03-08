@@ -292,6 +292,7 @@ namespace FracG
 			dvertex_type dvd = boost::add_vertex(dv, dg);
 			vertex_map[*v] = dvd;
 			dg[dvd].index = index++; //initialise vertex index list
+// 			std::cout << "For vertex "<<*v<<"->"<<dvd<<" the data has been set from "<<fv.data<<" to " <<dv.data<<std::endl;
 		}
 
 		Graph::edge_iterator e, estart, eend;
@@ -372,7 +373,7 @@ namespace FracG
 	}
 
 	//the capacity values for the maximum flow algorithm
-	void SetupMaximumFlow(DGraph &dg, std::string cap_type)
+	void SetupMaximumFlow(DGraph &dg, std::string cap_type, double gradient_angle)
 	{
 		float sig1;
 		enum {ERROR, l, lo, o};
@@ -385,19 +386,19 @@ namespace FracG
 		}
 		int type = c_type[cap_type];
 
-		switch (type) 
-		{
-				case o:
-				case lo:
-				{
-					std::cout << "Enter maximum stress orientation: " ;
-					std::cin >> sig1;
-					std::cout << std::endl;
-				} break;
-				default: 
-				{
-				} break;
-		}
+// 		switch (type) 
+// 		{
+// 				case o:
+// 				case lo:
+// 				{
+// 					std::cout << "Enter maximum stress orientation: " ;
+// 					std::cin >> sig1;
+// 					std::cout << std::endl;
+// 				} break;
+// 				default: 
+// 				{
+// 				} break;
+// 		}
 
 		std::vector<double> capacities; //need to check for maximum value
 		DGraph::edge_iterator e, estart, eend;
@@ -414,12 +415,12 @@ namespace FracG
 
 				case lo:
 				{
-					flow = LengthOrientationCapacity(dg[*e], sig1);
+					flow = LengthOrientationCapacity(dg[*e], gradient_angle);
 				} break;
 
 				case o:
 				{
-					flow =  OrientationCapacity(dg[*e], sig1);
+					flow =  OrientationCapacity(dg[*e], gradient_angle);
 				} break;
 
 				default: 
@@ -428,6 +429,12 @@ namespace FracG
 					exit(EXIT_FAILURE);
 				} break;
 			}
+			vertex_type source_vertex = boost::source(*e, dg);
+            vertex_type target_vertex = boost::target(*e, dg);
+// 			if (dg[source_vertex].data < dg[target_vertex].data) std::cout << "Setting capacity of " << source_vertex << " to " << target_vertex << ", because " << dg[source_vertex].data << " < " << dg[target_vertex].data <<", was "<< flow << std::endl;
+			if (dg[source_vertex].data < dg[target_vertex].data) flow = 0; //flow cannot move from low pressure to high pressure
+//             std::cout << "vertex "<<source_vertex<<" = "<<dg[source_vertex].data<<", target vertex "<<target_vertex<<"= "<<dg[target_vertex].data<<std::endl;
+//             if (dg[source_vertex].data >= dg[target_vertex].data) std::cout << "Allowing flow from "<<source_vertex<<" to "<<target_vertex<<" ("<<flow<<")"<<std::endl;
 			dg[*e].capacity = flow;
 			dg[*e].residual_capacity = flow;
 			capacities.push_back(flow);
@@ -454,6 +461,19 @@ namespace FracG
 		auto index_map    = boost::get(&DVertex::index, dg); //no idea what the type is, but it will do for now
 
 		const double flow = boost::boykov_kolmogorov_max_flow(dg, capacity_map, res_cap_map, rev_map, pred_map, colour_map, distance_map, index_map, s, t);
+//         std::cout <<"Maximum Flow from node "<<s<<" to "<<t<<std::endl;
+//         DGraph::edge_iterator e, estart, eend;
+// 		boost::tie(estart, eend) = boost::edges(dg);
+//         for (e = estart; e != eend; e++)
+//         {
+//             double cap = dg[*e].capacity, res_cap = dg[*e].residual_capacity;
+//             dvertex_type vs = boost::source(*e, dg), vt = boost::target(*e, dg);
+//             if ((cap > 0 && res_cap < cap))
+//             {
+// //                 std::cout << "max flow edge "<<*e<<" has capacity "<<dg[*e].capacity<<std::endl;
+//                 std::cout << "There is flow from "<<vs<<" to "<<vt<<" with value "<<cap-res_cap<<std::endl;
+//             }
+//         }
 		return flow;//0
 	}
 
