@@ -2236,7 +2236,9 @@ namespace FracG
 		const double la = std::sqrt(std::pow(dxa, 2) + std::pow(dya, 2));
 		const double lb = std::sqrt(std::pow(dxb, 2) + std::pow(dyb, 2));
 		const double dotprod = dxa*dxb + dya*dyb;
-		const double theta = acos(dotprod / (la*lb)); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
+        const double capped_cosine = std::min(dotprod / (la*lb), 1.0); //this value can go over one, I think it is a floating point rounding error
+		const double theta = acos(capped_cosine); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
+//         std::cerr<<"dxa = "<<dxa<<", dya = "<<dya<<" la = "<<la<<"; dxb = "<<dxb<<", dyb = "<<dyb<<" lb = "<<lb<<" dotprod = "<<dotprod<<" -> "<<theta*180/math::constants::pi<double>()<<" deg"<<std::endl;
 		return theta;
 	}
 
@@ -2245,17 +2247,104 @@ namespace FracG
 	typedef std::tuple<point_type, unmerged_type::iterator, bool> endpoint_value_type;
 	typedef geometry::index::rtree<endpoint_value_type, geometry::index::rstar<16>> endpoint_rtree_type;
 
-	//convenience function to remove enfpoints from the endpoint rtree, given an iterator
+	//convenience function to remove endpoints from the endpoint rtree, given an iterator
 	void RemoveEndpoints(endpoint_rtree_type &rtree, std::list<line_type>::iterator it)
 	{
-		rtree.remove(std::make_tuple(it->front(), it, true ));
-		rtree.remove(std::make_tuple(it->back (), it, false));
+		long r1 = rtree.remove(std::make_tuple(it->front(), it, true ));
+		long r2 = rtree.remove(std::make_tuple(it->back (), it, false));
+//         if (r1 != 1 || r2 != 1) std::cerr <<"Error: expected to remove 1 value, actually removed "<<r1<<" and "<<r2<<" values from rtree" << std::endl;
 	}
 
+	std::tuple<unmerged_type::iterator, bool> ChooseBestMatch(unmerged_type::iterator base_it, std::list<std::tuple<unmerged_type::iterator, bool>> matches, bool is_front, double angle_threshold_radians, unmerged_type::iterator unmatched_marker)
+    {
+//         line_type base = *base_it;
+//         std::cerr<<"Finding best match for ";
+//         for (auto p_it = base_it->begin(); p_it < base_it->end(); p_it++)
+//         {
+//             std::cerr<<"("<<p_it->x()<<", "<<p_it->y()<<") ";
+//         }
+//         std::cerr<<std::endl;//<<*base_it
+        bool this_match_loc, other_match_loc;
+        decltype(matches)::iterator base_match_it = matches.insert(matches.end(), std::make_tuple(base_it, is_front));
+        decltype(matches)::iterator candidate1, candidate2;
+        
+        //need at least two elements to match together
+        while (matches.size() >= 2)
+        {
+            double best_angle = std::numeric_limits<double>::infinity();
+            candidate1 = matches.end();
+            candidate2 = matches.end();
+            for (auto it1 = matches.begin(); it1 != matches.end(); it1++)
+            {
+                unmerged_type::iterator f1 = std::get<0>(*it1);
+                bool front1 = std::get<1>(*it1);
+                for (auto it2 = it1; it2 != matches.end(); it2++)
+                {
+                    if (it1 == it2) continue;
+                    unmerged_type::iterator f2 = std::get<0>(*it2);
+                    bool front2 = std::get<1>(*it2);
+                    double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
+                    if (angle_diff < best_angle)
+                    {
+//                         this_match = unmatched_marker;
+//                         break;
+                        candidate1 = it1;
+                        candidate2 = it2;
+                        best_angle = angle_diff;
+                    }
+                }
+//                 if (this_match == unmatched_marker) break;
+            }
+            //no suitable match found
+            if (best_angle > angle_threshold_radians || candidate1 == matches.end())
+            {
+//                 std::cerr<<"Stopping due to bad angle: "<<best_angle*180/math::constants::pi<double>()<<", "<<matches.size()<<" matches left"<<std::endl;
+                return std::make_tuple(unmatched_marker, false);
+            }
+            if (candidate1 == base_match_it || candidate2 == base_match_it)
+            {
+                //we have a match for this line segment, so return it
+//                 std::cerr<<"found a match at angle "<<best_angle*180/math::constants::pi<double>()<<", "<<matches.size()<<" matches left"<<std::endl;
+                decltype(matches)::iterator return_it = (candidate1 == base_match_it) ? candidate2 : candidate1;
+                return *return_it;//std::make_tuple(this_match, this_match_loc)
+            }
+            else if (candidate1 != matches.end() && candidate2 != matches.end())
+            {
+                //two other segments are best matches for each other, so remove them from consideration here
+                matches.erase(candidate1);
+                matches.erase(candidate2);
+//                 std::cerr<<"Putting two other objects together at angle "<<best_angle*180/math::constants::pi<double>()<<" ("<<matches.size()<<" left)"<<std::endl;
+            }
+        }
+        
+        //no match found
+//         std::cerr<<"Stopping due to not enough objects ("<<matches.size()<<" left)"<<std::endl;
+        return std::make_tuple(unmatched_marker, false);
+        
+        /*for (auto match_it = matches.begin(); match_it != matches.end(); match_it++)
+        {
+            std::tie(candidate, other_match_loc) = *match_it;
+            const double theta = CalculateAngleDifference(base, is_front, *candidate, other_match_loc);//
+            const double angle_diff = abs(theta);
+            if (angle_diff <= angle_threshold && angle_diff < best_angle)
+            {
+                this_match = candidate;
+                best_angle = angle_diff;
+                this_match_loc = other_match_loc;
+            }
+        }
+        //if there is more than one candidate, check to see if they should be merged into each other instead
+        if (this_match != unmateched_marker && matches.size() >= 2)
+        {
+            
+        }
+        */
+    }
+	
 	//sometimes the data has faults that are split into different entries in the shapefile
 	//this function checks the vector of input line_types for faults that were split, and merges them back together
 	//this checks for any and all fault segments that should be merged back with base
-	bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, line_type &base, double distance_threshold, double angl)
+	bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, unmerged_type::iterator base_it, double distance_threshold, double angl)
 	{
 		//our thresholds for merging fault segments together are:
 		//1) Their endpoints are within threshold distance of each other
@@ -2267,16 +2356,17 @@ namespace FracG
 		//and we choose to merge the segment with the smallest angle difference
 
 		bool changed;
-		const double angle_threshold = angl * math::constants::pi<double>() / 180; 
+		const double angle_threshold_radians = angl * math::constants::pi<double>() / 180; 
 
 		const double dt = distance_threshold; //convenience name
+		line_type &base = *base_it;
 
 		do {
 			//a front match is one that matches to the front of the base fault/line segment, a back match is one that matches to the back of the base fault/line segment
 			//use faults.end() as a sentinel value to mark that a match hasn't been found
-			unmerged_type::iterator front_match = faults.end(), back_match = faults.end(), candidate;
+			unmerged_type::iterator front_match = faults.end(), back_match = faults.end();
 			bool front_match_loc = false, back_match_loc = false; //true iff we're matching to the front of the other linestring
-			std::vector<std::tuple<unmerged_type::iterator, bool>> front_matches, back_matches;
+			std::list<std::tuple<unmerged_type::iterator, bool>> front_matches, back_matches;
 			bool match_loc;
 			//use boxes, because boost doesn't have a circle geometry object (just a polygon/linestring that approximates a circle)
 			box front_box(point_type(base.front().x() - dt, base.front().y() - dt), point_type(base.front().x() + dt, base.front().y() + dt));
@@ -2303,78 +2393,47 @@ namespace FracG
 
 			changed = false;
 			//check for matches to the front of base
-			double best_angle = std::numeric_limits<double>::infinity();
-			for (auto match_it = front_matches.begin(); match_it != front_matches.end(); match_it++)
-			{
-				std::tie(candidate, match_loc) = *match_it;
-				const double theta = CalculateAngleDifference(base, true, *candidate, match_loc);
-				const double angle_diff = abs(theta);
-				if (angle_diff <= angle_threshold && angle_diff < best_angle)
-				{
-					front_match = candidate;
-					best_angle = angle_diff;
-					front_match_loc = match_loc;
-				}
-			}
-			//if there is more than one candidate, check to see if they should be merged into each other instead
-			if (front_match != faults.end() && front_matches.size() >= 2)
-			{
-				for (auto it1 = front_matches.begin(); it1 != front_matches.end(); it1++)
-				{
-					unmerged_type::iterator f1 = std::get<0>(*it1);
-					bool front1 = std::get<1>(*it1);
-					for (auto it2 = it1; it2 != front_matches.end(); it2++)
-					{
-						if (it1 == it2) continue;
-						unmerged_type::iterator f2 = std::get<0>(*it2);
-						bool front2 = std::get<1>(*it2);
-						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
-						if (angle_diff < best_angle)
-						{
-							front_match = faults.end();
-							break;
-						}
-					}
-					if (front_match == faults.end()) break;
-				}
-			}
+            std::tie(front_match, front_match_loc) = ChooseBestMatch(base_it, front_matches, true, angle_threshold_radians, faults.end());
+			
 			//check for matches to the back of base
-			best_angle = std::numeric_limits<double>::infinity(); //reset the best angle varaible
-			for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
-			{
-				std::tie(candidate, match_loc) = *match_it;
-				double theta = CalculateAngleDifference(base, false, *candidate, match_loc);
-				const double angle_diff = abs(theta);
-				if (angle_diff <= angle_threshold && angle_diff < best_angle)
-				{
-					back_match = candidate;
-					best_angle = angle_diff;
-					back_match_loc = match_loc;
-				}
-			}
-
-			//if there is more than one candidate, check to see if they should be merged into each other instead
-			if (back_match != faults.end() && back_matches.size() >= 2)
-			{
-				for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
-				{
-					unmerged_type::iterator f1 = std::get<0>(*it1);
-					bool front1 = std::get<1>(*it1);
-					for (auto it2 = it1; it2 != back_matches.end(); it2++)
-					{
-						if (it1 == it2) continue;
-						unmerged_type::iterator f2 = std::get<0>(*it2);
-						bool front2 = std::get<1>(*it2);
-						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
-						if (angle_diff < best_angle)
-						{
-							back_match = faults.end();
-							break;
-						}
-					}
-					if (back_match == faults.end()) break;
-				}
-			}
+            std::tie(back_match, back_match_loc) = ChooseBestMatch(base_it, back_matches, false, angle_threshold_radians, faults.end());
+//             std::cerr<<std::endl;
+// 			double best_angle = std::numeric_limits<double>::infinity(); //reset the best angle varaible
+// 			for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
+// 			{
+// 				std::tie(candidate, match_loc) = *match_it;
+// 				double theta = CalculateAngleDifference(base, false, *candidate, match_loc);
+// 				const double angle_diff = abs(theta);
+// 				if (angle_diff <= angle_threshold && angle_diff < best_angle)
+// 				{
+// 					back_match = candidate;
+// 					best_angle = angle_diff;
+// 					back_match_loc = match_loc;
+// 				}
+// 			}
+// 
+// 			//if there is more than one candidate, check to see if they should be merged into each other instead
+// 			if (back_match != faults.end() && back_matches.size() >= 2)
+// 			{
+// 				for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
+// 				{
+// 					unmerged_type::iterator f1 = std::get<0>(*it1);
+// 					bool front1 = std::get<1>(*it1);
+// 					for (auto it2 = it1; it2 != back_matches.end(); it2++)
+// 					{
+// 						if (it1 == it2) continue;
+// 						unmerged_type::iterator f2 = std::get<0>(*it2);
+// 						bool front2 = std::get<1>(*it2);
+// 						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
+// 						if (angle_diff < best_angle)
+// 						{
+// 							back_match = faults.end();
+// 							break;
+// 						}
+// 					}
+// 					if (back_match == faults.end()) break;
+// 				}
+// 			}
 
 
 
@@ -2394,20 +2453,20 @@ namespace FracG
 			if (front_match != faults.end())
 			{
 				line_type prepend = *front_match;
+				RemoveEndpoints(endpoints, front_match);
+				faults.erase(front_match);
 				if (front_match_loc) geometry::reverse(prepend);
 				geometry::append(prepend, base);
 				base = prepend;
-				RemoveEndpoints(endpoints, front_match);
-				faults.erase(front_match);
 				changed = true;
 			}
 
 			if (back_match != faults.end()){
 				line_type append = *back_match;
-				if (!back_match_loc) geometry::reverse(append);
-				geometry::append(base, append);
 				RemoveEndpoints(endpoints, back_match);
 				faults.erase(back_match);
+				if (!back_match_loc) geometry::reverse(append);
+				geometry::append(base, append);
 				changed = true;
 			}
 
@@ -2447,12 +2506,11 @@ namespace FracG
 	void CorrectNetwork(std::vector<line_type>&F, double dist, double angl_threshold, double dfd_thres)
 	{
 		typedef std::pair<box, std::vector<line_type>::iterator> box_line; //a bounding box around the linestring and its iterator
-		std::vector<box_line> result;
 		//first we need to remove duplicates. We sort the lines by distance to a reference point (from line centroid)
 		//and then remove duplicates
 		box AOI = ReturnAOI(F);
 		point_type origin(geometry::get<geometry::min_corner, 0>(AOI), geometry::get<geometry::min_corner, 1>(AOI));
-		bool found_dublicate = true;
+		bool found_duplicate = true;
 
 			do{
 				int size = F.size();
@@ -2462,10 +2520,10 @@ namespace FracG
 				F.erase(new_lines_3, F.end());
 
 				if (size == F.size())
-					found_dublicate = false;
+					found_duplicate = false;
 
-			}	while (found_dublicate);
-		std::cout << F.size() << " lines remaining after removing dublicates \n" << std::endl;
+			}	while (found_duplicate);
+		std::cout << F.size() << " lines remaining after removing duplicates \n" << std::endl;
 	//----------------------------------------------------------------------
 
 		std::vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
@@ -2482,11 +2540,11 @@ namespace FracG
 		std::cout << "merging split faults - starting" << std::endl;
 		while (!unmerged_faults.empty())
 		{
-			line_type base = unmerged_faults.front();
+// 			line_type &base = ;
 			RemoveEndpoints(endpoint_tree, unmerged_faults.begin());
+			MergeConnections(unmerged_faults, endpoint_tree, unmerged_faults.begin(), dist, angl_threshold);
+			merged_faults.push_back(unmerged_faults.front());//base
 			unmerged_faults.pop_front(); //I don't know why this doesn't also return the value being pop'd
-			MergeConnections(unmerged_faults, endpoint_tree, base, dist, angl_threshold);
-			merged_faults.push_back(base);
 		}
 		std::cout <<"merging split faults - finished" << std::endl;
 		F = merged_faults;
@@ -2507,32 +2565,33 @@ namespace FracG
 			else
 		nb = 2;
 		
-		std::vector<line_type> line_remove;
-		for (auto l : F)
+		std::vector<line_type> keep;
+        std::vector<bool> is_copy(F.size(), false);
+        
+        //iterate through lines
+		for (auto l = F.begin(); l < F.end(); l++)
 		{
-			line_tree.query(geometry::index::nearest(l, 5), std::back_inserter(result));
+            if (is_copy.at(std::distance(F.begin(), l))) continue;
+            std::vector<box_line> result;
+            //get the overlapping lines
+			line_tree.query(geometry::index::intersects(*l), std::back_inserter(result));
 			for(auto it : result)
 			{
-				if (!geometry::equals(l, *it.second))
-				{
-					if (boost::geometry::discrete_frechet_distance(l, *it.second) < dfd_thres)
-						line_remove.push_back(*it.second);
-				}
+                //if they aren't the same line as this one...
+				if (l == it.second) continue;
+                    
+                //how does this handle partial overlap? we would need to decide which one to keep
+                //delete the ones that are copies of this ones
+                if (boost::geometry::discrete_frechet_distance(*l, *it.second) < dfd_thres)
+                {
+                    is_copy.at(std::distance(F.begin(), it.second)) = true; //mark the other line as a copy
+                    line_tree.remove(it); //remove it from the rtree
+                }
+				
 			}
-			result.clear();
+            keep.push_back(*l);
 		}
-		
-		for (auto l : line_remove)
-		{
-			for (int i = 0; i < F.size(); i++)
-			{
-				if (geometry::equals(l,F.at(i)))
-				{
-					 F.erase (F.begin()+i);
-					 break;
-				 }
-			}
-		}
+		F = keep;
 	}
 
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target)

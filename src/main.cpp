@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 		(OUT_DIR, po::value<std::string>()->default_value(""), "Write output to this directory")
 
 		(DIST_THRESH, po::value<double>()->default_value(1), "Distances under this distance threshold will be considered the same location")
-		(ANGL_THRESH, po::value<double>()->default_value(25), "Maximum difference in orientation fro merging")
+		(ANGL_THRESH, po::value<double>()->default_value(25), "Maximum difference in orientation for merging")
 		(DFD_THRESH, po::value<double>()->default_value(1), "Threshold for dicrete frechet distance (line similarity)")
 		
 		(MAP_DIST_THRESH, po::value<double>()->default_value(-1), "Distance threshold to consider points to be the same in a point-indexed map")

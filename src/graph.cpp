@@ -426,6 +426,12 @@ namespace FracG
 
 		typedef std::vector <std::tuple < edge_iter, std::vector< std::tuple<long double, point_type, AttachPoint>> >> UpGraph;
 		UpGraph GraphBuild;
+        typedef std::pair<box, edge_iter> edge_obj;
+        geometry::index::rtree<edge_obj, geometry::index::quadratic<16> > rtree;
+        for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
+        {
+            rtree.insert(std::make_pair(boost::geometry::return_envelope<box>(graph[*Eg].trace), Eg));
+        }
 
 		for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
 		{
@@ -433,8 +439,20 @@ namespace FracG
 			int N  = graph[*Eg].FaultNb;
 			const double fault_length = geometry::length(fault);
 			cross.push_back(std::make_tuple(0, fault.front(), AttachPoint::middle));
-			for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
+            
+            //use rtree to limit amount of other lines to check
+            box this_envelope = boost::geometry::return_envelope<box>(fault);
+            point_type new_min_corner(bgm::get<0>(this_envelope.min_corner()) - minDist, bgm::get<1>(this_envelope.min_corner()) - minDist);
+            point_type new_max_corner(bgm::get<0>(this_envelope.max_corner()) + minDist, bgm::get<1>(this_envelope.max_corner()) + minDist);
+            box expanded_envelope(new_min_corner, new_max_corner);
+            
+            std::vector<edge_obj> potential_intersections;
+            rtree.query(geometry::index::intersects(expanded_envelope), std::back_inserter(potential_intersections));
+            
+			for (decltype(potential_intersections)::iterator potential_it = potential_intersections.begin(); potential_it < potential_intersections.end(); potential_it++)
 			{
+                Eg2 = potential_it->second;
+//                 tie(, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2
 				fault2 = graph[*Eg2].trace;
 				Intersec.clear();
 				if(Eg == Eg2) continue;
