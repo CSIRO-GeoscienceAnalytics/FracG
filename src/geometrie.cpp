@@ -373,7 +373,8 @@ namespace FracG
 			box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
 			line_tree.insert(std::make_pair(fault_bounding_box, it));
 		}
-
+			
+		std::cout << min_x << " " << max_y << " " << x_size << " " << y_size << std::endl;
 		// query intesity and density for every grid cell-----------------------
 		std::cout << "Calulating P20 and P21 maps for raster with size \n"
 			 << vec_count.size()<< " x " << vec_count[0].size() << std::endl;

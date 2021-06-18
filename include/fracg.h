@@ -167,7 +167,9 @@ namespace FracG
             int FaultNb;
             int component;
             double fault_length; //the length of the entire fault that the fault segment is taken from
-
+			double angle;
+			int set;
+			
             double Centre;
             double MeanValue;
             double CentreGrad;

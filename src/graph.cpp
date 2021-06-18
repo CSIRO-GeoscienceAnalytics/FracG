@@ -261,11 +261,15 @@ namespace FracG
 		return map;
 	}
 
-	Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold)
+	Graph Read4MODEL(Graph g, box bx, double map_distance_threshold)
 	{
-		std::vector<line_type> &faults = lines.data;
+		std::vector<line_type> faults;
+		
+		for (auto Eg : make_iterator_range(edges(g)))
+			faults.push_back(g[Eg].trace);
+		
 		Graph graph;
-		graph_map map(graph, map_distance_threshold, lines.refWKT);
+		graph_map map(graph, map_distance_threshold, "0");
 
 		geometry::model::multi_linestring<line_type> intersection;
 		std::vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >> G;
@@ -358,37 +362,30 @@ namespace FracG
 					remove_edge(U, u, G);
 					if (degree(U,G) == 0)
 					{
-	// 					cout << "WARNING: Removing edge to vertex " << endl;
-	// 					rmP.set<0>((long long).x());
-	// 					rmP.set<1>((long long)G[U].location.y());
-	// 					remove_vertex(U, G);
+
 						map.RemoveVertex(G[U].location);
 					}
 					if (degree(u,G) == 0)
 					{
-	// 					cout << "WARNING: Removing edge to vertex " << endl;
-	// 					rmP.set<0>((long long).x());
-	// 					rmP.set<1>((long long)G[u].location.y());
-	// 					remove_vertex(u, G);
 						map.RemoveVertex(G[u].location);
 					}
 					goto restart;
 				}
 			}
 		}
-		//taking this out entirely. the graph *should* be planar. if it isn't, we should fix what is wrong witht he code.
-	// 	if (!boyer_myrvold_planarity_test(G))
-	// 	{
-	// 		cout << "WARNING: Graph is non-planar!\n"
-	// 			 << "Attempting to re-split edges with r = " << split_dist/2 << endl;
-	// 		graph_map<> resplit_map = SplitFaults(map, split_dist/2);
-	//         map = resplit_map;
-	// 		if (!boyer_myrvold_planarity_test(G))
-	// 		{
-	// 			cout << "ERROR: Could not construct planar graph" << endl;
-	// 			exit(EXIT_FAILURE);
-	// 		}
-	// 	}
+		
+		for (auto eg : boost::make_iterator_range(edges(G))) 
+		{
+			double strike = (float)(atan2(G[eg].trace.front().y() - G[eg].trace.back().y(), G[eg].trace.front().x() - G[eg].trace.back().x())) 
+								* (180 / math::constants::pi<double>());
+			if (strike  < 0) 
+				strike  += 180;
+			G[eg].angle = strike;
+		}
+
+		if (!boyer_myrvold_planarity_test(G))
+	 		std::cout << "WARNING: Could not construct planar graph" << std::endl;
+	
 		std::cout << " done \n" << std::endl;
 	}
 
@@ -487,8 +484,6 @@ namespace FracG
 
 			cross.clear();
 		}
-	// 	graph = g;
-	// 	map = m;
 		std::cout << " done \n" << std::endl;
 		return split_map;
 	}
@@ -797,6 +792,7 @@ namespace FracG
 						comp_Lineamants.out_path = lines.out_path;
 						comp_Lineamants.in_path = lines.in_path;
 						
+						//TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 						//GetLengthDist(comp_Lineamants);
 						//KdeEstimationStrikes(comp_Lineamants, angle_param_penalty);
 
@@ -939,14 +935,14 @@ namespace FracG
 	}
 
 	//create minimum spanning tree (backbone of network)--------------------
-	Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string filename)
+	Graph MinTree (graph_map<> gm, std::string filename)
 	{  
 		std::cout << "Generating minimum spanning tree" << std::endl;
 		Graph &G = gm.GetGraph();
 		Graph min_graph;
 		int i = 0;
 		std::string line;
-		graph_map map(min_graph, map_dist_threshold);
+		graph_map map = gm;
 		line_type fault;
 
 		std::vector<edge_type> spanning_tree;
@@ -1338,11 +1334,8 @@ namespace FracG
 		std::cout << " done \n" << std::endl;
 	}
 
-	//parameters: graph, pressure1 , pressure2, adn bool whether vertical or horizontal gradient (vertical if true)
-	void AssignGrad(Graph &G, double cell_size, float p1, float p2, Direction pressure_direction, const char *refWKT)
+	void AssignGrad(Graph &G, float p1, float p2, Direction pressure_direction)
 	{
-		//creating a gradient raster with a buffer of 5 cell sizes around the AOI
-		//float** values[x_dim][y_dim];
 		RASTER<float> raster;
 		std::vector<line_type> lines;
         bool is_vertical = pressure_direction == Direction::TOP || pressure_direction == Direction::BOTTOM;
@@ -1353,23 +1346,6 @@ namespace FracG
 			lines.push_back(G[Eg].trace);
 		line_type l = ShortestLine(lines);
 		
-		double min_l ;
-		if (cell_size < 0)
-		{
-			min_l = geometry::length(l)/2;
-			if (min_l > 0)
-				std::cout << "Aiming for cell size of: " << min_l << std::endl;
-			else
-			{
-				min_l  = 1;
-				std::cout << "Aiming for cell size of: " << min_l << std::endl;
-			}
-		}
-		else
-		{
-			min_l = cell_size;
-			std::cout << "Aiming for cell size of: " << min_l << std::endl;
-		}
 		box AOI = ReturnAOI(lines);
         double x_start = AOI.min_corner().get<0>();
         double y_start = AOI.min_corner().get<1>();
@@ -1377,139 +1353,18 @@ namespace FracG
         dist = std::fabs(dist);
         double pressure_diff = p2 - p1;
         
-
-        /*
-		double min_x = geometry::get<geometry::min_corner, 0>(AOI) + 5*min_l ; 
-		double max_y = geometry::get<geometry::max_corner, 1>(AOI) - 5*min_l ; 
-
-		point_type ll ,lr, ur;
-		ll.set<0>(geometry::get<geometry::min_corner, 0>(AOI) - 5*min_l );
-		ll.set<1>(geometry::get<geometry::min_corner, 1>(AOI) + 5*min_l);
-
-		lr.set<0>(geometry::get<geometry::max_corner, 0>(AOI) + 5*min_l );
-		lr.set<1>(geometry::get<geometry::min_corner, 1>(AOI) - 5*min_l );
-
-		ur.set<0>(geometry::get<geometry::max_corner, 0>(AOI) + 5*min_l );
-		ur.set<1>(geometry::get<geometry::max_corner, 1>(AOI) + 5*min_l );
-
-		int x_dim = geometry::distance(ll, lr) / min_l ;
-		int y_dim = geometry::distance(lr, ur) / min_l ;
-
-		std::cout << "Building raster with dimesnions: "<< x_dim << " " << y_dim << std::endl;
-		raster.transform[0] = ll.x();
-		raster.transform[1] = min_l;
-		raster.transform[2] = 0;
-		raster.transform[3] = ur.y();
-		raster.transform[4] = 0;
-		raster.transform[5] = -min_l;
-		raster.transform[6] = x_dim;
-		raster.transform[7] = y_dim;
-
-		//set reference to the one of the shp file
-		raster.refWKT = refWKT;
-
-		float change;
-		if (p1 > p2)
-			change = -(p1 - p2) / x_dim;
-
-		if (p1 < p2)
-			change = (p2 - p1) / x_dim; //these are the same
-
-		if (p1 == p2)
-		{
-			std::cout << "no differntial defined for maximum flow" << std::endl;
-			change = 0;
-		}
-
-		raster.values = new float*[x_dim];
-		for (int i = 0; i < x_dim ; i++)
-			raster.values[i] = new float[y_dim];
-
-		float value = p1;
-		for (int x = 0; x < x_dim ; x++)
-		{
-			if (is_vertical)
-				value = p1;
-			for (int y = 0; y < y_dim ; y++)
-			{
-				raster.values[x][y] = value;
-				if (is_vertical)
-					value += change;
-			}
-			if (!is_vertical)
-				value += change;
-		}
-		*/
-
-		//why this, instead of interpolating between the two end pressures?
 		for (auto Ve : boost::make_iterator_range(vertices(G)))
 		{
             point_type location = G[Ve].location;
             double this_dist = is_vertical ? location.get<1>() - y_start : location.get<0>() - x_start;
 			G[Ve].data = p1 + pressure_diff * this_dist / dist;//GetRasterValue(G[Ve].location, raster.transform, raster.values);
-// 			std::cout << "Vertex " <<Ve<< " is at location x " << location.get<0>() << ", y " << location.get<1>() << ", is at scaled distance " << this_dist / dist << " resulting in a pressure of " << G[Ve].data <<std::endl;
+
 			if (std::isnan(G[Ve].data)) 
 			{
 				std::cout <<"Error: vertex " << Ve << " read a value of nan" << std::endl;
 				std::cout << G[Ve].location.x() << " " << G[Ve].location.y() << std::endl;
 			}
 		}
-// 		delete raster.values;
-	}
-
-	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
-	{
-		if (boost::num_vertices(G) > 0 && boost::num_edges(G) > 0)
-		{
-			point_type s, t;
-			if (st_filename.empty())
-				SetBoundaryPoints(G, s, t, false);
-			else
-				GetSourceTarget(st_filename.c_str(), s, t);
-
-			std::cout<< "Maximum flow with raster data." << std::endl;
-				
-			DGraph dg = MakeDirectedGraph(G);
-			SetupMaximumFlow(dg, capacity_type);
-				
-			double mf =  MaximumFlow(dg, s, t);
-			std::cout << "maximum flow is: " << mf << std::endl;
-				
-			if (out_filename != "")
-			{
-				std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
-				WriteSHP_maxFlow(dg, refWKT, name.c_str());
-				std::cout << " done \n" << std::endl;
-			}
-			else
-				std::cout << " No raster file given, Cannot solve maximum flow for network" << std::endl;
-			
-		}
-	}
-
-	void MaximumFlow_VG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
-	{
-		float top =0,  bottom = 10;
-		point_type s, t;
-		if (st_filename.empty())
-			SetBoundaryPoints(G, s, t, true);
-		else
-			GetSourceTarget(st_filename.c_str(), s, t);
-			
-		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
-		AssignGrad(G, cell_size, top, bottom, Direction::TOP, refWKT);//true
-
-		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type, 90);
-		double mf =  MaximumFlow(dg, s, t);
-		
-		std::cout << "maximum flow is: " << mf << std::endl;
-		if (out_filename != "")
-		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_VG_");
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
-		}
-		std::cout << " done \n" << std::endl;
 	}
 
 	void MakeCroppedGraph(Graph &g, box AOI, double crop_amount)
@@ -1550,9 +1405,7 @@ namespace FracG
                 if (s_dist < t_dist) {g[s].Enode = true; g[s].enode_dir = directions[i];}
                 else {g[t].Enode = true; g[t].enode_dir = directions[i];}
             }
-            
         }
-        
     }
 	
 	//add artificial source and target nodes to a graph, to have the max flow involve all features that cross the boundary of the area of interest
@@ -1583,7 +1436,6 @@ namespace FracG
             dedge_type fwd, bkw;
             if (vert.direction == source)
             {
-//                 std::cout << "Adding source vertex to vertex " << *v << " at xy "<<dg[*v].location.get<0>()<<", "<<dg[*v].location.get<1>() << std::endl;
                 boost::tie(fwd, added) = boost::add_edge(s, *v, DEdge(max_flow_amount), dg);
                 boost::tie(bkw, added) = boost::add_edge(*v, s, DEdge(0), dg);
                 dg[fwd].reverse = bkw;
@@ -1592,7 +1444,6 @@ namespace FracG
             }
             if (vert.direction == target)
             {
-//                 std::cout << "Adding target vertex to vertex " << *v << " at xy "<<dg[*v].location.get<0>()<<", "<<dg[*v].location.get<1>() << std::endl;
                 boost::tie(fwd, added) = boost::add_edge(*v, t, DEdge(max_flow_amount), dg);
                 boost::tie(bkw, added) = boost::add_edge(t, *v, DEdge(0), dg);
                 dg[fwd].reverse = bkw;
@@ -1600,7 +1451,6 @@ namespace FracG
                 num_target++;
             }
         }
-        //std::cout << "For gradient max flow, there are "<<num_source<<" source nodes and "<<num_target<<" target nodes" << std::endl;
     }
     
     //remove the artificial source and target nodes
@@ -1638,11 +1488,8 @@ namespace FracG
         }
     }
 	
-	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename)
+	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
-//         std::cout << "Maximum Flow based on pressure gradient, measuring flow towards "<< flow_direction << " and pressure towards " << pressure_direction << std::endl;
-		float left = 10, right = 0;
-        
         Direction flow_source;
         switch(flow_direction) {
             case LEFT: flow_source = Direction::RIGHT; break;
@@ -1654,14 +1501,9 @@ namespace FracG
         box bbox = G.GetBoundingBox();
         Graph &g = G.GetGraph();
         
-// 		if (st_filename.empty())
-// 			SetBoundaryPoints(G, s, t, is_vertical);
-// 		else
-// 			GetSourceTarget(st_filename.c_str(), s, t);
-			
-		std::cout<< "Maximum flow with flow direction " << flow_direction << " and gradient pressure direction" << pressure_direction << std::endl;
-//         if (source == Direction::RIGHT or source == Direction::BOTTOM) std::swap(start_pressure, end_pressure);
-		AssignGrad(g, cell_size, start_pressure, end_pressure, pressure_direction, refWKT);
+		std::cout<< "Maximum flow with flow direction " << std::string(1,flow_direction) << " and gradient pressure direction " << std::string(1,pressure_direction) << std::endl;
+
+		AssignGrad(g, start_pressure, end_pressure, pressure_direction);
         MakeCroppedGraph(g, bbox, border_amount);
 
 		DGraph dg = MakeDirectedGraph(g);
@@ -1675,49 +1517,67 @@ namespace FracG
         RemoveGradientSourceSink(dg, s, t);
 		
 		std::cout << "maximum flow is: " << mf << std::endl;
-		if (out_filename != "")
+		if (mf > 0)
 		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Gradient_");
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
+			if (out_filename != "")
+			{
+				std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Gradient_");
+				WriteSHP_maxFlow(dg, refWKT, name.c_str());
+			}
 		}
+		
 		std::cout << " done \n" << std::endl;
         return mf;
 	}
-
-	//setting boundary points for vertical and horizontal gradients.
-	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad)
+	
+	//we need to run four experminets to obtaint the 2x2 tensor in 2D
+	void MaxFlowTensor(graph_map<> G, std::string capacity_type, const char *refWKT, std::string out_filename)
 	{
-		std::vector<line_type> all_edges;
-		for (auto Eg : boost::make_iterator_range(edges(G))) 
-			all_edges.push_back(G[Eg].trace);
+		std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "Perm_tensor_values_", ".csv", true);
+		std::ofstream txtF = FracG::CreateFileStream(name);
+		txtF << "Permeability values estiamtes (normalized)" << std::endl;
+		txtF << "Pressure \t Flow \t value" << std::endl;
+		
+		std::vector<std::string> pressure_d, flow_d;
+		pressure_d.push_back("l");
+		pressure_d.push_back("b");
 
-//getting the boundaries-----------------------------------------------
-		box aoi_graph = ReturnAOI(all_edges);
-		double min_x = geometry::get<bg::min_corner, 0>(aoi_graph); 
-		double min_y = geometry::get<bg::min_corner, 1>(aoi_graph);
-		double max_x = geometry::get<bg::max_corner, 0>(aoi_graph); 
-		double max_y = geometry::get<bg::max_corner, 1>(aoi_graph);
-		
-		point_type ll(min_x, min_y);
-		point_type ul(min_x, max_y);
-		point_type lr(max_x, min_y);
-		point_type ur(max_x, max_y);
-		
-		line_type ub{{ul}, {ur}}; 	//upper boundary
-		line_type lob{{ll}, {lr}};		//lower boundary
-		line_type leb{{ll}, {ul}};	//left boundary
-		line_type rb{{lr}, {ur}};	//rigth boundary
-//----------------------------------------------------------------------
-//assigning coodinates for source and target (will be switched during max flow anyway so no need to distinguish here)
-		if (vert_grad)
+		flow_d.push_back("lr");
+		flow_d.push_back("bt");
+
+		std::vector<double> Perm_tensor;
+		int i = 0;
+		for (auto p : pressure_d)
 		{
-			geometry::centroid(ub, s);
-			geometry::centroid(lob, t);
-		}
-		else
-		{
-			geometry::centroid(leb, s);
-			geometry::centroid(rb, t);
+			Direction P = ReadDirection(p);
+			 int test = 0;
+			 for (auto f : flow_d)
+			 {
+				 if (f == "lr")
+				 {
+					Direction F = ReadDirection("l");
+					std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_h1_"+ std::to_string(i))+"_";
+					double q1 = MaximumFlowGradient(G, F, P, 1, 0, 0.1, capacity_type, refWKT, name);
+					txtF << p << "\t l \t" << q1  <<std::endl;
+					F = ReadDirection("r");
+					name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_h2_"+ std::to_string(i))+"_";
+					double q2 = MaximumFlowGradient(G, F, P, 1, 0, 0.1, capacity_type, refWKT, name);
+					txtF << p << "\t r \t" << q2  <<std::endl;
+				 }
+				if (f == "bt")
+				{
+					Direction F = ReadDirection("b");
+					std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_v1_"+ std::to_string(i))+"_";
+					double q1 = MaximumFlowGradient(G, F, P, 1, 0, 0.01, capacity_type, refWKT, name);
+					txtF << p << "\t b \t" << q1  <<std::endl;
+					F = ReadDirection("t");
+					name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_v2_"+ std::to_string(i))+"_";
+					double q2 = MaximumFlowGradient(G, F, P, 1, 0, 0.01, capacity_type, refWKT, name);
+					txtF << p << "\t t \t" << q2  <<std::endl;
+				}
+				i++;
+			}
+			std::cout <<"-------------------------------"<<std::endl;
 		}
 	}
 }

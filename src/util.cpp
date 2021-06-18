@@ -118,4 +118,7 @@ namespace FracG
                 return std::nan("");
         }
     }
+    
+
+    
 }

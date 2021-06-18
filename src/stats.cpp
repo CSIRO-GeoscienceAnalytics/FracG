@@ -8,8 +8,6 @@ const std::string stats_subdir = "/statisics/";
 
 namespace FracG
 {
-
-
 	// create and open filestream in folder "statistics"
 	std::ofstream CreateFileStream(std::string subdir_name, std::string name)
 	{
@@ -1620,7 +1618,7 @@ namespace FracG
 		arma::vec ANGLE(lineaments.size(), arma::fill::zeros);
 		BOOST_FOREACH(line_type F,  lineaments)
 		{ 
-			double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
+			double strike = (float)(atan2(F.front().y() - F.back().y(), F.front().x() - F.back().x())) 
 								* (180 / math::constants::pi<double>());
 			if (strike  < 0) 
 				strike  += 180;
@@ -1899,7 +1897,7 @@ namespace FracG
 		unsigned int index = 0;
 		BOOST_FOREACH(line_type F, faults)
 		{ 
-			double strike = (float)(atan2(F.front().x() - F.back().x(), F.front().y() - F.back().y())) 
+			double strike = (float)(atan2(F.front().y() - F.back().y(), F.front().x() - F.back().x())) 
 								* (180 / math::constants::pi<double>());
 			if (strike  < 0) 
 				strike  += 180;

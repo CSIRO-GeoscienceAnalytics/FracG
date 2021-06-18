@@ -216,7 +216,7 @@ namespace FracG
 
     graph_map<> ReadVEC4raster(double transform[8], VECTOR &lines, double distance_threshold);
 
-    Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold);
+    Graph Read4MODEL(Graph g, box bx, double map_distance_threshold);
     void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
     graph_map<> SplitFaults(graph_map<>& map, double minDist );
     void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string name);
@@ -225,13 +225,14 @@ namespace FracG
     void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample);
     void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, std::string name);
 
+	void MakeCroppedGraph(Graph &g, box AOI, double crop_amount);
+	
 	void Betweeness_centrality(Graph G);
-    Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
+    Graph MinTree (graph_map<> gm, std::string out_filename="");
     Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
-    void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_VG(Graph G, std::string st_filename, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
-    double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, double cell_size, std::string capacity_type, const char *refWKT, std::string out_filename);
+    double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, const char *refWKT, std::string out_filename);
+	void MaxFlowTensor(graph_map<> G, std::string capacity_type, const char *refWKT, std::string out_filename);
 }
 #endif

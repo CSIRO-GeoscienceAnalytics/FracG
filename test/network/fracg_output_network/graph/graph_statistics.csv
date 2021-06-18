@@ -1,0 +1,24 @@
+Nodes: 	28
+Edges 	28
+Edgenodes: 	0
+Inodes: 	17
+Ynodes: 	5
+Xnodes: 	6
+Enodes: 	0
+II-Branches: 	0
+IC-Branches: 	17
+CC-Branches: 	11
+ Connections (Y +X): 	11
+ Total length:	258.035
+ Average length: 	9.21552
+ 
+Connecting node frequency:	0.00417545
+Branch frequency: 	0.0106284
+Line frequency: 	0.00493462
+2D intensity: 	0.0979464
+Dimensionless intesity: 	0.902627
+Average degree of network: 	2
+Average connections: 	0.785714
+Number of components (c): 	1
+Number of faces (f): 	2
+Density (d): 	176.915

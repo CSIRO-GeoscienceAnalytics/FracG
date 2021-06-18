@@ -157,16 +157,16 @@ namespace FracG
 	}
 
 	//get mean raster value around line
-	template <typename T>double LineExtractor(line_type L, RASTER<T> raster)
+	template <typename T>double LineExtractor(line_type L, RASTER<T> raster, double dist)
 	{
 		//note that raster values are converted into double 
-		polygon_type pl = BoundingBox(raster.transform, 1);
+		polygon_type pl = BoundingBox(raster.transform, 0);
 		box AOI;
 		BUFFER envelop;
 		point_type point;
 		int maxX, minX, maxY, minY;
 		std::vector<double> D;
-		double radius = 1.5 * (( abs(raster.transform[1]) + abs(raster.transform[5]))/2) ;
+		double radius = dist * (( abs(raster.transform[1]) + abs(raster.transform[5]))/2) ;
 
 		envelop = DefineLineBuffer(L, radius);
 		geometry::envelope(envelop, AOI);
@@ -186,22 +186,22 @@ namespace FracG
 				if (!geometry::disjoint(point, envelop) && geometry::within(point, pl))
 					D.push_back((double)GetRasterValue(point, raster.transform, raster.values));
 			}
+			geometry::clear(point);
 		}
 
 		if (D.size() > 0)
 			return(accumulate(D.begin(), D.end(), 0.0)/D.size());
-
 		else
 			return(0);
 	 }
 
-	 template <typename T> double CentreGradient(line_type F, RASTER<T> raster)
+	 template <typename T> double CentreGradient(line_type F, RASTER<T> raster, double dist)
 	{
 	// gradient across the centre of lineament
 		line_type cross;
 		point_type point, p1, p2;
-		polygon_type pl = BoundingBox(raster.transform, 1);
-		double len =  2 * (abs(raster.transform[1]) + abs(raster.transform[5]) / 2);
+		polygon_type pl = BoundingBox(raster.transform, 0);
+		double len =  dist * (abs(raster.transform[1]) + abs(raster.transform[5]) / 2);
 		geometry::centroid(F, point);
 
 		double rx = F.back().x() - F.front().x();
@@ -230,15 +230,15 @@ namespace FracG
 	}
 
 	template <typename T>
-	double CrossGradient(line_type F, RASTER<T> raster)
+	double CrossGradient(line_type F, RASTER<T> raster, double dist)
 	{
 	//mean gradient across all segmetns of lineament
 	//create a functor that boost can use in for_each_segment
 		Perpencicular <geometry::model::referring_segment<point_type>> functor;
-		functor.d =  2 * (abs(raster.transform[1]) + abs(raster.transform[5]) / 2);	 //set the length of the crossing lines to twice the mean pixel resolution
+		functor.d =  dist * (abs(raster.transform[1]) + abs(raster.transform[5]) / 2);	 //set the length of the crossing lines to twice the mean pixel resolution
 		functor  = geometry::for_each_segment(F, functor );
 
-		polygon_type pl = BoundingBox(raster.transform, 1);
+		polygon_type pl = BoundingBox(raster.transform, 0);
 		std::vector<double> D;
 
 		BOOST_FOREACH(line_type cross, functor.all)
@@ -261,7 +261,7 @@ namespace FracG
 	double ParallelGradient(line_type F, RASTER<T> raster)
 	{
 	//slope between lineametn tips
-		polygon_type pl = BoundingBox(raster.transform, 1);
+		polygon_type pl = BoundingBox(raster.transform, 0);
 
 		if (geometry::within(F.front(), pl) && geometry::within(F.back(), pl))
 		{
@@ -292,7 +292,6 @@ namespace FracG
 			dvertex_type dvd = boost::add_vertex(dv, dg);
 			vertex_map[*v] = dvd;
 			dg[dvd].index = index++; //initialise vertex index list
-// 			std::cout << "For vertex "<<*v<<"->"<<dvd<<" the data has been set from "<<fv.data<<" to " <<dv.data<<std::endl;
 		}
 
 		Graph::edge_iterator e, estart, eend;
@@ -320,55 +319,38 @@ namespace FracG
 	//setting the capacity
 	double LengthCapacity(DEdge de)
 	{
-		/*we set matrix permeability(p_m) to 0.5 and fracture permeability (p_f) to 1
-		* fracture flow capcaity is calucalted as:
-		* F = (p_f * w_f) / (p_m * l/2)
-		* for the width of the fracuture (w_f) we assume a square-root scaling
-		*/
-		double p_f = 10;
-		double p_m = 5;
-		double w_f = sqrt(de.full_length); 
-		double flow = (p_f * w_f) / (p_m * (de.full_length / 2));
+		//double flow = sqrt(de.full_length / 1e3); 
+		double flow = 1;
 		return(flow);
 	}
 
 	double OrientationCapacity(DEdge de, float sig1)
 	{
-		//we assume a guassian function for capacity depnding on roentation
-		double angle = (float)(atan2(de.trace.front().x() - de.trace.back().x(), de.trace.front().y() - de.trace.back().y())) 
+		//we assume a guassian function for capacity depending on orientation
+		double angle = (double)(atan2(de.trace.front().y() - de.trace.back().y(), de.trace.front().x() - de.trace.back().x())) 
 								* (180 / math::constants::pi<double>());
 		if (angle  < 0) 
 			angle  += 180;
 
 		double stddev = 25;
-		double mean = sig1 + 90;
-		double flow = 1/ (stddev * sqrt(2*math::constants::pi<double>())) * exp(-0.5 * (std::pow( ((angle - mean) / stddev),2)));
-		flow *= 1000;
+		double mean = sig1 ;
+		double flow = 1 / (stddev * sqrt(2*math::constants::pi<double>())) * exp(-0.5 * (std::pow( ((angle - mean) / stddev),2)));
+		flow *= 1e3;
 		return(flow);
 	}
 
 	double LengthOrientationCapacity(DEdge de, float sig1)
 	{
-		/*we set matrix permeability(p_m) to 0.5 and fracture permeability (p_f) to 1
-		* fracture flow capcaity is calucalted as:
-		* F = (p_f * w_f) / (p_m * l/2)
-		* for the width of the fracuture (w_f) we assume a square-root scaling
-		* we assume a guassian function for capacity depnding on roentation
-		*/
-
-		double angle = (float)(atan2(de.trace.front().x() - de.trace.back().x(), de.trace.front().y() - de.trace.back().y())) 
+		double angle = (double)(atan2(de.trace.front().y() - de.trace.back().y(), de.trace.front().x() - de.trace.back().x())) 
 								* (180 / math::constants::pi<double>());
 		if (angle  < 0) 
 			angle  += 180;
 
 		double stddev = 25;
-		double mean = sig1 + 90;
-		double p_f = 10;
-		double p_m = 5;
-		double w_f = sqrt(de.full_length); 
-		double cap1 = (p_f * w_f) / (p_m * (de.full_length / 2));
-		double flow = cap1* (1/ (stddev * sqrt(2*math::constants::pi<double>())) * exp(-0.5 * (std::pow( ((angle - mean) / stddev),2))));
-		flow *= 1000;
+		double mean = sig1 ;
+		double cap1 = sqrt(de.full_length / 1e3); 
+		double flow = cap1 * (1/ (stddev * sqrt(2*math::constants::pi<double>())) * exp(-0.5 * (std::pow( ((angle - mean) / stddev),2))));
+		flow *= 1e5;
 		return(flow);
 	}
 
@@ -381,24 +363,40 @@ namespace FracG
 		if (c_type.empty() )
 		{
 			c_type["l"] = l;			//capacity depending on length
-			c_type["lo"] = lo;			//capacity depending on length and orientation
-			c_type["o"] = o;			//capacity depending on orientation
+			c_type["lo"] = lo;		//capacity depending on length and orientation
+			c_type["o"] = o;		//capacity depending on orientation
 		}
 		int type = c_type[cap_type];
 
-// 		switch (type) 
-// 		{
-// 				case o:
-// 				case lo:
-// 				{
-// 					std::cout << "Enter maximum stress orientation: " ;
-// 					std::cin >> sig1;
-// 					std::cout << std::endl;
-// 				} break;
-// 				default: 
-// 				{
-// 				} break;
-// 		}
+		std::vector<double> all_length;
+		switch (type) 
+		{
+			case l:
+			{
+				for (auto Eg : make_iterator_range(edges(dg)))	
+					all_length.push_back(geometry::length(dg[Eg].trace));
+							
+			} break;
+
+			case o:
+			{
+				
+			} break;
+				
+			case lo:
+			{
+					
+			} break;
+
+
+			default: 
+			{
+				std::cout << "ERROR: Wrong capacity type defined" << std::endl;
+				exit(EXIT_FAILURE);
+			} break;
+				
+		}
+		
 
 		std::vector<double> capacities; //need to check for maximum value
 		DGraph::edge_iterator e, estart, eend;
@@ -413,15 +411,16 @@ namespace FracG
 					flow = LengthCapacity(dg[*e]);
 				} break;
 
-				case lo:
-				{
-					flow = LengthOrientationCapacity(dg[*e], gradient_angle);
-				} break;
-
 				case o:
 				{
-					flow =  OrientationCapacity(dg[*e], gradient_angle);
+					flow =  OrientationCapacity(dg[*e], 122);
 				} break;
+				
+				case lo:
+				{
+					flow = LengthOrientationCapacity(dg[*e], 111);
+				} break;
+
 
 				default: 
 				{
@@ -431,16 +430,21 @@ namespace FracG
 			}
 			vertex_type source_vertex = boost::source(*e, dg);
             vertex_type target_vertex = boost::target(*e, dg);
-// 			if (dg[source_vertex].data < dg[target_vertex].data) std::cout << "Setting capacity of " << source_vertex << " to " << target_vertex << ", because " << dg[source_vertex].data << " < " << dg[target_vertex].data <<", was "<< flow << std::endl;
-			if (dg[source_vertex].data < dg[target_vertex].data) flow = 0; //flow cannot move from low pressure to high pressure
-//             std::cout << "vertex "<<source_vertex<<" = "<<dg[source_vertex].data<<", target vertex "<<target_vertex<<"= "<<dg[target_vertex].data<<std::endl;
-//             if (dg[source_vertex].data >= dg[target_vertex].data) std::cout << "Allowing flow from "<<source_vertex<<" to "<<target_vertex<<" ("<<flow<<")"<<std::endl;
+            
+			//std::cout << flow << " " << ( (dg[source_vertex].data - dg[target_vertex].data)) / (geometry::length(dg[*e].trace)/1e3) << std::endl;
+			
+            flow *=  ( (dg[source_vertex].data - dg[target_vertex].data)) / (geometry::length(dg[*e].trace)/1e3);
+				
+			//std::cout << " " << flow << std::endl;
+			
+			           		
 			dg[*e].capacity = flow;
 			dg[*e].residual_capacity = flow;
 			capacities.push_back(flow);
 		}
 		
 		double max_cap = *std::max_element(capacities.begin(), capacities.end());
+	
 		for (e = estart; e != eend; e++)
 		{
 			dg[*e].capacity /= max_cap;
@@ -458,23 +462,10 @@ namespace FracG
 		auto pred_map     = boost::get(&DVertex::predecessor, dg);
 		auto colour_map   = boost::get(&DVertex::colour, dg);
 		auto distance_map = boost::get(&DVertex::distance, dg);//not using a distance map currently. this should be distance to the target vertex, and improves the speed of the algorithm
-		auto index_map    = boost::get(&DVertex::index, dg); //no idea what the type is, but it will do for now
+		auto index_map    = boost::get(&DVertex::index, dg); 
 
 		const double flow = boost::boykov_kolmogorov_max_flow(dg, capacity_map, res_cap_map, rev_map, pred_map, colour_map, distance_map, index_map, s, t);
-//         std::cout <<"Maximum Flow from node "<<s<<" to "<<t<<std::endl;
-//         DGraph::edge_iterator e, estart, eend;
-// 		boost::tie(estart, eend) = boost::edges(dg);
-//         for (e = estart; e != eend; e++)
-//         {
-//             double cap = dg[*e].capacity, res_cap = dg[*e].residual_capacity;
-//             dvertex_type vs = boost::source(*e, dg), vt = boost::target(*e, dg);
-//             if ((cap > 0 && res_cap < cap))
-//             {
-// //                 std::cout << "max flow edge "<<*e<<" has capacity "<<dg[*e].capacity<<std::endl;
-//                 std::cout << "There is flow from "<<vs<<" to "<<vt<<" with value "<<cap-res_cap<<std::endl;
-//             }
-//         }
-		return flow;//0
+		return flow;
 	}
 
 	//perform the maximum flow from the source location to the target location
@@ -597,7 +588,7 @@ namespace FracG
 	//same effect as AssignValues() above, but more efficient
 	//read the entire file at once, rather than one at a time. gives faster IO. This assumes that we can fit the entire file in memory at once.
 	template <typename T>
-	void AssignValuesGraph(Graph& G, RASTER<T> raster)
+	void AssignValuesGraph(Graph& G, RASTER<T> raster, double dist)
 	{
 		line_type curEdge;
 		point_type centre;
@@ -615,22 +606,21 @@ namespace FracG
 			geometry::centroid(G[Eg].trace, centre);
 
 			G[Eg].Centre     = GetRasterValue(centre, raster.transform, raster.values);
-			G[Eg].MeanValue  = LineExtractor<T>(G[Eg].trace, raster) ;
-			G[Eg].CentreGrad = CentreGradient(G[Eg].trace, raster);
-			G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, raster);
+			G[Eg].MeanValue  = LineExtractor<T>(G[Eg].trace, raster, dist) ;
+			G[Eg].CentreGrad = CentreGradient(G[Eg].trace, raster, dist);
+			G[Eg].CrossGrad  = CrossGradient(G[Eg].trace, raster, dist);
 			G[Eg].ParalGrad  = ParallelGradient(G[Eg].trace, raster) ;
 		}
 		std::cout << " done" << std::endl;
 	}
 	//make these instatiations so that other cpp files can find them
-	template void AssignValuesGraph<int>(Graph& G, RASTER<int> raster);
-	template void AssignValuesGraph<float>(Graph& G, RASTER<float> raster);
-	template void AssignValuesGraph<double>(Graph& G, RASTER<double> raster);
+	template void AssignValuesGraph<int>(Graph& G, RASTER<int> raster, double dist);
+	template void AssignValuesGraph<float>(Graph& G, RASTER<float> raster, double dist);
+	template void AssignValuesGraph<double>(Graph& G, RASTER<double> raster, double dist);
 
 	template <typename T>
 	RASTER <T>ReadRaster(std::string in_filename, const char *refWKT)
 	{
-
 		/*
 		[0]  top left x 
 		[1]  w-e pixel resolution 
@@ -641,12 +631,12 @@ namespace FracG
 		[6]  x-size
 		[7]  y-size
 		*/
+		
 		std::cout << "Reading raster " << in_filename;
 		T** raster_data;
 		const char * name = in_filename.c_str();
 		RASTER <T>raster;
 		double adfGeoTransform[6];
-
 
 		GDALAllRegister();
 		GDALDataset  *poDataset;
@@ -669,34 +659,42 @@ namespace FracG
 				if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None )
 					memcpy ( &raster.transform, &adfGeoTransform, sizeof(adfGeoTransform) );
 
-
-				GDALRasterBand *band = poDataset -> GetRasterBand(1);  
-
-				poDataset = (GDALDataset *) GDALOpen( name, GA_ReadOnly );
+				GDALRasterBand *band = poDataset -> GetRasterBand(1); 
+				double no_data =  band->GetNoDataValue();
 
 				if( poDataset == NULL )
 					std::cout<<"no file"<< std::endl;
 
-				int xSize = poDataset->GetRasterXSize();
-				int ySize = poDataset->GetRasterYSize();
-				raster.transform[6] = xSize;
-				raster.transform[7] = ySize;
-
-				std::cout << " of size: "<<  xSize << " x " << ySize << std::endl;
+				raster.transform[6] = poDataset->GetRasterXSize();
+				raster.transform[7] = poDataset->GetRasterYSize();
+				std::cout << " of size: "<<  poDataset->GetRasterXSize() << " x " << poDataset->GetRasterYSize()<< std::endl;
 
 				raster.values = (T**)RasterConvert(poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), raster.values);
-
 				for(int row = 0; row < poDataset->GetRasterXSize(); row++) 
 				{
-					int err = band->RasterIO(GF_Read, row, 0, 1, ySize, &(raster.values[row][0]), 1, ySize, GetGDALDataType<T>(), 0, 0, nullptr);  //read coloun of raster (switch datatype depending on raster's data type)
+					int err = band->RasterIO(GF_Read, row, 0, 1, poDataset->GetRasterYSize(), &(raster.values[row][0]), 1, poDataset->GetRasterYSize(), 
+								GetGDALDataType<T>(), 0, 0, nullptr);  //read column of raster (switch datatype depending on raster's data type)
 					if (err != 0)
 					{
 						std::cerr << " ERROR reading from raster" << std::endl;
 						exit (EXIT_FAILURE);
 					}
 				}
-
-				GDALClose( poDataset );
+//set no data values to 0-----------------------------------------------
+				int noData_count = 0;
+				for (int i = 0; i < poDataset->GetRasterXSize(); i++)
+				{
+					for (int j = 0; j < poDataset->GetRasterYSize(); j++)
+					{
+						if (raster.values[i][j] == no_data)
+						{
+							raster.values[i][j] = 0;
+							noData_count++;
+						}
+					}
+				}
+				std:: cout << "Found " << noData_count << " NoData cells in raster (" << no_data << ")" <<std::endl;
+			GDALClose( poDataset );
 		}
 		return(raster);
 	}
@@ -721,7 +719,7 @@ namespace FracG
 	{
 		GDALAllRegister();
 		FracG::CreateDir(save_name);
-		const char* ref = raster.refWKT;
+		const char* ref = lines.refWKT;		
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
@@ -839,9 +837,9 @@ namespace FracG
 			point_type cent; 
 			geometry::centroid(line, cent);
 			double c_val   = (double) GetRasterValue<T>(cent, raster.transform, raster.values);
-			double mean_v  = (double) LineExtractor<T>(line, raster);
-			double grad_c  = (double) CentreGradient<T>(line, raster);
-			double grad_cc = (double) CrossGradient<T>(line, raster);
+			double mean_v  = (double) LineExtractor<T>(line, raster, dist);
+			double grad_c  = (double) CentreGradient<T>(line, raster, dist);
+			double grad_cc = (double) CrossGradient<T>(line, raster, dist);
 			double grad_p  = (double) ParallelGradient<T>(line, raster);
 
 			poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
@@ -893,7 +891,6 @@ namespace FracG
 	void WriteTXT(VECTOR lines, double dist, RASTER<T> raster, std::string tsv_filename)
 	{
 		std::ofstream txtF = FracG::CreateFileStream(tsv_filename);
-
 		GetMidSegment<geometry::model::referring_segment<point_type>> functor;
 
 		int x_size   = raster.transform[6];
@@ -959,10 +956,10 @@ namespace FracG
 		{
 			txtF << nb << "\t";
 			std::vector<grid_cell> result_p; //results of profile
-			std::vector<grid_cell> result_c; //re3sults of cross
+			std::vector<grid_cell> result_c; //results of cross
 
 	//get profile values----------------------------------------------------
-			BUFFER profile = DefineLineBuffer(l, dist+1);
+			BUFFER profile = DefineLineBuffer(l, dist);
 			rtree.query(geometry::index::intersects(profile), std::back_inserter(result_p));
 			std::sort(result_p.begin(), result_p.end(), CellSorter<T>(l.front()));
 
@@ -978,11 +975,13 @@ namespace FracG
 	//first get a line though the centre of the lineament
 			line_type cross, m_seg;
 			point_type centre, p1, p2;
-			double len =  geometry::length(l);
+			
+			double len = dist * ((abs(raster.transform[1]) + abs(raster.transform[5]))/2);
+			
 			double rx = l.back().x() - l.front().x();
 			double ry = l.back().y() - l.front().y();
 			double le = sqrt(rx*rx + ry*ry);
-
+			
 			geometry::centroid(l, centre);
 
 			p1.set<0>((centre.x() + ( ry/le) * len ));
@@ -1013,7 +1012,7 @@ namespace FracG
 			geometry::append(cross, centre);
 			geometry::append(cross, p2);
 
-			BUFFER crossing = DefineLineBuffer(cross, dist+1);
+			BUFFER crossing = DefineLineBuffer(cross, dist);
 			rtree.query(geometry::index::intersects(crossing), std::back_inserter(result_c));
 			std::sort(result_c.begin(), result_c.end(), CellSorter<T>(cross.front()));
 
@@ -1045,7 +1044,7 @@ namespace FracG
 	template void AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
 	template void AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, const double angle_param_penalty, std::string raster_filename)
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, const double angle_param_penalty, std::string raster_filename)
 	{
 		Graph raster_graph;
 		if (!raster_filename.empty())
@@ -1098,7 +1097,7 @@ namespace FracG
 					R = ReadRaster<int>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					AssignValuesGraph<int>(raster_graph, R);
+					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
@@ -1110,7 +1109,7 @@ namespace FracG
 					R = ReadRaster<int>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					AssignValuesGraph<int>(raster_graph, R);
+					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
@@ -1122,7 +1121,7 @@ namespace FracG
 					R = ReadRaster<int>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					AssignValuesGraph<int>(raster_graph, R);
+					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
@@ -1134,7 +1133,7 @@ namespace FracG
 					R = ReadRaster<int>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					AssignValuesGraph<int>(raster_graph, R);
+					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
@@ -1146,7 +1145,7 @@ namespace FracG
 					R = ReadRaster<float>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					AssignValuesGraph<float>(raster_graph, R);
+					AssignValuesGraph<float>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
@@ -1158,7 +1157,7 @@ namespace FracG
 					R = ReadRaster<double>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					AssignValuesGraph<double>(raster_graph, R);
+					AssignValuesGraph<double>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 
@@ -1573,7 +1572,7 @@ namespace FracG
 	 }
 
 	//convert graph edges to shp-file---------------------------------------
-	void WriteSHP_g_lines(Graph G, char *refWKT, const char* Name)
+	void WriteSHP_g_lines(Graph G, char *refWKT, const char* Name, bool raster)
 	{
 		GDALAllRegister();
 		const char* ref = refWKT;
@@ -1650,147 +1649,9 @@ namespace FracG
 			exit( 1 );
 		}
 		
-		OGRFieldDefn oField4( "BC_abs[length]", OFTReal );
-		oField4.SetWidth(15);
-		oField4.SetPrecision(5);
-		if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+		if (raster)
 		{
-			printf( "Creating 'BC_abs[length]' field failed.\n" );
-			exit( 1 );
-		}
-		
-		/*
-		//Absolute betweeness centrality-------------------------------
-		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
-		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
-		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
-		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map_rel(vertex_property_vec.begin(), v_index);
-		brandes_betweenness_centrality(G, vertex_property_map);
-		relative_betweenness_centrality(G, vertex_property_map_rel);
-		*/
-	//	brandes_betweenness_centrality(G, boost::weight_map(boost::get(&FEdge::length, G)));
-		
-		int id = 0;
-		for (auto Eg : boost::make_iterator_range(edges(G))) 
-		{
-			OGRLineString l;
-			OGRFeature *poFeature;
-			line_type line = G[Eg].trace;
-			geometry::unique(line);
-			float L = (float) G[Eg].length;
-			double strike = (double)(atan2(line.front().x() - line.back().x(), line.front().y() - line.back().y())) 
-							* (180 / math::constants::pi<double>());
-			if (strike  < 0) 
-				strike  += 180;
-			int C = G[Eg].component;
-
-			poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
-			poFeature->SetField( "ID", id );
-			poFeature->SetField( "Length", L);
-			poFeature->SetField( "BranchType", G[Eg].BranchType.c_str());
-			poFeature->SetField( "Component", C);
-			poFeature->SetField( "Angle", strike);
-		//	poFeature->SetField( "BC_abs[length]", G[Eg].distance_map);
-			
-
-			BOOST_FOREACH(point_type P, line) 
-				l.addPoint(P.x(), P.y());
-			poFeature->SetGeometry( &l );
-
-			if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
-			{
-				printf( "Failed to create feature in shapefile.\n" );
-				exit( 1 );
-			}
-
-			OGRFeature::DestroyFeature( poFeature );
-			id++;
-		}
-		GDALClose( poDS );
-	}
-
-	//convert graph edges to shp-file---------------------------------------
-
-	void WriteSHP_g_lines_R(Graph G, char *refWKT, const char* Name)
-	{
-			GDALAllRegister();
-			const char* ref = refWKT;
-			const char *pszDriverName = "ESRI Shapefile";
-			GDALDriver *poDriver;
-			GDALDataset *poDS;
-			OGRLayer *poLayer;
-
-			OGRSpatialReference oSRS;
-			oSRS.importFromWkt(&ref);
-
-			poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
-			if( poDriver == NULL )
-			{
-				printf( "%s driver not available.\n", pszDriverName );
-				exit( 1 );
-			}
-
-			poDriver->SetDescription("graph_edges_raster");
-
-			poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
-			if( poDS == NULL )
-			{
-				printf( "Creation of output file failed.\n" );
-				exit( 1 );
-			}
-
-			poLayer = poDS->CreateLayer( "graph_branches", &oSRS, wkbLineString, NULL );
-			if( poLayer == NULL )
-			{
-				printf( "Layer creation failed.\n" );
-				exit( 1 );
-			}
-
-			OGRFieldDefn oField( "ID", OFTInteger );
-			oField.SetWidth(10);
-			if( poLayer->CreateField( &oField ) != OGRERR_NONE )
-			{
-				printf( "Creating 'No' field failed.\n" );
-				exit( 1 );
-			}
-
-			OGRFieldDefn oField0( "Length", OFTReal );
-			oField0.SetWidth(10);
-			oField0.SetPrecision(5);
-			if( poLayer->CreateField( &oField0 ) != OGRERR_NONE )
-			{
-				printf( "Creating 'Length' field failed.\n" );
-				exit( 1 );
-			}
-
-			OGRFieldDefn oField1( "BranchType", OFTString );
-			oField1.SetWidth(10);
-			if( poLayer->CreateField( &oField1 ) != OGRERR_NONE )
-			{
-				printf( "Creating 'BranchType' field failed.\n" );
-				exit( 1 );
-			}
-
-			OGRFieldDefn oField2( "Component", OFTInteger );
-			oField1.SetWidth(20);
-			if( poLayer->CreateField( &oField2 ) != OGRERR_NONE )
-			{
-				printf( "Creating 'Component' field failed.\n" );
-				exit( 1 );
-			}
-
-			OGRFieldDefn oField3( "Angle", OFTReal );
-			oField3.SetWidth(10);
-			oField3.SetPrecision(3);
-			if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
-			{
-				printf( "Creating 'Angle' field failed.\n" );
-				exit( 1 );
-			}
-			
-			
-
-		// raster---------------------------------------------------------------
+// raster---------------------------------------------------------------
 				OGRFieldDefn oField4( "Centre", OFTReal );
 				oField4.SetWidth(25);
 				oField4.SetPrecision(5);
@@ -1834,49 +1695,58 @@ namespace FracG
 					printf( "Creating 'PGrad' field failed.\n" );
 					exit( 1 );
 				}
-
-			int id = 0;
-			for (auto Eg : boost::make_iterator_range(edges(G))) 
-			{
-				OGRLineString l;
-				OGRFeature *poFeature;
-				line_type line = G[Eg].trace;
-				geometry::unique(line);
-				float L = (float) G[Eg].length;
-				double strike = (double)(atan2(line.front().x() - line.back().x(), line.front().y() - line.back().y())) 
-								* (180 / math::constants::pi<double>());
-				if (strike  < 0) 
-					strike  += 180;
-
-				int C = G[Eg].component;
-				poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
-				poFeature->SetField( "ID", id );
-				poFeature->SetField( "Length", L);
-				poFeature->SetField( "BranchType", G[Eg].BranchType.c_str());
-				poFeature->SetField( "Component", C);
-				poFeature->SetField( "Angle", strike);
-		//add raster data to graph shp file-------------------------------------
-				poFeature->SetField( "Centre", 		(float) G[Eg].Centre);
-				poFeature->SetField( "MeanValue", 	(float) G[Eg].MeanValue);
-				poFeature->SetField( "CentreGrad", 	(float) G[Eg].CentreGrad);
-				poFeature->SetField( "CrossGrad", 	(float) G[Eg].CrossGrad);
-				poFeature->SetField( "PGrad", 		(float) G[Eg].ParalGrad );
-
-				BOOST_FOREACH(point_type P, line) 
-					l.addPoint(P.x(), P.y());
-				poFeature->SetGeometry( &l );
-
-				if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
-				{
-					printf( "Failed to create feature in shapefile.\n" );
-					exit( 1 );
-				}
-
-				OGRFeature::DestroyFeature( poFeature );
-				id++;
 			}
-			GDALClose( poDS );
+
+		int id = 0;
+		for (auto Eg : boost::make_iterator_range(edges(G))) 
+		{
+			OGRLineString l;
+			OGRFeature *poFeature;
+			line_type line = G[Eg].trace;
+			geometry::unique(line);
+			float L = (float) G[Eg].length;
+			double strike = (double)(atan2(line.front().y() - line.back().y(), line.front().x() - line.back().x())) 
+							* (180 / math::constants::pi<double>());
+			if (strike  < 0) 
+				strike  += 180;
+			int C = G[Eg].component;
+
+			poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
+			poFeature->SetField( "ID", id );
+			poFeature->SetField( "Length", L);
+			poFeature->SetField( "BranchType", G[Eg].BranchType.c_str());
+			poFeature->SetField( "Component", C);
+			poFeature->SetField( "Angle", strike);
+		
+		if (raster)
+		{
+		//add raster data to graph shp file-------------------------------------
+			poFeature->SetField( "Centre", 		(float) G[Eg].Centre);
+			poFeature->SetField( "MeanValue", 	(float) G[Eg].MeanValue);
+			poFeature->SetField( "CentreGrad", 	(float) G[Eg].CentreGrad);
+			poFeature->SetField( "CrossGrad", 	(float) G[Eg].CrossGrad);
+			poFeature->SetField( "PGrad", 		(float) G[Eg].ParalGrad );
+
+		}
+			
+
+			BOOST_FOREACH(point_type P, line) 
+				l.addPoint(P.x(), P.y());
+			poFeature->SetGeometry( &l );
+
+			if( poLayer->CreateFeature( poFeature ) != OGRERR_NONE )
+			{
+				printf( "Failed to create feature in shapefile.\n" );
+				exit( 1 );
+			}
+
+			OGRFeature::DestroyFeature( poFeature );
+			id++;
+		}
+		GDALClose( poDS );
 	}
+
+	//convert graph edges to shp-file---------------------------------------
 
 	void WriteSHP_maxFlow(DGraph G, const char* refWKT, std::string name)
 	{
@@ -2014,7 +1884,7 @@ namespace FracG
 	}
 
 	//convert graph edges to shp-file---------------------------------------
-	void WriteSHP_g_points(Graph G, char* refWKT, const char* Name)
+	void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
 	{
 		GDALAllRegister();
 		point_type point;
@@ -2076,42 +1946,54 @@ namespace FracG
 			exit( 1 );
 		}
 		
-		OGRFieldDefn oField4( "Abs_bc", OFTReal );
+		OGRFieldDefn oField4( "Abs_bc", OFTInteger );
 		oField4.SetWidth(10);
 		if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
 		{
 			printf( "Creating betweeness centrality field failed.\n" );
 			exit( 1 );
 		}
+		
+		if (raster)
+		{
+			OGRFieldDefn oField5( "data", OFTReal );
+			oField5.SetWidth(10);
+			if( poLayer->CreateField( &oField5 ) != OGRERR_NONE )
+			{
+				printf( "Creating data field failed.\n" );
+				exit( 1 );
+			}
+			
+		}
 
-		//Absolute betweeness centrality-------------------------------
+		//Betweeness centrality----------------------------------------
 		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
 		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
 		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
-		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map_rel(vertex_property_vec.begin(), v_index);
 		brandes_betweenness_centrality(G, vertex_property_map);
-		relative_betweenness_centrality(G, vertex_property_map_rel);
+		float factor = 2 / (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
 		
 		int NO = 0;
 		poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
 		//write shp file----------------------------------------------------
 		for (auto Ve : boost::make_iterator_range(vertices(G))) 
 		{
-			int n = num_vertices(G);
-			double rel_bc = vertex_property_map_rel[Ve];
-			double abs_bc = vertex_property_map[Ve] ;
-
 			point = G[Ve].location;
-			int de = degree(Ve, G);
-			int co = G[Ve].component;
 			float da = G[Ve].data;
 
-			poFeature->SetField( "No", NO);
-			poFeature->SetField( "Degree", de);
-			poFeature->SetField( "Component", co);
-			poFeature->SetField( "Rel_bc", rel_bc);
-			poFeature->SetField( "Abs_bc", abs_bc);
-
+			poFeature->SetField( "No", (int) NO );
+			poFeature->SetField( "Degree", (int) degree(Ve, G));
+			poFeature->SetField( "Component", (int) G[Ve].component);
+			
+			poFeature->SetField( "Abs_bc", (double) vertex_property_map[Ve]);
+			if (factor != 0)
+				poFeature->SetField( "Rel_bc",  (float) vertex_property_map[Ve]/factor);
+			else
+				poFeature->SetField( "Rel_bc",  0);
+			
+			if (raster)
+				poFeature->SetField( "data", (double) G[Ve].data);
+				
 			OGRPoint PO;
 			PO.setX(point.x());
 			PO.setY(point.y());
@@ -2144,8 +2026,8 @@ namespace FracG
 		const char* Name_b = n_b.c_str();
 		const char* Name_v = n_v.c_str();
 
-		WriteSHP_g_lines(G, reference, Name_b);
-		WriteSHP_g_points(G, reference, Name_v);
+		WriteSHP_g_lines(G, reference, Name_b, false);
+		WriteSHP_g_points(G, reference, Name_v, false);
 		std::cout << " done" << std::endl;
 	}
 
@@ -2165,8 +2047,8 @@ namespace FracG
 		const char* Name_b = n_b.c_str();
 		const char* Name_v = n_v.c_str();
 
-		WriteSHP_g_lines_R(G, reference, Name_b);
-		WriteSHP_g_points(G, reference, Name_v);
+		WriteSHP_g_lines(G, reference, Name_b, true);
+		WriteSHP_g_points(G, reference, Name_v, true);
 		std::cout << " done" << std::endl;
 	}
 
@@ -2236,7 +2118,9 @@ namespace FracG
 		const double la = std::sqrt(std::pow(dxa, 2) + std::pow(dya, 2));
 		const double lb = std::sqrt(std::pow(dxb, 2) + std::pow(dyb, 2));
 		const double dotprod = dxa*dxb + dya*dyb;
-		const double theta = acos(dotprod / (la*lb)); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
+               const double capped_cosine = std::min(dotprod / (la*lb), 1.0); //this value can go over one, I think it is a floating point rounding error
+		const double theta = acos(capped_cosine); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
+//         std::cerr<<"dxa = "<<dxa<<", dya = "<<dya<<" la = "<<la<<"; dxb = "<<dxb<<", dyb = "<<dyb<<" lb = "<<lb<<" dotprod = "<<dotprod<<" -> "<<theta*180/math::constants::pi<double>()<<" deg"<<std::endl;
 		return theta;
 	}
 
@@ -2248,14 +2132,101 @@ namespace FracG
 	//convenience function to remove enfpoints from the endpoint rtree, given an iterator
 	void RemoveEndpoints(endpoint_rtree_type &rtree, std::list<line_type>::iterator it)
 	{
-		rtree.remove(std::make_tuple(it->front(), it, true ));
-		rtree.remove(std::make_tuple(it->back (), it, false));
+		long r1 = rtree.remove(std::make_tuple(it->front(), it, true ));
+		long r2 = rtree.remove(std::make_tuple(it->back (), it, false));
+//         if (r1 != 1 || r2 != 1) std::cerr <<"Error: expected to remove 1 value, actually removed "<<r1<<" and "<<r2<<" values from rtree" << std::endl;
 	}
+
+	std::tuple<unmerged_type::iterator, bool> ChooseBestMatch(unmerged_type::iterator base_it, std::list<std::tuple<unmerged_type::iterator, bool>> matches, bool is_front, double angle_threshold_radians, unmerged_type::iterator unmatched_marker)
+    {
+//         line_type base = *base_it;
+//         std::cerr<<"Finding best match for ";
+//         for (auto p_it = base_it->begin(); p_it < base_it->end(); p_it++)
+//         {
+//             std::cerr<<"("<<p_it->x()<<", "<<p_it->y()<<") ";
+//         }
+//         std::cerr<<std::endl;//<<*base_it
+        bool this_match_loc, other_match_loc;
+        decltype(matches)::iterator base_match_it = matches.insert(matches.end(), std::make_tuple(base_it, is_front));
+        decltype(matches)::iterator candidate1, candidate2;
+        
+        //need at least two elements to match together
+        while (matches.size() >= 2)
+        {
+            double best_angle = std::numeric_limits<double>::infinity();
+            candidate1 = matches.end();
+            candidate2 = matches.end();
+            for (auto it1 = matches.begin(); it1 != matches.end(); it1++)
+            {
+                unmerged_type::iterator f1 = std::get<0>(*it1);
+                bool front1 = std::get<1>(*it1);
+                for (auto it2 = it1; it2 != matches.end(); it2++)
+                {
+                    if (it1 == it2) continue;
+                    unmerged_type::iterator f2 = std::get<0>(*it2);
+                    bool front2 = std::get<1>(*it2);
+                    double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
+                    if (angle_diff < best_angle)
+                    {
+//                         this_match = unmatched_marker;
+//                         break;
+                        candidate1 = it1;
+                        candidate2 = it2;
+                        best_angle = angle_diff;
+                    }
+                }
+//                 if (this_match == unmatched_marker) break;
+            }
+            //no suitable match found
+            if (best_angle > angle_threshold_radians || candidate1 == matches.end())
+            {
+//                 std::cerr<<"Stopping due to bad angle: "<<best_angle*180/math::constants::pi<double>()<<", "<<matches.size()<<" matches left"<<std::endl;
+                return std::make_tuple(unmatched_marker, false);
+            }
+            if (candidate1 == base_match_it || candidate2 == base_match_it)
+            {
+                //we have a match for this line segment, so return it
+//                 std::cerr<<"found a match at angle "<<best_angle*180/math::constants::pi<double>()<<", "<<matches.size()<<" matches left"<<std::endl;
+                decltype(matches)::iterator return_it = (candidate1 == base_match_it) ? candidate2 : candidate1;
+                return *return_it;//std::make_tuple(this_match, this_match_loc)
+            }
+            else if (candidate1 != matches.end() && candidate2 != matches.end())
+            {
+                //two other segments are best matches for each other, so remove them from consideration here
+                matches.erase(candidate1);
+                matches.erase(candidate2);
+//                 std::cerr<<"Putting two other objects together at angle "<<best_angle*180/math::constants::pi<double>()<<" ("<<matches.size()<<" left)"<<std::endl;
+            }
+        }
+        
+        //no match found
+//         std::cerr<<"Stopping due to not enough objects ("<<matches.size()<<" left)"<<std::endl;
+        return std::make_tuple(unmatched_marker, false);
+        
+        /*for (auto match_it = matches.begin(); match_it != matches.end(); match_it++)
+        {
+            std::tie(candidate, other_match_loc) = *match_it;
+            const double theta = CalculateAngleDifference(base, is_front, *candidate, other_match_loc);//
+            const double angle_diff = abs(theta);
+            if (angle_diff <= angle_threshold && angle_diff < best_angle)
+            {
+                this_match = candidate;
+                best_angle = angle_diff;
+                this_match_loc = other_match_loc;
+            }
+        }
+        //if there is more than one candidate, check to see if they should be merged into each other instead
+        if (this_match != unmateched_marker && matches.size() >= 2)
+        {
+            
+        }
+        */
+    }
 
 	//sometimes the data has faults that are split into different entries in the shapefile
 	//this function checks the vector of input line_types for faults that were split, and merges them back together
 	//this checks for any and all fault segments that should be merged back with base
-	bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, line_type &base, double distance_threshold, double angl)
+	bool MergeConnections(unmerged_type &faults, endpoint_rtree_type &endpoints, unmerged_type::iterator base_it, double distance_threshold, double angl)
 	{
 		//our thresholds for merging fault segments together are:
 		//1) Their endpoints are within threshold distance of each other
@@ -2267,16 +2238,17 @@ namespace FracG
 		//and we choose to merge the segment with the smallest angle difference
 
 		bool changed;
-		const double angle_threshold = angl * math::constants::pi<double>() / 180; 
+		const double angle_threshold_radians = angl * math::constants::pi<double>() / 180; 
 
 		const double dt = distance_threshold; //convenience name
+		line_type &base = *base_it;
 
 		do {
 			//a front match is one that matches to the front of the base fault/line segment, a back match is one that matches to the back of the base fault/line segment
 			//use faults.end() as a sentinel value to mark that a match hasn't been found
-			unmerged_type::iterator front_match = faults.end(), back_match = faults.end(), candidate;
+			unmerged_type::iterator front_match = faults.end(), back_match = faults.end();
 			bool front_match_loc = false, back_match_loc = false; //true iff we're matching to the front of the other linestring
-			std::vector<std::tuple<unmerged_type::iterator, bool>> front_matches, back_matches;
+			std::list<std::tuple<unmerged_type::iterator, bool>> front_matches, back_matches;
 			bool match_loc;
 			//use boxes, because boost doesn't have a circle geometry object (just a polygon/linestring that approximates a circle)
 			box front_box(point_type(base.front().x() - dt, base.front().y() - dt), point_type(base.front().x() + dt, base.front().y() + dt));
@@ -2303,78 +2275,47 @@ namespace FracG
 
 			changed = false;
 			//check for matches to the front of base
-			double best_angle = std::numeric_limits<double>::infinity();
-			for (auto match_it = front_matches.begin(); match_it != front_matches.end(); match_it++)
-			{
-				std::tie(candidate, match_loc) = *match_it;
-				const double theta = CalculateAngleDifference(base, true, *candidate, match_loc);
-				const double angle_diff = abs(theta);
-				if (angle_diff <= angle_threshold && angle_diff < best_angle)
-				{
-					front_match = candidate;
-					best_angle = angle_diff;
-					front_match_loc = match_loc;
-				}
-			}
-			//if there is more than one candidate, check to see if they should be merged into each other instead
-			if (front_match != faults.end() && front_matches.size() >= 2)
-			{
-				for (auto it1 = front_matches.begin(); it1 != front_matches.end(); it1++)
-				{
-					unmerged_type::iterator f1 = std::get<0>(*it1);
-					bool front1 = std::get<1>(*it1);
-					for (auto it2 = it1; it2 != front_matches.end(); it2++)
-					{
-						if (it1 == it2) continue;
-						unmerged_type::iterator f2 = std::get<0>(*it2);
-						bool front2 = std::get<1>(*it2);
-						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
-						if (angle_diff < best_angle)
-						{
-							front_match = faults.end();
-							break;
-						}
-					}
-					if (front_match == faults.end()) break;
-				}
-			}
+            std::tie(front_match, front_match_loc) = ChooseBestMatch(base_it, front_matches, true, angle_threshold_radians, faults.end());
+			
 			//check for matches to the back of base
-			best_angle = std::numeric_limits<double>::infinity(); //reset the best angle varaible
-			for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
-			{
-				std::tie(candidate, match_loc) = *match_it;
-				double theta = CalculateAngleDifference(base, false, *candidate, match_loc);
-				const double angle_diff = abs(theta);
-				if (angle_diff <= angle_threshold && angle_diff < best_angle)
-				{
-					back_match = candidate;
-					best_angle = angle_diff;
-					back_match_loc = match_loc;
-				}
-			}
-
-			//if there is more than one candidate, check to see if they should be merged into each other instead
-			if (back_match != faults.end() && back_matches.size() >= 2)
-			{
-				for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
-				{
-					unmerged_type::iterator f1 = std::get<0>(*it1);
-					bool front1 = std::get<1>(*it1);
-					for (auto it2 = it1; it2 != back_matches.end(); it2++)
-					{
-						if (it1 == it2) continue;
-						unmerged_type::iterator f2 = std::get<0>(*it2);
-						bool front2 = std::get<1>(*it2);
-						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
-						if (angle_diff < best_angle)
-						{
-							back_match = faults.end();
-							break;
-						}
-					}
-					if (back_match == faults.end()) break;
-				}
-			}
+            std::tie(back_match, back_match_loc) = ChooseBestMatch(base_it, back_matches, false, angle_threshold_radians, faults.end());
+//             std::cerr<<std::endl;
+// 			double best_angle = std::numeric_limits<double>::infinity(); //reset the best angle varaible
+// 			for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
+// 			{
+// 				std::tie(candidate, match_loc) = *match_it;
+// 				double theta = CalculateAngleDifference(base, false, *candidate, match_loc);
+// 				const double angle_diff = abs(theta);
+// 				if (angle_diff <= angle_threshold && angle_diff < best_angle)
+// 				{
+// 					back_match = candidate;
+// 					best_angle = angle_diff;
+// 					back_match_loc = match_loc;
+// 				}
+// 			}
+// 
+// 			//if there is more than one candidate, check to see if they should be merged into each other instead
+// 			if (back_match != faults.end() && back_matches.size() >= 2)
+// 			{
+// 				for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
+// 				{
+// 					unmerged_type::iterator f1 = std::get<0>(*it1);
+// 					bool front1 = std::get<1>(*it1);
+// 					for (auto it2 = it1; it2 != back_matches.end(); it2++)
+// 					{
+// 						if (it1 == it2) continue;
+// 						unmerged_type::iterator f2 = std::get<0>(*it2);
+// 						bool front2 = std::get<1>(*it2);
+// 						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
+// 						if (angle_diff < best_angle)
+// 						{
+// 							back_match = faults.end();
+// 							break;
+// 						}
+// 					}
+// 					if (back_match == faults.end()) break;
+// 				}
+// 			}
 
 
 
@@ -2394,20 +2335,20 @@ namespace FracG
 			if (front_match != faults.end())
 			{
 				line_type prepend = *front_match;
+				RemoveEndpoints(endpoints, front_match);
+				faults.erase(front_match);
 				if (front_match_loc) geometry::reverse(prepend);
 				geometry::append(prepend, base);
 				base = prepend;
-				RemoveEndpoints(endpoints, front_match);
-				faults.erase(front_match);
 				changed = true;
 			}
 
 			if (back_match != faults.end()){
 				line_type append = *back_match;
-				if (!back_match_loc) geometry::reverse(append);
-				geometry::append(base, append);
 				RemoveEndpoints(endpoints, back_match);
 				faults.erase(back_match);
+				if (!back_match_loc) geometry::reverse(append);
+				geometry::append(base, append);
 				changed = true;
 			}
 
@@ -2447,7 +2388,6 @@ namespace FracG
 	void CorrectNetwork(std::vector<line_type>&F, double dist, double angl_threshold, double dfd_thres)
 	{
 		typedef std::pair<box, std::vector<line_type>::iterator> box_line; //a bounding box around the linestring and its iterator
-		std::vector<box_line> result;
 		//first we need to remove duplicates. We sort the lines by distance to a reference point (from line centroid)
 		//and then remove duplicates
 		box AOI = ReturnAOI(F);
@@ -2482,16 +2422,16 @@ namespace FracG
 		std::cout << "merging split faults - starting" << std::endl;
 		while (!unmerged_faults.empty())
 		{
-			line_type base = unmerged_faults.front();
 			RemoveEndpoints(endpoint_tree, unmerged_faults.begin());
+			MergeConnections(unmerged_faults, endpoint_tree, unmerged_faults.begin(), dist, angl_threshold);
+			merged_faults.push_back(unmerged_faults.front());//base
 			unmerged_faults.pop_front(); //I don't know why this doesn't also return the value being pop'd
-			MergeConnections(unmerged_faults, endpoint_tree, base, dist, angl_threshold);
-			merged_faults.push_back(base);
 		}
 		std::cout <<"merging split faults - finished" << std::endl;
 		F = merged_faults;
 		std::cout << F.size() << " lines remaining after merging" << std::endl;
 	
+		/*
 		//calculate discrete_frechet distance  (only from boost 1.69)
 		//first build an rtree containing boxes of lineaments
 		geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
@@ -2507,32 +2447,34 @@ namespace FracG
 			else
 		nb = 2;
 		
-		std::vector<line_type> line_remove;
-		for (auto l : F)
+		std::vector<line_type> keep;
+        std::vector<bool> is_copy(F.size(), false);
+        
+        //iterate through lines
+		for (auto l = F.begin(); l < F.end(); l++)
 		{
-			line_tree.query(geometry::index::nearest(l, 5), std::back_inserter(result));
+            if (is_copy.at(std::distance(F.begin(), l))) continue;
+            std::vector<box_line> result;
+            //get the overlapping lines
+			line_tree.query(geometry::index::intersects(*l), std::back_inserter(result));
 			for(auto it : result)
 			{
-				if (!geometry::equals(l, *it.second))
-				{
-					if (boost::geometry::discrete_frechet_distance(l, *it.second) < dfd_thres)
-						line_remove.push_back(*it.second);
-				}
+                //if they aren't the same line as this one...
+				if (l == it.second) continue;
+                    
+                //how does this handle partial overlap? we would need to decide which one to keep
+                //delete the ones that are copies of this ones
+                if (boost::geometry::discrete_frechet_distance(*l, *it.second) < dfd_thres)
+                {
+                    is_copy.at(std::distance(F.begin(), it.second)) = true; //mark the other line as a copy
+                    line_tree.remove(it); //remove it from the rtree
+                }
+				
 			}
-			result.clear();
+            keep.push_back(*l);
 		}
-		
-		for (auto l : line_remove)
-		{
-			for (int i = 0; i < F.size(); i++)
-			{
-				if (geometry::equals(l,F.at(i)))
-				{
-					 F.erase (F.begin()+i);
-					 break;
-				 }
-			}
-		}
+		*/
+		//F = keep;
 	}
 
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target)
@@ -2674,7 +2616,7 @@ namespace FracG
 		dstProjection = GDALGetProjectionRef( srcDataset ); // set destination projection to source projection
 		GDALGetGeoTransform(srcDataset, srcGeoTransform
 );		//get the intitial geotransfrom
-		//define new geotransform with a 10th of teh intitial pixel size
+		//define new geotransform with a 10th of the intitial pixel size
 		dstGeotransform[0] = srcGeoTransform[0];
 		dstGeotransform[1] = srcGeoTransform[1] / 10;
 		dstGeotransform[2] = srcGeoTransform[2];
@@ -2688,7 +2630,6 @@ namespace FracG
 		std::cout << "resampling from " << GDALGetRasterXSize( srcDataset ) << " x " << GDALGetRasterYSize( srcDataset ) << " to " <<
 		dstncols << " x " << dstnrows << std::endl;
 
-		// create geotransform object ... pass in following parameters:
 	  void *handleTransformArg;
 	  handleTransformArg = GDALCreateGenImgProjTransformer( srcDataset, srcProjection,
 	  NULL, dstProjection, FALSE, 0, 1);
