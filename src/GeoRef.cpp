@@ -2118,9 +2118,9 @@ namespace FracG
 		const double la = std::sqrt(std::pow(dxa, 2) + std::pow(dya, 2));
 		const double lb = std::sqrt(std::pow(dxb, 2) + std::pow(dyb, 2));
 		const double dotprod = dxa*dxb + dya*dyb;
-               const double capped_cosine = std::min(dotprod / (la*lb), 1.0); //this value can go over one, I think it is a floating point rounding error
+        const double capped_cosine = std::min(dotprod / (la*lb), 1.0); //this value can go over one, I think it is a floating point rounding error
 		const double theta = acos(capped_cosine); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
-//         std::cerr<<"dxa = "<<dxa<<", dya = "<<dya<<" la = "<<la<<"; dxb = "<<dxb<<", dyb = "<<dyb<<" lb = "<<lb<<" dotprod = "<<dotprod<<" -> "<<theta*180/math::constants::pi<double>()<<" deg"<<std::endl;
+//      std::cerr<<"dxa = "<<dxa<<", dya = "<<dya<<" la = "<<la<<"; dxb = "<<dxb<<", dyb = "<<dyb<<" lb = "<<lb<<" dotprod = "<<dotprod<<" -> "<<theta*180/math::constants::pi<double>()<<" deg"<<std::endl;
 		return theta;
 	}
 
@@ -2129,7 +2129,7 @@ namespace FracG
 	typedef std::tuple<point_type, unmerged_type::iterator, bool> endpoint_value_type;
 	typedef geometry::index::rtree<endpoint_value_type, geometry::index::rstar<16>> endpoint_rtree_type;
 
-	//convenience function to remove enfpoints from the endpoint rtree, given an iterator
+	//convenience function to remove endpoints from the endpoint rtree, given an iterator
 	void RemoveEndpoints(endpoint_rtree_type &rtree, std::list<line_type>::iterator it)
 	{
 		long r1 = rtree.remove(std::make_tuple(it->front(), it, true ));
@@ -2392,7 +2392,7 @@ namespace FracG
 		//and then remove duplicates
 		box AOI = ReturnAOI(F);
 		point_type origin(geometry::get<geometry::min_corner, 0>(AOI), geometry::get<geometry::min_corner, 1>(AOI));
-		bool found_dublicate = true;
+		bool found_duplicate = true;
 
 			do{
 				int size = F.size();
@@ -2402,10 +2402,10 @@ namespace FracG
 				F.erase(new_lines_3, F.end());
 
 				if (size == F.size())
-					found_dublicate = false;
+					found_duplicate = false;
 
-			}	while (found_dublicate);
-		std::cout << F.size() << " lines remaining after removing dublicates \n" << std::endl;
+			}	while (found_duplicate);
+		std::cout << F.size() << " lines remaining after removing duplicates \n" << std::endl;
 	//----------------------------------------------------------------------
 
 		std::vector<line_type> merged_faults; //the new list of merged faults, to be built by this function
@@ -2422,6 +2422,7 @@ namespace FracG
 		std::cout << "merging split faults - starting" << std::endl;
 		while (!unmerged_faults.empty())
 		{
+// 			line_type &base = ;
 			RemoveEndpoints(endpoint_tree, unmerged_faults.begin());
 			MergeConnections(unmerged_faults, endpoint_tree, unmerged_faults.begin(), dist, angl_threshold);
 			merged_faults.push_back(unmerged_faults.front());//base
@@ -2473,6 +2474,7 @@ namespace FracG
 			}
             keep.push_back(*l);
 		}
+<<<<<<< HEAD
 		*/
 		//F = keep;
 	}
@@ -2692,4 +2694,3 @@ namespace FracG
 		MutiplyRasterbyCoefficient(output, scale_coef);
 	}
 }
-

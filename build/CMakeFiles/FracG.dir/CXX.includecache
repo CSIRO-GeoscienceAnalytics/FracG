@@ -6,6 +6,14 @@
 
 #IncludeRegexTransform: 
 
+/home/uk/FracG_git/fracgraph/include/GeoRef.h
+../include/fracg.h
+/home/uk/FracG_git/fracgraph/include/fracg.h
+../include/stats.h
+/home/uk/FracG_git/fracgraph/include/stats.h
+boost/filesystem.hpp
+-
+
 /home/uk/FracG_git/fracgraph/include/fracg.h
 omp.h
 -
@@ -182,16 +190,6 @@ type_traits
 ../include/stats.h
 /home/uk/FracG_git/fracgraph/include/stats.h
 
-/home/uk/FracG_git/fracgraph/include/model.h
-gmsh.h
--
-../include/fracg.h
-/home/uk/FracG_git/fracgraph/include/fracg.h
-../include/geometrie.h
-/home/uk/FracG_git/fracgraph/include/geometrie.h
-../include/graph.h
-/home/uk/FracG_git/fracgraph/include/graph.h
-
 /home/uk/FracG_git/fracgraph/include/stats.h
 ../include/fracg.h
 /home/uk/FracG_git/fracgraph/include/fracg.h
@@ -206,9 +204,15 @@ boost/filesystem.hpp
 fracg.h
 /home/uk/FracG_git/fracgraph/include/fracg.h
 
-/home/uk/FracG_git/fracgraph/src/model.cpp
-../include/model.h
-/home/uk/FracG_git/fracgraph/include/model.h
+/home/uk/FracG_git/fracgraph/src/GeoRef.cpp
+../include/GeoRef.h
+/home/uk/FracG_git/fracgraph/include/GeoRef.h
+../include/graph.h
+/home/uk/FracG_git/fracgraph/include/graph.h
+../include/geometrie.h
+/home/uk/FracG_git/fracgraph/include/geometrie.h
+../include/stats.h
+/home/uk/FracG_git/fracgraph/include/stats.h
 ../include/util.h
 /home/uk/FracG_git/fracgraph/include/util.h
 
