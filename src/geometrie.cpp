@@ -109,6 +109,35 @@ namespace FracG
 		boost::geometry::convex_hull(multiL, hull);
 		return(hull);
 	}
+	
+	//retun the centre of a line even if it stronlgy curved
+	point_type GetCentre(line_type l)
+	{
+		line_type cross;
+		point_type centre, p1, p2;
+		double len = boost::geometry::length(l);
+			
+		double rx = l.back().x() - l.front().x();
+		double ry = l.back().y() - l.front().y();
+		double le = sqrt(rx*rx + ry*ry);
+			
+		boost::geometry::centroid(l, centre);
+		p1.set<0>((centre.x() + ( ry/le) * len ));
+		p1.set<1>((centre.y() + (-rx/le) * len ));
+		p2.set<0>((centre.x() + (-ry/le) * len ));
+		p2.set<1>((centre.y() + ( rx/le) * len ));
+		
+		boost::geometry::append(cross, p1);
+		boost::geometry::append(cross, centre);
+		boost::geometry::append(cross, p2);
+		
+		std::vector<point_type> output; 
+		boost::geometry::intersection(l, cross, output);
+		
+		point_type real_centre = output.at(0);
+		return(real_centre);
+	};
+	
 
 	//return the segment of a line that is the closest to the given point
 	//the returned iterator points to the linsestring point that is *after* the given point

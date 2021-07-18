@@ -1,7 +1,0 @@
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/install/strip.dir
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/install/local.dir
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/install.dir
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/list_install_components.dir
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/rebuild_cache.dir
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/edit_cache.dir
-/home/uk/FracG_git/fracgraph/build/CMakeFiles/FracG.dir

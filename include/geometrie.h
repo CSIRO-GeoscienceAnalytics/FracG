@@ -7,8 +7,6 @@ namespace FracG
 
     enum class AttachPoint : signed char {front=-1, middle=0, back=+1};
 
-     
-
     //construct perpendicular line through midpoint of segment--------------
     template <typename Segment>
     struct Perpencicular
@@ -28,6 +26,7 @@ namespace FracG
                     boost::geometry::convert(s, cross);
                     p1 = cross.front();
                     p2 = cross.back();
+                    
                     boost::geometry::centroid(cross, centre);
 
                     rx = p2.x() - p1.x();
@@ -48,6 +47,9 @@ namespace FracG
                     all.push_back(cross);
             }
     };
+
+
+
 
 //gets the segmnet intersection with lne-----------------------------
     template <typename Segment>
@@ -77,6 +79,7 @@ namespace FracG
     void D_Maps (VECTOR lines, float cell_size, bool resample);
     void P_Maps(VECTOR lines, float cell_size, bool resample);
 
+	point_type GetCentre(line_type l);
 
     box ReturnAOI(std::vector<line_type> &lines);
     polygon_type ReturnTightAOI(std::vector<line_type> &lines);

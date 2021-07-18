@@ -38,9 +38,11 @@
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/random_device.hpp>
 
-
-
-#include <boost/progress.hpp>
+#if (BOOST_VERSION >= 107200)
+	#include <boost/timer/progress_display.hpp>
+#else
+	#include <boost/progress.hpp>
+#endif
 #include "boost/multi_array.hpp"
 
 #include <boost/range/adaptors.hpp>

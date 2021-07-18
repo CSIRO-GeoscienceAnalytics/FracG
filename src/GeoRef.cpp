@@ -15,7 +15,7 @@ namespace FracG
 		OGRSpatialReference oSRS1, oSRS2;
 		oSRS1.importFromWkt(&s1);
 		oSRS2.importFromWkt(&s2);
-		int err = oSRS1.IsSameGeogCS(&oSRS2);
+		int err = oSRS1.IsSame(&oSRS2);
 		if (err != 1)
 		{
 			std::cout << "differnet reference systems!" << std::endl;
@@ -160,13 +160,14 @@ namespace FracG
 	template <typename T>double LineExtractor(line_type L, RASTER<T> raster, double dist)
 	{
 		//note that raster values are converted into double 
+		//ode sno use dist anymore
 		polygon_type pl = BoundingBox(raster.transform, 0);
 		box AOI;
 		BUFFER envelop;
 		point_type point;
 		int maxX, minX, maxY, minY;
 		std::vector<double> D;
-		double radius = dist * (( abs(raster.transform[1]) + abs(raster.transform[5]))/2) ;
+		double radius = 1.5*(( abs(raster.transform[1]) + abs(raster.transform[5]))/2) ;
 
 		envelop = DefineLineBuffer(L, radius);
 		geometry::envelope(envelop, AOI);
@@ -202,7 +203,8 @@ namespace FracG
 		point_type point, p1, p2;
 		polygon_type pl = BoundingBox(raster.transform, 0);
 		double len =  dist * (abs(raster.transform[1]) + abs(raster.transform[5]) / 2);
-		geometry::centroid(F, point);
+		
+		point = GetCentre(F);
 
 		double rx = F.back().x() - F.front().x();
 		double ry = F.back().y() - F.front().y();
@@ -618,6 +620,8 @@ namespace FracG
 	template void AssignValuesGraph<float>(Graph& G, RASTER<float> raster, double dist);
 	template void AssignValuesGraph<double>(Graph& G, RASTER<double> raster, double dist);
 
+
+
 	template <typename T>
 	RASTER <T>ReadRaster(std::string in_filename, const char *refWKT)
 	{
@@ -698,6 +702,9 @@ namespace FracG
 		}
 		return(raster);
 	}
+	
+	
+	
 
 	//TODO: these are ints, and not descriptive. split seems to be the distance threshold for splitting the graph into fault segments, and spurs seems to be the distance threshold for removing spurs from the graph
 	template<typename T> 
@@ -821,6 +828,8 @@ namespace FracG
 				printf( "Creating 'PGrad' field failed.\n" );
 				exit( 1 );
 			}
+			
+			std::cout <<"created shp file" <<std::endl;
 
 		int id = 0;
 		BOOST_FOREACH(line_type line, lines.data)
@@ -828,14 +837,12 @@ namespace FracG
 			OGRLineString l;
 			OGRFeature *poFeature;
 			geometry::unique(line);
-
 			double strike = (double)(atan2(line.front().x() - line.back().x(), line.front().y() - line.back().y())) 
 							* (180 / math::constants::pi<double>());
 			if (strike  < 0) 
 				strike  += 180;
 
-			point_type cent; 
-			geometry::centroid(line, cent);
+			point_type cent = GetCentre(line);
 			double c_val   = (double) GetRasterValue<T>(cent, raster.transform, raster.values);
 			double mean_v  = (double) LineExtractor<T>(line, raster, dist);
 			double grad_c  = (double) CentreGradient<T>(line, raster, dist);
@@ -891,8 +898,7 @@ namespace FracG
 	void WriteTXT(VECTOR lines, double dist, RASTER<T> raster, std::string tsv_filename)
 	{
 		std::ofstream txtF = FracG::CreateFileStream(tsv_filename);
-		GetMidSegment<geometry::model::referring_segment<point_type>> functor;
-
+		
 		int x_size   = raster.transform[6];
 		int y_size   = raster.transform[7];
 
@@ -902,30 +908,7 @@ namespace FracG
 		double y_res = raster.transform[5];
 		double pdfMin = 0, pdfMax = 0, pdfMean = 0, pdfStdDev = 0;
 
-		//first we build a searchabel tree from the raster data
-		typedef std::pair<box, T> grid_cell;
-		geometry::index::rtree< grid_cell, geometry::index::quadratic<16> > rtree;
-
-		double cur_x = ul_x;
-		for (int x = 0; x < x_size; x++)
-		{
-			double cur_y = ul_y;
-			for (int y =0; y< y_size; y++)
-			{
-				box cur_box;
-				point_type value;
-				geometry::set<geometry::min_corner, 0>(cur_box, cur_x); 
-				geometry::set<geometry::min_corner, 1>(cur_box, cur_y + y_res);
-				geometry::set<geometry::max_corner, 0>(cur_box, cur_x + x_res); 
-				geometry::set<geometry::max_corner, 1>(cur_box, cur_y);
-				geometry::centroid(cur_box, value);
-				rtree.insert(std::make_pair(cur_box, GetRasterValue(value, raster.transform, raster.values)));
-				cur_y += y_res;
-			}
-			cur_x += x_res;
-		}
-
-	//get raster statistics-------------------------------------------------
+		//get raster statistics-------------------------------------------------
 		GDALAllRegister();
 		GDALDataset  *poDataset;
 		poDataset = (GDALDataset *) GDALOpen(raster.name.c_str(), GA_ReadOnly );
@@ -950,83 +933,69 @@ namespace FracG
 		txtF << "Pixel values \t" << dist << std::endl;
 		txtF << "No \t Parallel Profile \t Cross Profile" << std::endl;
 
-	//now loop over lines to obtain profile and crossing--------------------
 		int nb = 0;
 		BOOST_FOREACH(line_type l, lines.data)
 		{
 			txtF << nb << "\t";
-			std::vector<grid_cell> result_p; //results of profile
-			std::vector<grid_cell> result_c; //results of cross
-
-	//get profile values----------------------------------------------------
-			BUFFER profile = DefineLineBuffer(l, dist);
-			rtree.query(geometry::index::intersects(profile), std::back_inserter(result_p));
-			std::sort(result_p.begin(), result_p.end(), CellSorter<T>(l.front()));
-
-			for(auto it = result_p.begin(); it != result_p.end(); ++it) 
+			
+			//exract values along the line
+			BOOST_FOREACH(point_type p, l)
 			{
-				if (it < result_p.end()-1)
-					txtF << it->second << ", ";
+			double V = (double)GetRasterValue(p, raster.transform, raster.values);
+				if (!geometry::equals(p, l.back()) )
+				{
+					if(!std::isnan(V) )
+						txtF << V << "," ;
+				}
 				else
-					txtF << it->second << "\t";
+					if(!std::isnan(V) )
+						txtF << V << "\t" ;
 			}
 
-	//get crossing values---------------------------------------------------
-	//first get a line though the centre of the lineament
+			//exract values along the centre profile
 			line_type cross, m_seg;
 			point_type centre, p1, p2;
-			
 			double len = dist * ((abs(raster.transform[1]) + abs(raster.transform[5]))/2);
 			
 			double rx = l.back().x() - l.front().x();
 			double ry = l.back().y() - l.front().y();
 			double le = sqrt(rx*rx + ry*ry);
 			
-			geometry::centroid(l, centre);
-
+			centre = FracG::GetCentre(l);
+			
 			p1.set<0>((centre.x() + ( ry/le) * len ));
 			p1.set<1>((centre.y() + (-rx/le) * len ));
 			p2.set<0>((centre.x() + (-ry/le) * len ));
 			p2.set<1>((centre.y() + ( rx/le) * len ));
-
 			geometry::append(cross, p1);
 			geometry::append(cross, centre);
 			geometry::append(cross, p2);
-
-	//here we get the segment cut by the line 
-			functor.cross = cross;
-			functor  = geometry::for_each_segment(l, functor );
-
-	//now we calculate the actual line through the centre with orientation obtained from the segment
-			rx = functor.midSeg.back().x() - functor.midSeg.front().x();
-			ry = functor.midSeg.back().y() - functor.midSeg.front().y();
-			len =  dist * x_res ;
-			le = sqrt(rx*rx + ry*ry);
-
-			p1.set<0>((centre.x() + ( ry/le) * len ));
-			p1.set<1>((centre.y() + (-rx/le) * len ));
-			p2.set<0>((centre.x() + (-ry/le) * len ));
-			p2.set<1>((centre.y() + ( rx/le) * len ));
-
-			geometry::append(cross, p1);
-			geometry::append(cross, centre);
-			geometry::append(cross, p2);
-
-			BUFFER crossing = DefineLineBuffer(cross, dist);
-			rtree.query(geometry::index::intersects(crossing), std::back_inserter(result_c));
-			std::sort(result_c.begin(), result_c.end(), CellSorter<T>(cross.front()));
-
-			for(auto it = result_c.begin(); it != result_c.end(); ++it) 
+			
+			//create point along line
+			double length = geometry::length(cross);
+			double raster_res = (abs(raster.transform[1]) + abs(raster.transform[5]))/2;
+				
+			BOOST_FOREACH(point_type p, cross)
 			{
-				if (it < result_c.end()-1)
-					txtF << it->second << ", ";
+				double V = (double)GetRasterValue(p, raster.transform, raster.values);
+				//std::cout << std::setprecision(15) << p.x() << " " << p.y() << std::endl;
+				if (!geometry::equals(p, cross.back()) )
+				{
+					if(!std::isnan(V) )
+						txtF << V << "," ;
+				}
 				else
-					txtF << it->second << std::endl;;
+					if(!std::isnan(V) )
+						txtF << V ;
 			}
+			txtF << "\n";
 			nb++;
 		}
 	}
-
+	template void WriteTXT<int>(VECTOR lines, double dist, RASTER<int> raster, std::string tsv_filename);
+	template void WriteTXT<float>(VECTOR lines, double dist, RASTER<float> raster, std::string tsv_filename);
+	template void WriteTXT<double>(VECTOR lines, double dist, RASTER<double> raster, std::string tsv_filename);
+	
 	template<typename T>
 	void AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster)
 	{
@@ -1343,10 +1312,6 @@ namespace FracG
 
 	 void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], std::string out_filename)
 	{
-	  //get the path of the current directory
-		char cur_path[256];
-		getcwd(cur_path, 255);
-
 		GDALDataset *poDstDS;
 		GDALDriver *poDriver;
 		char *pszSRS_WKT = NULL;
@@ -1384,7 +1349,6 @@ namespace FracG
 		}
 		poBand->SetNoDataValue(-256);
 		GDALClose( (GDALDatasetH) poDstDS );
-		chdir(cur_path);
 	}
 	
 	  void WriteSHP_lines(std::vector<line_type> lineaments, const char* refWKT, std::string name)
@@ -2014,9 +1978,8 @@ namespace FracG
 	{
 		std::cout << "starting writegraph" << std::endl;
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
-		char cur_path[256];
+
 		char* reference = lines.refWKT;
-		getcwd(cur_path, 255);
 
 		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
 		FracG::CreateDir(subdir_name);
@@ -2036,9 +1999,9 @@ namespace FracG
 	{
 		std::cout << "starting writegraph (raster)" << std::endl;
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
-		char cur_path[256];
+
 		char* reference = lines.refWKT;
-		getcwd(cur_path, 255);
+
 		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
 		FracG::CreateDir(subdir_name);
 
@@ -2120,7 +2083,6 @@ namespace FracG
 		const double dotprod = dxa*dxb + dya*dyb;
         const double capped_cosine = std::min(dotprod / (la*lb), 1.0); //this value can go over one, I think it is a floating point rounding error
 		const double theta = acos(capped_cosine); //calculate angle, and subract from 1pi radians/180 degrees to get the angle difference from being a straight line
-//      std::cerr<<"dxa = "<<dxa<<", dya = "<<dya<<" la = "<<la<<"; dxb = "<<dxb<<", dyb = "<<dyb<<" lb = "<<lb<<" dotprod = "<<dotprod<<" -> "<<theta*180/math::constants::pi<double>()<<" deg"<<std::endl;
 		return theta;
 	}
 
@@ -2134,18 +2096,10 @@ namespace FracG
 	{
 		long r1 = rtree.remove(std::make_tuple(it->front(), it, true ));
 		long r2 = rtree.remove(std::make_tuple(it->back (), it, false));
-//         if (r1 != 1 || r2 != 1) std::cerr <<"Error: expected to remove 1 value, actually removed "<<r1<<" and "<<r2<<" values from rtree" << std::endl;
 	}
 
 	std::tuple<unmerged_type::iterator, bool> ChooseBestMatch(unmerged_type::iterator base_it, std::list<std::tuple<unmerged_type::iterator, bool>> matches, bool is_front, double angle_threshold_radians, unmerged_type::iterator unmatched_marker)
     {
-//         line_type base = *base_it;
-//         std::cerr<<"Finding best match for ";
-//         for (auto p_it = base_it->begin(); p_it < base_it->end(); p_it++)
-//         {
-//             std::cerr<<"("<<p_it->x()<<", "<<p_it->y()<<") ";
-//         }
-//         std::cerr<<std::endl;//<<*base_it
         bool this_match_loc, other_match_loc;
         decltype(matches)::iterator base_match_it = matches.insert(matches.end(), std::make_tuple(base_it, is_front));
         decltype(matches)::iterator candidate1, candidate2;
@@ -2168,25 +2122,20 @@ namespace FracG
                     double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
                     if (angle_diff < best_angle)
                     {
-//                         this_match = unmatched_marker;
-//                         break;
                         candidate1 = it1;
                         candidate2 = it2;
                         best_angle = angle_diff;
                     }
                 }
-//                 if (this_match == unmatched_marker) break;
             }
             //no suitable match found
             if (best_angle > angle_threshold_radians || candidate1 == matches.end())
             {
-//                 std::cerr<<"Stopping due to bad angle: "<<best_angle*180/math::constants::pi<double>()<<", "<<matches.size()<<" matches left"<<std::endl;
                 return std::make_tuple(unmatched_marker, false);
             }
             if (candidate1 == base_match_it || candidate2 == base_match_it)
             {
                 //we have a match for this line segment, so return it
-//                 std::cerr<<"found a match at angle "<<best_angle*180/math::constants::pi<double>()<<", "<<matches.size()<<" matches left"<<std::endl;
                 decltype(matches)::iterator return_it = (candidate1 == base_match_it) ? candidate2 : candidate1;
                 return *return_it;//std::make_tuple(this_match, this_match_loc)
             }
@@ -2195,32 +2144,9 @@ namespace FracG
                 //two other segments are best matches for each other, so remove them from consideration here
                 matches.erase(candidate1);
                 matches.erase(candidate2);
-//                 std::cerr<<"Putting two other objects together at angle "<<best_angle*180/math::constants::pi<double>()<<" ("<<matches.size()<<" left)"<<std::endl;
             }
         }
-        
-        //no match found
-//         std::cerr<<"Stopping due to not enough objects ("<<matches.size()<<" left)"<<std::endl;
         return std::make_tuple(unmatched_marker, false);
-        
-        /*for (auto match_it = matches.begin(); match_it != matches.end(); match_it++)
-        {
-            std::tie(candidate, other_match_loc) = *match_it;
-            const double theta = CalculateAngleDifference(base, is_front, *candidate, other_match_loc);//
-            const double angle_diff = abs(theta);
-            if (angle_diff <= angle_threshold && angle_diff < best_angle)
-            {
-                this_match = candidate;
-                best_angle = angle_diff;
-                this_match_loc = other_match_loc;
-            }
-        }
-        //if there is more than one candidate, check to see if they should be merged into each other instead
-        if (this_match != unmateched_marker && matches.size() >= 2)
-        {
-            
-        }
-        */
     }
 
 	//sometimes the data has faults that are split into different entries in the shapefile
@@ -2279,45 +2205,6 @@ namespace FracG
 			
 			//check for matches to the back of base
             std::tie(back_match, back_match_loc) = ChooseBestMatch(base_it, back_matches, false, angle_threshold_radians, faults.end());
-//             std::cerr<<std::endl;
-// 			double best_angle = std::numeric_limits<double>::infinity(); //reset the best angle varaible
-// 			for (auto match_it = back_matches.begin(); match_it != back_matches.end(); match_it++)
-// 			{
-// 				std::tie(candidate, match_loc) = *match_it;
-// 				double theta = CalculateAngleDifference(base, false, *candidate, match_loc);
-// 				const double angle_diff = abs(theta);
-// 				if (angle_diff <= angle_threshold && angle_diff < best_angle)
-// 				{
-// 					back_match = candidate;
-// 					best_angle = angle_diff;
-// 					back_match_loc = match_loc;
-// 				}
-// 			}
-// 
-// 			//if there is more than one candidate, check to see if they should be merged into each other instead
-// 			if (back_match != faults.end() && back_matches.size() >= 2)
-// 			{
-// 				for (auto it1 = back_matches.begin(); it1 != back_matches.end(); it1++)
-// 				{
-// 					unmerged_type::iterator f1 = std::get<0>(*it1);
-// 					bool front1 = std::get<1>(*it1);
-// 					for (auto it2 = it1; it2 != back_matches.end(); it2++)
-// 					{
-// 						if (it1 == it2) continue;
-// 						unmerged_type::iterator f2 = std::get<0>(*it2);
-// 						bool front2 = std::get<1>(*it2);
-// 						double angle_diff = abs(CalculateAngleDifference(*f1, front1, *f2, front2));
-// 						if (angle_diff < best_angle)
-// 						{
-// 							back_match = faults.end();
-// 							break;
-// 						}
-// 					}
-// 					if (back_match == faults.end()) break;
-// 				}
-// 			}
-
-
 
 	// 		this is clunky, but we need to wait to erase the front match, because we need the iterator to be valid long enough to compare it to the back match
 			if ( (front_match != faults.end()) && (front_match == back_match) ) 
@@ -2422,7 +2309,6 @@ namespace FracG
 		std::cout << "merging split faults - starting" << std::endl;
 		while (!unmerged_faults.empty())
 		{
-// 			line_type &base = ;
 			RemoveEndpoints(endpoint_tree, unmerged_faults.begin());
 			MergeConnections(unmerged_faults, endpoint_tree, unmerged_faults.begin(), dist, angl_threshold);
 			merged_faults.push_back(unmerged_faults.front());//base
@@ -2431,52 +2317,6 @@ namespace FracG
 		std::cout <<"merging split faults - finished" << std::endl;
 		F = merged_faults;
 		std::cout << F.size() << " lines remaining after merging" << std::endl;
-	
-		/*
-		//calculate discrete_frechet distance  (only from boost 1.69)
-		//first build an rtree containing boxes of lineaments
-		geometry::index::rtree<box_line, geometry::index::rstar<16>> line_tree;
-		for (auto it = F.begin(); it < F.end(); it++)
-		{
-			box line_bounding_box = geometry::return_envelope<box>(*it);
-			line_tree.insert(std::make_pair(line_bounding_box, it));
-		}
-		
-		int nb;
-		if (F.size() > 5)
-			nb = 5;
-			else
-		nb = 2;
-		
-		std::vector<line_type> keep;
-        std::vector<bool> is_copy(F.size(), false);
-        
-        //iterate through lines
-		for (auto l = F.begin(); l < F.end(); l++)
-		{
-            if (is_copy.at(std::distance(F.begin(), l))) continue;
-            std::vector<box_line> result;
-            //get the overlapping lines
-			line_tree.query(geometry::index::intersects(*l), std::back_inserter(result));
-			for(auto it : result)
-			{
-                //if they aren't the same line as this one...
-				if (l == it.second) continue;
-                    
-                //how does this handle partial overlap? we would need to decide which one to keep
-                //delete the ones that are copies of this ones
-                if (boost::geometry::discrete_frechet_distance(*l, *it.second) < dfd_thres)
-                {
-                    is_copy.at(std::distance(F.begin(), it.second)) = true; //mark the other line as a copy
-                    line_tree.remove(it); //remove it from the rtree
-                }
-				
-			}
-            keep.push_back(*l);
-		}
-<<<<<<< HEAD
-		*/
-		//F = keep;
 	}
 
 	void GetSourceTarget(const char* Name, point_type &Source, point_type &Target)

@@ -1076,6 +1076,7 @@ namespace FracG
 
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename)
 	{
+		
 		if (!raster_filename.empty())
 		{
 			std::cout << "Generating raster statisics " << std::endl;
@@ -1100,6 +1101,22 @@ namespace FracG
 			GDALRasterBand  *poBand;
 			poBand = poDataset->GetRasterBand( 1 );
 			std::string datatype (GDALGetDataTypeName(poBand->GetRasterDataType()));
+			
+			if( poDataset->GetProjectionRef()  != NULL )
+			{
+				OGRSpatialReference oSRS1, oSRS2;
+				oSRS1.importFromWkt(poDataset->GetProjectionRef());
+				oSRS2.importFromWkt(lines.refWKT);
+				
+				int err = oSRS1.IsSame(&oSRS2);
+				if (err != 1)
+				{
+					std::cout << "ERROR: raster data and vector data are in different reference systems!" << std::endl;
+					GDALClose( poDataset );
+					exit (EXIT_FAILURE);
+				}
+			}
+
 			GDALClose( poDataset );
 
 			std::cout << "Raster datatype is " ;

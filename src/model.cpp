@@ -23,7 +23,8 @@ namespace FracG
 			return (gmsh_sam);
 		}
 	}
-
+	
+	
 	/* create a bounding box of the area around the network.
 	 * At the moment it is just a rectangular box derived from the envelope around all 
 	 * lines */
@@ -31,6 +32,7 @@ namespace FracG
 	{
 		std::vector<line_type> lines;
 
+		double crop = 0;
 		for (auto Eg : make_iterator_range(edges(G)))
 			lines.push_back(G[Eg].trace);  
 
@@ -45,10 +47,10 @@ namespace FracG
 			x_m = 0;
 			y_m = 0;
 		}
-		long double min_x  = bgm::get<bgm::min_corner, 0>(AOI) - x_m  ;
-		long double min_y  = bgm::get<bgm::min_corner, 1>(AOI) - y_m  ;
-		long double max_x = bgm::get<bgm::max_corner, 0>(AOI)  - x_m  ;
-		long double max_y = bgm::get<bgm::max_corner, 1>(AOI)  - y_m  ;
+		long double min_x  = bgm::get<bgm::min_corner, 0>(AOI) - x_m + crop ;
+		long double min_y  = bgm::get<bgm::min_corner, 1>(AOI) - y_m + crop;
+		long double max_x = bgm::get<bgm::max_corner, 0>(AOI)  - x_m - crop ;
+		long double max_y = bgm::get<bgm::max_corner, 1>(AOI)  - y_m - crop;
 
 		lc = std::min((max_x-min_x)/nb_cells, (max_y-min_y)/nb_cells);
 		std::cout <<"init lc: " << lc<<std::endl;
@@ -212,15 +214,6 @@ namespace FracG
 				model::setPhysicalName(2, (nb_faces + 600), "bottom");
 			}
 		
-			std::vector<int> f_b1, f_b2;
-			f_b1.push_back(12);
-			model::addPhysicalGroup(1, f_b1, 10000);
-			model::setPhysicalName(1, 10000, "fault_b1");
-			
-			f_b2.push_back(38);
-			model::addPhysicalGroup(1, f_b2, 10001);
-			model::setPhysicalName(1, 10001, "fault_b2");
-		
 	}
 
 	void MeshRefine_line(std::vector<int> line_tags, float lc, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist)
@@ -300,9 +293,9 @@ namespace FracG
 			
   		factory::synchronize();
 		model::mesh::field::add("Distance", 1);
-		//model::mesh::field::setNumber(1, "NNodesByEdge", 100);
-		//model::mesh::field::setNumbers(1, "EdgesList", edge_list);
-		//model::mesh::field::setNumbers(1, "FacesList", surf);
+		model::mesh::field::setNumber(1, "NNodesByEdge", 100);
+		model::mesh::field::setNumbers(1, "EdgesList", edge_list);
+		model::mesh::field::setNumbers(1, "FacesList", surf);
 		model::mesh::field::add("Threshold", 2);
 		model::mesh::field::setNumber(2, "IField", 1);
 		model::mesh::field::setNumber(2, "LcMin", lc);
@@ -453,11 +446,10 @@ namespace FracG
 		return(line_tags);
 	}
 
-	std::vector <box> CreateSamplingWindows(Graph G, int nb_samples)
+	std::vector <box> CreateSamplingWindows(Graph G, double gmsh_sw_size, int nb_samples)
 	{
 		boost::random_device dev;
 		boost::mt19937 rng(dev);
-
 		std::vector <box> SamplingWindows;
 		std::vector<line_type> lines;
 		std::vector<double> length;
@@ -490,7 +482,11 @@ namespace FracG
 			bool found = false;
 			do
 			{
-				double d = size(rng);
+				double d;
+				if (gmsh_sw_size == -1)
+					d = size(rng);
+				else
+					d = gmsh_sw_size;
 				point_type rand_p (rand_x(rng), rand_y(rng)); 
 				point_type max_p ( (rand_p.x() + d), (rand_p.y() + d) );
 				box sample_w{{rand_p.x(), rand_p.y()}, {max_p.x(), max_p.y()}}; 
@@ -556,7 +552,7 @@ namespace FracG
 		{
 			gmsh::vectorpair cur_line, new_entities;
 			cur_line.push_back(std::make_pair(1,edge_tag.second));
-			int set = CheckGaussians(angle_dist, G[edge_tag.first].angle);
+			//int set = CheckGaussians(angle_dist, G[edge_tag.first].angle);
 			factory::extrude(cur_line, 0, 0, z, new_entities);
 			
 			for (auto newE : new_entities)
@@ -565,8 +561,6 @@ namespace FracG
 					edge_list.push_back((double)newE.second);
 				if(newE.first == 2)
 					extruded_lines.push_back(newE);
-					
-					
 			}
 		}
 		std::cout << "added surfaces: " << extruded_lines.size() << std::endl;
@@ -675,7 +669,6 @@ namespace FracG
 		return(surface_tag);
 	}
 
-	
 	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, bool gmsh_in_meters, bool name_ss, std::string out_filename)
 	{
 		float lc;
@@ -794,52 +787,54 @@ namespace FracG
 		
 //Adding layeres--------------------------------------------------------
 		 //AddLayer_2D(face_dim_tags, xyz, lc, -900, 2);
-		AddLayer_2D(face_dim_tags, xyz, lc, -1000, 5);
+		//AddLayer_2D(face_dim_tags, xyz, lc, -1000, 5);
 		//AddLayer_2D(face_dim_tags, xyz, lc, -700, 2);
 		
 		std::vector<int> surf_tags = Fragment_and_cut(face_dim_tags, l_tag, lc, out_filename, name_ss);
 		factory::synchronize();
-	
 		TagBoundaries_3D(xyz, gmsh_point_tol);
+		factory::synchronize();
 			
-		MeshRefine_surface(surf_tags, edge_list, lc, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, xyz);
+		//MeshRefine_surface(surf_tags, edge_list, lc, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, xyz);
 		factory::synchronize();
 		
 		model::mesh::generate(3);
 		gmsh::write(out_filename);
-		
 		std::cout << out_filename <<std::endl;
+		
+		if (output)
 			gmsh::fltk::run();
 		gmsh::finalize();
 		std::cout << "Created msh-file " << out_filename << std::endl << std::endl;
 	}
 				
-//void SampleNetwork_2D(bool output, VECTOR &lines, int nb_cells, int nb_samples, double map_distance_threshold, std::string filename)
-	void SampleNetwork_2D(bool show_output, Graph g, int nb_cells, int nb_samples, bool gmsh_in_meters, std::string filename)
+	void SampleNetwork_2D(bool show_output, double gmsh_sw_size, Graph g, int nb_cells, int nb_samples, bool gmsh_in_meters, std::string filename)
 	{
-		std::vector <box> sampling_windows;
-		sampling_windows = CreateSamplingWindows(g, nb_samples);
-		std::cout << "Creating "<< nb_samples << " samples from lineament set" << std::endl;
-		
-		for (int w = 0; w < sampling_windows.size(); w++)
+		if (nb_samples > 0)
 		{
-			box AOI = sampling_windows.at(w);
-			Graph G = Read4MODEL(g, AOI, 0.1);
+			std::vector <box> sampling_windows;
+			sampling_windows = CreateSamplingWindows(g, gmsh_sw_size, nb_samples);
+			std::cout << "Creating "<< nb_samples << " samples from lineament set" << std::endl;
 			
-			std::cout << "Min corner: " << std::setprecision(15) << AOI.min_corner().get<0>() <<" " << AOI.min_corner().get<1>() << std::endl;
-			std::cout << "Max corner: " << std::setprecision(15) << AOI.max_corner().get<0>() <<" " << AOI.max_corner().get<1>() << std::endl;
-			
-			std::cout << " Contains "<< num_edges(G) << " edges" << std::endl;
-
-			if (num_edges(G) > 0)
+			for (int w = 0; w < sampling_windows.size(); w++)
 			{
-				std::string output_filename = filename + "_sample_" + std::to_string(w);
-				WriteGmsh_2D(show_output, G, 5, 50, 10, 20, gmsh_in_meters, true, output_filename );
+				box AOI = sampling_windows.at(w);
+				Graph G = Read4MODEL(g, AOI, 0.1);
+				
+				std::cout << "Min corner: " << std::setprecision(15) << AOI.min_corner().get<0>() <<" " << AOI.min_corner().get<1>() << std::endl;
+				std::cout << "Max corner: " << std::setprecision(15) << AOI.max_corner().get<0>() <<" " << AOI.max_corner().get<1>() << std::endl;
+				
+				std::cout << " Contains "<< num_edges(G) << " edges" << std::endl;
+
+				if (num_edges(G) > 0)
+				{
+					std::string output_filename = filename + "_sample_" + std::to_string(w);
+					WriteGmsh_2D(show_output, G, 5, 50, 10, 20, gmsh_in_meters, true, output_filename );
+				}
+				else
+					std::cout << "No features in sampling window  " << w << std::endl;
 			}
-			else
-				std::cout << "No features in sampling window  " << w << std::endl;
+			std::cout << " done \n" << std::endl;
 		}
-		std::cout << " done \n" << std::endl;
 	}
-	
 }

@@ -21,9 +21,7 @@ namespace FracG
 		*vertex_list = nullptr;
 		*found = nullptr;
 		const double threshold = 1; //verticies are considered to be in the same if the key and existing vertex are within this distance of each other
-		//check.set<0>();
-		//check.set<1>();
-		//check the "native" integer key first, then check all other integer keys around it
+
 		const long long xPos = (long long)key.x();
 		const long long yPos = (long long)key.y();
 		const long int check_threshold = lrint(ceil(threshold));
@@ -194,7 +192,6 @@ namespace FracG
         std::vector<Segment> raster_edges = {left_edge, right_edge, bottom_edge, top_edge};
         std::vector<Direction> raster_edge_directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
         
-
 		//check for edge nodes (crop faults by raster area)---------------------
 		BOOST_FOREACH(line_type const& Fault, faults)
 		{
@@ -1543,8 +1540,6 @@ namespace FracG
 				WriteSHP_maxFlow(dg, refWKT, name.c_str());
 			}
 		}
-		
-		std::cout << " done \n" << std::endl;
         return mf;
 	}
 	
@@ -1553,7 +1548,7 @@ namespace FracG
 	{
 		std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "Perm_tensor_values_", ".csv", true);
 		std::ofstream txtF = FracG::CreateFileStream(name);
-		txtF << "Permeability values estiamtes (normalized)" << std::endl;
+		txtF << "Flow values estiamtes (normalized)" << std::endl;
 		txtF << "Pressure \t Flow \t value" << std::endl;
 		
 		std::vector<std::string> pressure_d, flow_d;
@@ -1595,7 +1590,6 @@ namespace FracG
 				}
 				i++;
 			}
-			std::cout <<"-------------------------------"<<std::endl;
 		}
 	}
 }
