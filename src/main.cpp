@@ -256,8 +256,8 @@ int main(int argc, char *argv[])
 	FracG::MaximumFlowGradient(split_map, max_flow_gradient_flow_direction, max_flow_gradient_pressure_direction, 1, 0, max_flow_gradient_border_amount, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());	//maximum flow 
 
 	//building a graph with raster values assigned to elemnets. 
-	//FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
-	//FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_param_penalty, raster_name); //another distance threshold to check
+	FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
+	FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_param_penalty, raster_name); //another distance threshold to check
 	
 	fs::path mesh_dir = out_path / "mesh/";
 	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_in_meters, gmsh_name_ss,( mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
