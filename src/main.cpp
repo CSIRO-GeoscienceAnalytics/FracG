@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
 	graph = split_map.GetGraph();
 
 	//graph analysis and maps
-	FracG::GraphAnalysis(graph, lines, graph_min_branches, angle_param_penalty, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
+	FracG::GraphAnalysis(graph, lines, graph_min_branches, angle_distribution, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
 	FracG::WriteGraph(graph, lines, graph_results_folder);																		 	   //write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	FracG::ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());		  // number is the vritical distance between lineamnt and intersection point and the string is the filename
@@ -256,8 +256,8 @@ int main(int argc, char *argv[])
 	FracG::MaximumFlowGradient(split_map, max_flow_gradient_flow_direction, max_flow_gradient_pressure_direction, 1, 0, max_flow_gradient_border_amount, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());	//maximum flow 
 
 	//building a graph with raster values assigned to elemnets. 
-	FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
-	FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_param_penalty, raster_name); //another distance threshold to check
+	//FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
+	//FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_distribution, raster_name); //another distance threshold to check
 
 	fs::path mesh_dir = out_path / "mesh/";
 	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_in_meters, gmsh_name_ss,( mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename

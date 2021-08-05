@@ -51,7 +51,7 @@ namespace FracG
 	polygon_type BoundingBox(double transform[8], double buffer);
 	template<typename T> void AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster);
 	
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_dist, const double angle_param_penalty, std::string name);
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_dist, AngleDistribution angle_dist, std::string name);
 	template<typename T> T** RasterConvert(int rows, int cols, T **M);
 	template<typename T> void AssignValuesGraph(Graph& G, RASTER<T> raster);
 	template<typename T> T GetRasterValue(point_type p, double transform[8], T** values);

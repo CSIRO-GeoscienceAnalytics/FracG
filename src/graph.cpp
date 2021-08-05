@@ -379,13 +379,14 @@ namespace FracG
 				strike  += 180;
 			G[eg].angle = strike;
 		}
+		
 
 		if (!boyer_myrvold_planarity_test(G))
 	 		std::cout << "WARNING: Could not construct planar graph" << std::endl;
 	
 		std::cout << " done \n" << std::endl;
 	}
-
+	
 	//return whether the given point should be attached to the front, middle, or end of this fault
 	//this is used to sort the other faults that intersect with this one
 	AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distance_along, double threshold){
@@ -501,6 +502,18 @@ namespace FracG
 		}
 		std::cout << " done \n" << std::endl;
 		return split_map;
+	}
+
+	void ClassifyEdgeOrientation(Graph &G, VECTOR lines, AngleDistribution angle_dist)
+	{
+		for (auto Eg : make_iterator_range(edges(G)))
+		{
+			int id = G[Eg].FaultNb;
+			line_type line = lines.data[id];
+			double strike = (double)(atan2(line.front().x() - line.back().x(), line.front().y() - line.back().y())) 
+							* (180 / math::constants::pi<double>());
+			G[Eg].set = CheckGaussians(angle_dist, strike);
+		}
 	}
 
 	void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes, int &II, int &IC, int &CC, int &NbB, double &totalLength, int &numK, double &Area)
@@ -635,7 +648,7 @@ namespace FracG
 
 
 	//Topolgy analysis of graph---------------------------------------------
-	void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string out_filename)
+	void GraphAnalysis(Graph& G, VECTOR lines, int nb, AngleDistribution angle_dist, std::string out_filename)
 	{
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 		std::cout<< "GRAPH'S ANALYSIS OF NETWORK" << std::endl;
@@ -710,12 +723,10 @@ namespace FracG
 				Cb = (3*Ynodes + 4*Xnodes) / NbN;
 			}
 
-	//write results---------------------------------------------------------
-			//string graphFile =  + ;
-	//         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-			std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
-	//         cout << "the resulting name is " << save_name << endl;
-			txtG = FracG::CreateFileStream(save_name);
+		//write results---------------------------------------------------------
+		std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
+		txtG = FracG::CreateFileStream(save_name);
+		
 			if (txtG.is_open())  
 			{ 
 				txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
@@ -807,10 +818,6 @@ namespace FracG
 						comp_Lineamants.out_path = lines.out_path;
 						comp_Lineamants.in_path = lines.in_path;
 						
-						//TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-						//GetLengthDist(comp_Lineamants);
-						//KdeEstimationStrikes(comp_Lineamants, angle_param_penalty);
-
 						txtG<< "COMPONENT NO." << "\t" << i << "\n"
 							<< "Branches:" << "\t" << NbB << "\n" 
 							<< "Branches (calc):" << "\t" << NbN << "\n" 
@@ -832,8 +839,9 @@ namespace FracG
 			}
 			else 
 				std::cout << "ERROR: FAILED TO WRITE RESULTS!" << std::endl;
-
+		
 		txtG.close();
+		ClassifyEdgeOrientation(G, lines, angle_dist);
 	}
 
 	//find shortest path between source and target--------------------------

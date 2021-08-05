@@ -1013,7 +1013,7 @@ namespace FracG
 	template void AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
 	template void AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, const double angle_param_penalty, std::string raster_filename)
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, AngleDistribution angle_dist, std::string raster_filename)
 	{
 		Graph raster_graph;
 		if (!raster_filename.empty())
@@ -1067,7 +1067,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
 
@@ -1079,7 +1079,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
 
@@ -1091,7 +1091,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
 
@@ -1103,7 +1103,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
 
@@ -1115,7 +1115,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<float>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 				} break;
 
@@ -1127,7 +1127,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<double>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_param_penalty, raster_filename);
+					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
 					WriteGraph_R(raster_graph, lines, "raster");
 
 				} break;

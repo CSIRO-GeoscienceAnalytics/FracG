@@ -219,7 +219,7 @@ namespace FracG
     Graph Read4MODEL(Graph g, box bx, double map_distance_threshold);
     void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
     graph_map<> SplitFaults(graph_map<>& map, double minDist );
-    void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string name);
+    void GraphAnalysis(Graph& G, VECTOR lines, int nb, AngleDistribution angle_dist, std::string name);
 
     void ComponentExtract(Graph G, VECTOR lines, int nb);
     void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample);

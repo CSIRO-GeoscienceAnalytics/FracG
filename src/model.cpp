@@ -368,12 +368,12 @@ namespace FracG
 
 	std::vector<int> EmbedLineaments_all(Graph G, std::vector< std::vector<std::pair<int, int>>> fused_lines, std::vector<int> intersec, int nb_bb_pts, std::string name, bool name_ss)
 	{
-			
 		std::ofstream ss_names, lowD_ss_name, interface_ss_name, ss_properties;
 		std::string full_path  = FracG::AddPrefixSuffix(name, "", ".txt", true);
 		std::string full_path2 = FracG::AddPrefixSuffix(name, "", "_lowD.txt", true);
 		std::string full_path3 = FracG::AddPrefixSuffix(name, "", "_interface.txt", true);
-		std::string full_path4 = FracG::AddPrefixSuffix(name, "", "_propertiestxt", true);
+		std::string full_path4 = FracG::AddPrefixSuffix(name, "", "_properties.csv", true);
+
 		ss_names.open (full_path); 
 		lowD_ss_name.open (full_path2); 
 		interface_ss_name.open (full_path3); 
@@ -405,6 +405,7 @@ namespace FracG
 			if (name_ss)
 			{
 				model::addPhysicalGroup(1, phys_group, nb_bb_pts+i+1);
+				model::setPhysicalName(1, nb_bb_pts+i+1, "line_"+ to_string(nb_bb_pts+i+1));
 				model::mesh::embed(1, phys_group, 2, 1);
 				ss_names << " line_"+ to_string(i);
 				lowD_ss_name << " lowerD_line_"+ to_string(i);
@@ -422,7 +423,6 @@ namespace FracG
 			ss_names << " lines";
 			lowD_ss_name << " lowerD_lines";
 			interface_ss_name << " interface_lines";
-			
 		}
 		
 		model::addPhysicalGroup(2, {1}, 1);
@@ -696,7 +696,7 @@ namespace FracG
 	
 	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, bool gmsh_in_meters, bool name_ss, std::string out_filename)
 	{
-		bool periodic = true;
+		bool periodic = false;
 		float lc;
 		int nb_bb_pts;
 		int p_tag = 0;
