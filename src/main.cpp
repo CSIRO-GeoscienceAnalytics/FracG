@@ -219,9 +219,9 @@ int main(int argc, char *argv[])
 	// this is the correction of the network
 	FracG::VECTOR lines = FracG::ReadVector(shapefile_name, out_path.string());		 // read the first layer of the shape file
 	FracG::CorrectNetwork(lines.data, dist_threshold, angl_threshold, dfd_threshold);		// rejoin faults that are incorrectly split in the data file (number is the critical search radius)
-	
+
 	// the following functions analyse statistical properties of the network
- 	FracG::GetLengthDist(lines); 																				   // test for three distributions of length 
+ 	//FracG::GetLengthDist(lines); 																				   // test for three distributions of length 
  	FracG::DoBoxCount(lines); 																				  // Boxcounting algorithm 
  	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty);	 //kernel density estimation
 	
@@ -233,14 +233,14 @@ int main(int argc, char *argv[])
 	//density and spacing maps
 	FracG::P_Maps(lines, raster_spacing, resample); 			 //create P20 and P21 map (second argument is the pixel resolution)
 	FracG::D_Maps(lines, raster_spacing2, resample);			//create distance maps (second argument is the pixel resolution)
-	
+
 	//building the graph
 	FracG::graph_map<FracG::point_type, FracG::vertex_type, FracG::Graph> gm = FracG::ConvertLinesToGraph(lines.data, lines.refWKT, dist_threshold); 	  //convert the faults into a graph
 	graph = gm.GetGraph();
 	FracG::graph_map<> split_map = FracG::SplitFaults(gm, split_dist_thresh); 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
 	FracG::RemoveSpurs(split_map, spur_dist_thresh); 													 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
 	graph = split_map.GetGraph();
-	
+
 	//graph analysis and maps
 	FracG::GraphAnalysis(graph, lines, graph_min_branches, angle_param_penalty, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
 	FracG::WriteGraph(graph, lines, graph_results_folder);																		 	   //write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
 	//building a graph with raster values assigned to elemnets. 
 	FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
 	FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_param_penalty, raster_name); //another distance threshold to check
-	
+
 	fs::path mesh_dir = out_path / "mesh/";
 	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_in_meters, gmsh_name_ss,( mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
 	FracG::SampleNetwork_2D(gmsh_show_output, gmsh_sw_size, graph, gmsh_cell_count, gmsh_sample_count, gmsh_in_meters, (mesh_dir / "2D_mesh_sample_").string());

@@ -5,30 +5,10 @@ namespace FracG
 {
 	namespace bgm = boost::geometry;
 	
-	const char* CreateDir(bool sampling)
-	{
-		const char* gmsh_dir = "./gmsh/";
-		const char* gmsh_sam = "./gmsh/samples/";
-
-		if (!sampling)
-		{
-			if(!opendir(gmsh_dir))
-				mkdir(gmsh_dir, 0777);
-			return (gmsh_dir);
-		}
-		else
-		{
-			if(!opendir(gmsh_sam))
-				mkdir(gmsh_sam, 0777);
-			return (gmsh_sam);
-		}
-	}
-	
-	
 	/* create a bounding box of the area around the network.
 	 * At the moment it is just a rectangular box derived from the envelope around all 
 	 * lines */
-	void BoundingBox_2D(Graph G, int nb_cells, double& x_m, double& y_m, int &p_tag, int &l_tag, float &lc, bool gmsh_in_meters)
+	std::vector<double> BoundingBox_2D(Graph G, int nb_cells, double& x_m, double& y_m, int &p_tag, int &l_tag, float &lc, bool gmsh_in_meters)
 	{
 		std::vector<line_type> lines;
 
@@ -64,6 +44,13 @@ namespace FracG
 			factory::addLine(i, i+1, ++l_tag);
 
 		factory::addLine(p_tag, 1, ++l_tag); 
+		
+		std::vector<double> xy;
+		xy.push_back(min_x);
+		xy.push_back(max_x);
+		xy.push_back(min_y);
+		xy.push_back(max_y);
+		return(xy);
 	}
 	
 	std::vector<double> BoundingBox_3D(Graph G, double& x_m, double& y_m, int nb_cells, int &p_tag, int &l_tag, float &lc, double z, bool gmsh_in_meters)
@@ -668,9 +655,48 @@ namespace FracG
 		}
 		return(surface_tag);
 	}
+	
+	
+	void Translate(int nb_bb_pts, int &l_tag, std::vector<double> xy)
+	{
+		gmsh::vectorpair l_lines;
+		gmsh::vectorpair out;
+		
+		double dx = xy[1]-xy[0];
+		double dy = xy[3]-xy[2];
+		for( int i = nb_bb_pts+1; i < l_tag+1; i++ )
+			l_lines.push_back(std::make_pair(1, i));
+		
+		//left
+		gmsh::model::occ::copy(l_lines, out);
+		gmsh::model::occ::translate(out, -dx,0,0);
+		out.clear();
+		
+		//right
+		gmsh::model::occ::copy(l_lines, out);
+		gmsh::model::occ::translate(out, dx,0,0);
+		out.clear();
+		
+		//top
+		gmsh::model::occ::copy(l_lines, out);
+		gmsh::model::occ::translate(out, 0,-dy,0);
+		out.clear();
+		
+		//bottom
+		gmsh::model::occ::copy(l_lines, out);
+		gmsh::model::occ::translate(out, 0,dy,0);
+		out.clear();
 
+		factory::synchronize();
+		
+		l_lines.clear();
+		gmsh::model::getEntities(l_lines, 1);
+		l_tag = l_lines.size();
+	}
+	
 	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, bool gmsh_in_meters, bool name_ss, std::string out_filename)
 	{
+		bool periodic = true;
 		float lc;
 		int nb_bb_pts;
 		int p_tag = 0;
@@ -691,17 +717,43 @@ namespace FracG
 		gmsh::option::setNumber("General.NumThreads", 4);
 		gmsh::option::setNumber("Geometry.Tolerance", 1e-15); 
 		gmsh::option::setNumber("Geometry.MatchMeshTolerance", 1e-15); 
-		BoundingBox_2D(G, nb_cells, x_m,  y_m, p_tag, l_tag, lc, gmsh_in_meters);
+		std::vector<double> xy = BoundingBox_2D(G, nb_cells, x_m,  y_m, p_tag, l_tag, lc, gmsh_in_meters);
 
 		nb_bb_pts = p_tag;
 		for (auto Eg : make_iterator_range(edges(G)))
 			AddLineament(G[Eg].trace, x_m,  y_m, p_tag, l_tag, lc);
+			
+		if (periodic)
+			Translate(nb_bb_pts, l_tag, xy);
 			
 		MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
 		
 		NameBoundingBox(nb_bb_pts, fused_lines, intersec);
 		std::vector<int> line_tags = EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FracG::AddPrefixSuffix(out_filename, "", "_SideSet_names", true), name_ss);
 		MeshRefine_line(line_tags , lc, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist);
+
+		if (periodic)
+		{
+			std::vector<int> bottom, right, top, left;
+			for (auto ii : fused_lines[0])
+				bottom.push_back(ii.second);
+				
+			for (auto ii : fused_lines[1])
+				right.push_back(ii.second);
+				
+			for (auto ii : fused_lines[2])
+				top.push_back(ii.second);
+				
+			for (auto ii : fused_lines[3])
+			{
+				std::cout << ii.second << std::endl;
+				left.push_back(ii.second);
+			}
+			
+			std::vector<double> affineTransform{1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+			gmsh::model::mesh::setPeriodic(1, top, bottom, affineTransform);
+			gmsh::model::mesh::setPeriodic(1, left, right, affineTransform);
+		}
 
 		model::mesh::generate(2);
 		gmsh::write(out_filename);

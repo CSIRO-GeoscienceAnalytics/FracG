@@ -1425,6 +1425,7 @@ namespace FracG
 	 //TODO: this can write gauss parameter-associated values, but is only called before those values are calculated
 	 void WriteShapefile(VECTOR &lineaments, AngleDistribution &angle_dist, std::string name)
 	 {
+		 
 		GDALAllRegister();
 		const char* refWKT = lineaments.refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
@@ -1438,7 +1439,7 @@ namespace FracG
 		OGRSpatialReference oSRS;
 		oSRS.importFromWkt(&refWKT);
 
-		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
+		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName);
 		if( poDriver == NULL )
 		{
 			printf( "%s driver not available.\n", pszDriverName );
@@ -1690,10 +1691,8 @@ namespace FracG
 			poFeature->SetField( "CentreGrad", 	(float) G[Eg].CentreGrad);
 			poFeature->SetField( "CrossGrad", 	(float) G[Eg].CrossGrad);
 			poFeature->SetField( "PGrad", 		(float) G[Eg].ParalGrad );
-
 		}
 			
-
 			BOOST_FOREACH(point_type P, line) 
 				l.addPoint(P.x(), P.y());
 			poFeature->SetGeometry( &l );
@@ -1927,8 +1926,9 @@ namespace FracG
 				printf( "Creating data field failed.\n" );
 				exit( 1 );
 			}
-			
 		}
+
+		std::cout << "centrality started" << std::endl;
 
 		//Betweeness centrality----------------------------------------
 		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
@@ -1936,6 +1936,8 @@ namespace FracG
 		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
 		brandes_betweenness_centrality(G, vertex_property_map);
 		float factor = 2 / (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
+		
+		std::cout << "centrality done" << std::endl;
 		
 		int NO = 0;
 		poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
