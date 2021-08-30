@@ -10,11 +10,12 @@ namespace FracG
 
 	const std::string raster_subdir="raster";
 
-	void CheckReferenceSystem(const char* s1, const char* s2)
+	//compare two well known text strings, to check if they are equivalent
+	void CheckReferenceSystem(std::string wkt1, std::string wkt2)
 	{
 		OGRSpatialReference oSRS1, oSRS2;
-		oSRS1.importFromWkt(&s1);
-		oSRS2.importFromWkt(&s2);
+		oSRS1.importFromWkt(wkt1.c_str());
+		oSRS2.importFromWkt(wkt2.c_str());
 		int err = oSRS1.IsSame(&oSRS2);
 		if (err != 1)
 		{
@@ -63,8 +64,12 @@ namespace FracG
 				exit(EXIT_FAILURE);
 			}
 			if ( pOrigSrs->IsProjected() )
-				 pOrigSrs->exportToWkt( &data.refWKT );
-		}
+			{
+				 char *ref_well_known_text;
+				 pOrigSrs->exportToWkt( & ref_well_known_text);
+				 data.refWKT = ref_well_known_text;
+			}
+		} 
 
 		OGRLayer  *poLayer = poDS->GetLayer( 0 );
 
@@ -623,7 +628,7 @@ namespace FracG
 
 
 	template <typename T>
-	RASTER <T>ReadRaster(std::string in_filename, const char *refWKT)
+	RASTER <T>ReadRaster(std::string in_filename, std::string &comparison_refWKT)
 	{
 		/*
 		[0]  top left x 
@@ -658,7 +663,7 @@ namespace FracG
 					raster.refWKT = poDataset->GetProjectionRef() ;
 
 					//check consitency of refernce system with shp file
-					CheckReferenceSystem(raster.refWKT, refWKT);
+					CheckReferenceSystem(raster.refWKT, comparison_refWKT);
 
 				if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None )
 					memcpy ( &raster.transform, &adfGeoTransform, sizeof(adfGeoTransform) );
@@ -726,13 +731,12 @@ namespace FracG
 	{
 		GDALAllRegister();
 		FracG::CreateDir(save_name);
-		const char* ref = lines.refWKT;		
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
 		OGRLayer *poLayer;
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&ref);
+		oSRS.importFromWkt(lines.refWKT.c_str());
 
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
 		if( poDriver == NULL )
@@ -1013,7 +1017,7 @@ namespace FracG
 	template void AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
 	template void AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, AngleDistribution angle_dist, std::string raster_filename)
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, AngleDistribution angle_dist, std::string raster_filename, bool skip_betweenness_centrality)
 	{
 		Graph raster_graph;
 		if (!raster_filename.empty())
@@ -1056,7 +1060,7 @@ namespace FracG
 					R = ReadRaster<char>(raster_filename, lines.refWKT);
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
 				case UInt16:
@@ -1068,7 +1072,7 @@ namespace FracG
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
 				case Int16:
@@ -1080,7 +1084,7 @@ namespace FracG
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
 				case UInt32:
@@ -1092,7 +1096,7 @@ namespace FracG
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
 				case Int32:
@@ -1104,7 +1108,7 @@ namespace FracG
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
 				case Float32:
@@ -1116,7 +1120,7 @@ namespace FracG
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<float>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
 				case Float64:
@@ -1128,7 +1132,7 @@ namespace FracG
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<double>(raster_graph, R, raster_stats_dist);
 					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
-					WriteGraph_R(raster_graph, lines, "raster");
+					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 
 				} break;
 
@@ -1148,12 +1152,11 @@ namespace FracG
 	{
 		point_type P;
 		line_type Line;
-		const char* refWKT = lines.refWKT;
-		const char * name = filename.c_str();
+		const char* name = filename.c_str();
 		std::vector<point_type> points;
 
 		OGRSpatialReference init_ref;
-		init_ref.importFromWkt(&refWKT);
+		init_ref.importFromWkt(lines.refWKT.c_str());
 		const char* datum = init_ref.GetAttrValue("Datum") ;
 
 		GDALAllRegister();
@@ -1285,7 +1288,7 @@ namespace FracG
 
 		poDstDS->SetGeoTransform( raster.transform );
 
-		poDstDS->SetProjection( raster.refWKT);
+		poDstDS->SetProjection( raster.refWKT.c_str());
 
 		GDALRasterBand *poBand = poDstDS->GetRasterBand(1);
 
@@ -1310,7 +1313,7 @@ namespace FracG
 	template void WriteRasterStruct<float>(RASTER<float> raster);
 	template void WriteRasterStruct<double>(RASTER<double> raster);
 
-	 void WriteRASTER(std::vector<std::vector<double>> data, char* SpatialRef, double adfGeoTransform[6], std::string out_filename)
+	 void WriteRASTER(std::vector<std::vector<double>> data, std::string SpatialRef, double adfGeoTransform[6], std::string out_filename)
 	{
 		GDALDataset *poDstDS;
 		GDALDriver *poDriver;
@@ -1331,7 +1334,7 @@ namespace FracG
 		papszMetadata = poDriver->GetMetadata();
 		poDstDS = poDriver->Create(out_filename.c_str(), x,y, 1, GDT_Float32, NULL);
 		poDstDS->SetGeoTransform( adfGeoTransform );
-		poDstDS->SetProjection( SpatialRef );
+		poDstDS->SetProjection( SpatialRef.c_str() );
 
 		GDALRasterBand *poBand = poDstDS->GetRasterBand(1);
 
@@ -1347,20 +1350,20 @@ namespace FracG
 			}
 			int err = poBand->RasterIO(GF_Write, 0, row, x, 1, rowBuff, x, 1, GDT_Float32, 0, 0);
 		}
+		CPLFree(rowBuff);
 		poBand->SetNoDataValue(-256);
 		GDALClose( (GDALDatasetH) poDstDS );
 	}
 	
-	  void WriteSHP_lines(std::vector<line_type> lineaments, const char* refWKT, std::string name)
+	  void WriteSHP_lines(std::vector<line_type> lineaments, std::string refWKT, std::string name)
 	 {
 		GDALAllRegister();
-		const char* ref = refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
 		OGRLayer *poLayer;
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&ref);
+		oSRS.importFromWkt(refWKT.c_str());
 
 		name = FracG::AddPrefixSuffix(name, "", ".shp");
 		FracG::CreateDir(name);
@@ -1427,7 +1430,6 @@ namespace FracG
 	 {
 		 
 		GDALAllRegister();
-		const char* refWKT = lineaments.refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
@@ -1437,7 +1439,7 @@ namespace FracG
 		const char* Name = name.c_str();
 
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&refWKT);
+		oSRS.importFromWkt(lineaments.refWKT.c_str());
 
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName);
 		if( poDriver == NULL )
@@ -1537,17 +1539,16 @@ namespace FracG
 	 }
 
 	//convert graph edges to shp-file---------------------------------------
-	void WriteSHP_g_lines(Graph G, char *refWKT, const char* Name, bool raster)
+	void WriteSHP_g_lines(Graph G, std::string refWKT, std::string Name, bool raster)
 	{
 		GDALAllRegister();
-		const char* ref = refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
 		OGRLayer *poLayer;
 
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&ref);
+		oSRS.importFromWkt(refWKT.c_str());
 
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
 		if( poDriver == NULL )
@@ -1558,7 +1559,7 @@ namespace FracG
 
 		poDriver->SetDescription("graph_edges");
 
-		poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
+		poDS = poDriver->Create(Name.c_str(), 0, 0, 0, GDT_Unknown, NULL );
 		if( poDS == NULL )
 		{
 			printf( "Creation of output file failed.\n" );
@@ -1711,17 +1712,16 @@ namespace FracG
 
 	//convert graph edges to shp-file---------------------------------------
 
-	void WriteSHP_maxFlow(DGraph G, const char* refWKT, std::string name)
+	void WriteSHP_maxFlow(DGraph G, std::string refWKT, std::string name)
 	{
 		GDALAllRegister();
-		const char* ref = refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
 		OGRLayer *poLayer;
 
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&ref);
+		oSRS.importFromWkt(refWKT.c_str());
 
 		name = FracG::AddPrefixSuffix(name, "", ".shp");
 		FracG::CreateDir(name);
@@ -1847,7 +1847,7 @@ namespace FracG
 	}
 
 	//convert graph edges to shp-file---------------------------------------
-	void WriteSHP_g_points(Graph G, char* refWKT, const char* Name, bool raster)
+	void WriteSHP_g_points(Graph G, const char* refWKT, const char* Name, bool raster, bool skip_betweenness_centrality)
 	{
 		GDALAllRegister();
 		point_type point;
@@ -1856,13 +1856,12 @@ namespace FracG
 		GDALDriver *poDriver;
 		OGRLayer *poLayer;
 		OGRFeature *poFeature;
-		const char* ref = refWKT;
 		const char* pszDriverName = "ESRI Shapefile";
 		poDriver = GetGDALDriverManager()->GetDriverByName(pszDriverName );
 		poDS = poDriver->Create(Name, 0, 0, 0, GDT_Unknown, NULL );
 
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&ref);
+		oSRS.importFromWkt(&refWKT);
 
 		if( poDS == NULL )
 		{
@@ -1934,8 +1933,12 @@ namespace FracG
 		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
 		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
 		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
-		brandes_betweenness_centrality(G, vertex_property_map);
-		float factor = 2 / (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
+		float factor = 0;
+		if (!skip_betweenness_centrality)
+		{
+			brandes_betweenness_centrality(G, vertex_property_map);
+			factor = 2 / (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
+		}
 		
 		std::cout << "centrality done" << std::endl;
 		
@@ -1976,12 +1979,12 @@ namespace FracG
 		GDALClose( poDS );
 	}
 
-	void WriteGraph(Graph G, VECTOR lines, std::string subF)
+	void WriteGraph(Graph G, VECTOR lines, std::string subF, bool raster, bool skip_betweenness_centrality)
 	{
 		std::cout << "starting writegraph" << std::endl;
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 
-		char* reference = lines.refWKT;
+		const char* reference = lines.refWKT.c_str();
 
 		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
 		FracG::CreateDir(subdir_name);
@@ -1991,33 +1994,34 @@ namespace FracG
 		const char* Name_b = n_b.c_str();
 		const char* Name_v = n_v.c_str();
 
-		WriteSHP_g_lines(G, reference, Name_b, false);
-		WriteSHP_g_points(G, reference, Name_v, false);
+		WriteSHP_g_lines(G, reference, Name_b, raster);//false
+		WriteSHP_g_points(G, reference, Name_v, raster, skip_betweenness_centrality);//false
 		std::cout << " done" << std::endl;
 	}
 
-	//TODO: Why is this a separate function from the above?
-	void WriteGraph_R(Graph G, VECTOR lines, std::string subF)
-	{
-		std::cout << "starting writegraph (raster)" << std::endl;
-		assert (num_vertices(G) != 0 && num_edges(G) != 0);
-
-		char* reference = lines.refWKT;
-
-		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
-		FracG::CreateDir(subdir_name);
-
-		std::string n_b =  FracG::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
-		std::string n_v =  FracG::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
-		const char* Name_b = n_b.c_str();
-		const char* Name_v = n_v.c_str();
-
-		WriteSHP_g_lines(G, reference, Name_b, true);
-		WriteSHP_g_points(G, reference, Name_v, true);
-		std::cout << " done" << std::endl;
-	}
+// 	//TODO: Why is this a separate function from the above?
+// 	void WriteGraph_R(Graph G, VECTOR lines, std::string subF)
+// 	{
+// 		std::cout << "starting writegraph (raster)" << std::endl;
+// 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
+// 
+// 		const char* reference = lines.refWKT.c_str();
+// 
+// 		std::string subdir_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {"graph_shp", subF}, "", "/");
+// 		FracG::CreateDir(subdir_name);
+// 
+// 		std::string n_b =  FracG::AddPrefixSuffix(subdir_name, "graph_branches", ".shp");
+// 		std::string n_v =  FracG::AddPrefixSuffix(subdir_name, "graph_vertices", ".shp");
+// 		const char* Name_b = n_b.c_str();
+// 		const char* Name_v = n_v.c_str();
+// 
+// 		WriteSHP_g_lines(G, reference, Name_b, true);
+// 		WriteSHP_g_points(G, reference, Name_v, true);
+// 		std::cout << " done" << std::endl;
+// 	}
 
 	//TODO: Give these more indicative names
+	//distance from centre to centre of features
 	void PointTree(std::vector<p_index> points,  std::vector<p_index>& closest)
 	{
 		p_tree rt(points.begin(), points.end());
@@ -2026,6 +2030,7 @@ namespace FracG
 			rt.query(geometry::index::nearest(points[i].first, 1) && geometry::index::satisfies(different_id_p(i)), std::back_inserter(closest) );        
 	}
 
+	//distance from centre to centre of nearest larger feature
 	void PointTree2(std::vector<pl_index> points, std::vector<pl_index>& closest, double max_len)
 	{
 	 pl_tree rt(points.begin(), points.end());

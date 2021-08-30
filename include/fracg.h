@@ -123,8 +123,9 @@ namespace FracG
             std::string out_folder;
             boost::filesystem::path out_path;
             std::string name;
-            char *refWKT;
+            std::string refWKT;
             std::vector<line_type> data;
+            using LINE_IT = decltype(data)::iterator;
 	};
 	
 	
@@ -132,7 +133,7 @@ namespace FracG
 	struct RASTER
 	{
             std::string name;
-            const char *refWKT;
+            std::string refWKT;
             double transform[8];
             T** values;
 	}; 

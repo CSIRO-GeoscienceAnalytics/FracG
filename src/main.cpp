@@ -62,6 +62,11 @@ const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
 const char *GMSH_SAMPLE_COUNT="gmsh_sample_count";
 const char *GMSH_SAMPLE_SHOW_OUTPUT="gmsh_sample_show_output";
  
+//options to skip some time-consuming portions of the analysis
+const char *SKIP_LENGTH_DISTRIBUTION="skip_length_distribution";
+const char *SKIP_BETWEENNESS_CENTRALITY="skip_betweenness_centrality";
+const char *SKIP_MESHING="skip_meshing";
+
 int main(int argc, char *argv[])
 { 	 
 	std::clock_t startcputime = std::clock();
@@ -121,6 +126,10 @@ int main(int argc, char *argv[])
 		(GMSH_SAMPLE_CELL_COUNT, po::value<int>()->default_value(10), "GMSH Sample Network cell count")
 		(GMSH_SAMPLE_COUNT, po::value<int>()->default_value(0), "GMSH Sample Network sample count")
 		(GMSH_SAMPLE_SHOW_OUTPUT, po::bool_switch(), "GMSH show Sample Network output")
+		
+		(SKIP_LENGTH_DISTRIBUTION, po::bool_switch(), "Skip calculating the length distribution analysis")
+		(SKIP_BETWEENNESS_CENTRALITY, po::bool_switch(), "Skip calculating the betweenness centrality")
+		(SKIP_MESHING, po::bool_switch(), "Skip creating a mesh of the fault/fracture network")
     ;
     po::positional_options_description pdesc;
     pdesc.add(SHAPEFILE, 1); //first positional argument is the shapefile
@@ -179,6 +188,7 @@ int main(int argc, char *argv[])
     if (classify_lineaments_dist < 0) classify_lineaments_dist = dist_threshold;
     double raster_stats_dist = vm[RASTER_STATS_DIST].as<double>();
    // if (raster_stats_dist < 0) raster_stats_dist = dist_threshold;
+	const bool skip_betweenness_centrality = vm[SKIP_BETWEENNESS_CENTRALITY].as<bool>();
     
     const std::string max_flow_cap_type = vm[MAX_FLOW_CAP_TYPE].as<std::string>();
     
@@ -214,21 +224,33 @@ int main(int argc, char *argv[])
 
 	//if (raster_name == "") raster_name = (source_dir/"DEM.tif").string();
 	if (raster_name == "") raster = false;
-	if (source_name == "") source_name  = (source_dir).string();
+	if (source_name == "") source_name  = (source_dir / "S_T.shp").string();
 
 	// this is the correction of the network
 	FracG::VECTOR lines = FracG::ReadVector(shapefile_name, out_path.string());		 // read the first layer of the shape file
 	FracG::CorrectNetwork(lines.data, dist_threshold, angl_threshold, dfd_threshold);		// rejoin faults that are incorrectly split in the data file (number is the critical search radius)
 
 	// the following functions analyse statistical properties of the network
- 	//FracG::GetLengthDist(lines); 																				   // test for three distributions of length 
+	if (!vm[SKIP_LENGTH_DISTRIBUTION].as<bool>())
+	{
+		FracG::GetLengthDist(lines); // test for three distributions of length 
+	}
  	FracG::DoBoxCount(lines); 																				  // Boxcounting algorithm 
- 	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty);	 //kernel density estimation
+ 	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty, "angle_distribution_kde");	 //kernel density estimation
 	
 	FracG::WriteShapefile(lines, angle_distribution, FracG::AddPrefixSuffix(shapefile_name, "corrected_"));		// this writes the shp file after correction of orientations (fits gaussians to the data) 
 	
 	FracG::ScanLine(lines, scanline_count, angle_distribution, scanline_spaceing);							  // sanline analysis of density and spacing (number is number of scalines to generate)
 	FracG::CreateStats(lines, angle_distribution); 															// statistical analysis of network	
+	
+	//calculate angle distribution, weighted by the length of the feature
+	std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [&lines](FracG::VECTOR::LINE_IT &it) -> double
+	{
+// 		int idx = it - lines.data.begin();
+		double length = boost::geometry::length(*it);
+		return length;
+	};
+	FracG::AngleDistribution weighted_angle_distribution = FracG::KdeEstimationStrikes(lines, length_weights, angle_param_penalty, "angle_distribution_kde_length_weights");
 	
 	//density and spacing maps
 	FracG::P_Maps(lines, raster_spacing, resample); 			 //create P20 and P21 map (second argument is the pixel resolution)
@@ -243,7 +265,7 @@ int main(int argc, char *argv[])
 
 	//graph analysis and maps
 	FracG::GraphAnalysis(graph, lines, graph_min_branches, angle_distribution, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
-	FracG::WriteGraph(graph, lines, graph_results_folder);																		 	   //write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
+	FracG::WriteGraph(graph, lines, graph_results_folder, false, skip_betweenness_centrality); //write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	
 	FracG::ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());		  // number is the vritical distance between lineamnt and intersection point and the string is the filename
 	FracG::IntersectionMap(graph, lines, raster_spacing, isect_search_size, resample);											 //2000 2500 need to check what values to use here, also need to check the function itself
@@ -251,17 +273,28 @@ int main(int argc, char *argv[])
 	
 	//simple graph algorithms
 	FracG::Graph m_tree = FracG::MinTree(split_map, (out_path / "minimum_spanning_tree").string() );							   //minimum spanning tree
-	FracG::Graph s_path = FracG::ShortPath(split_map, source_name, (out_path / "shortest_path").string());											  //shortest path between points provited by shp-file. number is the merging radius to teh existing graph
+	FracG::Graph s_path;
+	if (!source_name.empty() && fs::exists(source_name))
+	{
+		s_path = FracG::ShortPath(split_map, source_name, (out_path / "shortest_path").string());											  //shortest path between points provited by shp-file. number is the merging radius to the existing graph
+	}
 	
 	FracG::MaximumFlowGradient(split_map, max_flow_gradient_flow_direction, max_flow_gradient_pressure_direction, 1, 0, max_flow_gradient_border_amount, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());	//maximum flow 
 
-	//building a graph with raster values assigned to elemnets. 
-	//FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
-	//FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_distribution, raster_name); //another distance threshold to check
-
-	fs::path mesh_dir = out_path / "mesh/";
-	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_in_meters, gmsh_name_ss,( mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-	FracG::SampleNetwork_2D(gmsh_show_output, gmsh_sw_size, graph, gmsh_cell_count, gmsh_sample_count, gmsh_in_meters, (mesh_dir / "2D_mesh_sample_").string());
+	if (raster_name.empty() && fs::exists(raster_name))
+	{
+		//building a graph with raster values assigned to elemnets. 
+		FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
+	// 	if (raster)
+		FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_distribution, raster_name, skip_betweenness_centrality); //another distance threshold to check
+	}
+	
+	if (!vm[SKIP_MESHING].as<bool>())
+	{
+		fs::path mesh_dir = out_path / "mesh/";
+		FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_in_meters, gmsh_name_ss, (mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+		FracG::SampleNetwork_2D(gmsh_show_output, gmsh_sw_size, graph, gmsh_cell_count, gmsh_sample_count, gmsh_in_meters, (mesh_dir / "2D_mesh_sample_").string());
+	}
 //----------------------------------------------------------------------
 	auto t_end = std::chrono::high_resolution_clock::now();
 	std::cout << " CPU  time: " << (clock() - startcputime) / (double)CLOCKS_PER_SEC << " seconds\n"

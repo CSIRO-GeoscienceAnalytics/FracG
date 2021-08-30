@@ -116,7 +116,7 @@ namespace FracG
 	}
 
 	//read vector data into graph------------------------------------------
-	graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, const char *refWKT, double distance_threshold)
+	graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, std::string refWKT, double distance_threshold)
 	{
 		graph_map<point_type, vertex_type, Graph> map(distance_threshold, refWKT);
 		Graph &graph = map.GetGraph();
@@ -1089,7 +1089,7 @@ namespace FracG
 				  IntersecTree.insert(std::make_pair(bounding_box, it));
 		}
 
-		progress_display * show_progress =  new boost::progress_display(x_size * y_size);
+		progress_display show_progress =  boost::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;
@@ -1129,7 +1129,7 @@ namespace FracG
 				}
 				cur_y-= cell_size;
 				result.clear();
-				 ++(*show_progress);
+				 ++show_progress;
 			}
 			cur_x += cell_size;
 			}
@@ -1209,7 +1209,6 @@ namespace FracG
 
 	//write a shp file containing the classification------------------------
 		GDALAllRegister();
-		const char* system = lines.refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
@@ -1220,7 +1219,7 @@ namespace FracG
 
 		std::cout << Name << std::endl;
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&system);
+		oSRS.importFromWkt(lines.refWKT.c_str());
 
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
 		if( poDriver == NULL )
@@ -1511,7 +1510,7 @@ namespace FracG
         }
     }
 	
-	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, const char *refWKT, std::string out_filename)
+	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename)
 	{
         Direction flow_source;
         switch(flow_direction) {
@@ -1552,7 +1551,7 @@ namespace FracG
 	}
 	
 	//we need to run four experminets to obtaint the 2x2 tensor in 2D
-	void MaxFlowTensor(graph_map<> G, std::string capacity_type, const char *refWKT, std::string out_filename)
+	void MaxFlowTensor(graph_map<> G, std::string capacity_type, std::string refWKT, std::string out_filename)
 	{
 		std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "Perm_tensor_values_", ".csv", true);
 		std::ofstream txtF = FracG::CreateFileStream(name);

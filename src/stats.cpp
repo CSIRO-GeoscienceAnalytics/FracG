@@ -176,7 +176,7 @@ namespace FracG
 			}
 			//this parallelisation can be better, each fault might only be looking at a small range of the area, not enough to use all threads/cores
 			//
-	#pragma omp parallel for collapse(2)
+			#pragma omp parallel for collapse(2)
 			for (int xind = min_x; xind <= max_x; xind++)
 			{
 				for (int yind = min_y; yind <= max_y; yind++)
@@ -1106,7 +1106,7 @@ namespace FracG
 			{
 				OGRSpatialReference oSRS1, oSRS2;
 				oSRS1.importFromWkt(poDataset->GetProjectionRef());
-				oSRS2.importFromWkt(lines.refWKT);
+				oSRS2.importFromWkt(lines.refWKT.c_str());
 				
 				int err = oSRS1.IsSame(&oSRS2);
 				if (err != 1)
@@ -1231,33 +1231,45 @@ namespace FracG
 
 	//evaluate the kernel density esimation, with an gaussian kernel, at an arbitrary point
 	//angles is the array of angles in degrees, smooth is a smoothing factor (>0), and x is the point to be evaluated at
-	double EvaluateAngleKde(arma::vec &angles, const double smooth, double x)
+	double EvaluateAngleKde(arma::vec &angles, arma::vec &weights, const double smooth, double x)
 	{
 		x = std::fmod(x, MAX_ANGLE);
 		double sum = 0;
 		const double s2 = smooth*smooth;
+		auto weight_it = weights.begin();
+		const bool use_weights = weights.size() > 0; //if the weights array has zero size, dont use weights
 		for (auto it = angles.begin(); it < angles.end(); it++)
 		{
 			//because the kde wraps around, exavluate it on either side of the gaussian
 			const double x0 = *it;
 			double xd1 = x - x0;
 			double xd2 = MAX_ANGLE - std::abs(xd1);
-			sum += std::exp(-0.5 * xd1 * xd1 / s2);
-			sum += std::exp(-0.5 * xd2 * xd2 / s2);
+			const double weight = use_weights ? (*weight_it++) : 1;
+			sum += weight * std::exp(-0.5 * xd1 * xd1 / s2);
+			sum += weight * std::exp(-0.5 * xd2 * xd2 / s2);
 		}
 		return sum/(sqrt(2*M_PI) * angles.size() * smooth);
 	}
 
 	//return an evenly-sampled array of the kde that represents the given values and smoothing factor
 	//and scale them to sum to 1, to be a probability distribution function
-	arma::vec AngleKdeFillArray(int nsamples, arma::vec &angles, const double smooth)
+	//weighted version
+	arma::vec AngleKdeFillArray(int nsamples, arma::vec &angles, arma::vec &weights, const double smooth)
 	{
 		const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
 		arma::vec sampled(nsamples);
 		for (int i = 0; i < nsamples; i++){
-			sampled[i] = EvaluateAngleKde(angles, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
+			sampled[i] = EvaluateAngleKde(angles, weights, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
 		}
 		return sampled;
+	}
+	
+	//evaulate the KDE and fill an array with values
+	//unweighted version
+	arma::vec AngleKdeFillArray(int nsamples, arma::vec &angles, const double smooth)
+	{
+		arma::vec dummy_weights((int)0); //use an array of 0 elements to signal that weights will not be used
+		return AngleKdeFillArray(nsamples, angles, dummy_weights, smooth);
 	}
 
 
@@ -1626,35 +1638,40 @@ namespace FracG
 		return result_it->second; //previous_results
 	}
 
-	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty)
+	AngleDistribution KdeEstimationStrikes(VECTOR &lines, std::function<double(VECTOR::LINE_IT &)> &weight_func, const double param_penalty, std::string out_filename)
 	{
 		std::vector<line_type> &lineaments = lines.data;
-		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, "angle_distribution_KDE", ".csv");
+		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, out_filename, ".csv");
 		std::ofstream txtF = FracG::CreateFileStream(out_name);
 		int index = 0 ;
 		arma::vec ANGLE(lineaments.size(), arma::fill::zeros);
-		BOOST_FOREACH(line_type F,  lineaments)
-		{ 
+		arma::vec WEIGHTS(lineaments.size(), arma::fill::zeros);
+		for (VECTOR::LINE_IT line_it = lineaments.begin(); line_it < lineaments.end(); line_it++)
+		{
+			line_type F = *line_it;
 			double strike = (float)(atan2(F.front().y() - F.back().y(), F.front().x() - F.back().x())) 
 								* (180 / math::constants::pi<double>());
 			if (strike  < 0) 
 				strike  += 180;
 			ANGLE(index) = strike;
+			WEIGHTS(index) = weight_func(line_it);//boost::geometry::length(F);
 			index++;
 		}
 
 		//KDE estimation of orientation to obtain number of lineament sets------
 		std::sort(ANGLE.begin(), ANGLE.end());
 
-		std::vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) std::pairs
-		arma::vec est_pdf = AngleKdeFillArray(MAX_ANGLE * 10, ANGLE, 10);
+		std::vector< std::pair<double, double>> GAUSS, GAUSS_WEIGHTED;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) std::pairs
+		const int samples_per_degree = 10;
+		arma::vec est_pdf = AngleKdeFillArray(MAX_ANGLE * samples_per_degree, ANGLE, WEIGHTS, samples_per_degree);
 		for (unsigned int i = 0; i < est_pdf.size(); i++)
 		{
-			GAUSS.push_back(std::make_pair(MAX_ANGLE * i / (double) est_pdf.size(), est_pdf[i]));
+			const double angle = MAX_ANGLE * i / (double) est_pdf.size();
+			GAUSS.push_back(std::make_pair(angle, est_pdf[i]));
 		}
 		std::vector< std::pair<double, double>> Maximas;
 
-		MovingAverageFilterWraparound(GAUSS, 5);
+		MovingAverageFilterWraparound(GAUSS, 5); //should probably make this variable, and maybe set it to the resolution of the angle samples
 
 		for (unsigned int i = 0; i < GAUSS.size(); i++)
 		{
@@ -1697,10 +1714,16 @@ namespace FracG
 			txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.EvaluateDistribution(GAUSS[i].first) <<  std::endl;   
 		txtF << std::endl;
 		//set namespace variable if true
-		return AngleDistribution(gauss_p);
+		return angle_dist;
+	}
+	
+	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty, std::string out_filename)
+	{
+		std::function<double(VECTOR::LINE_IT &)> unit_weights_func = [](VECTOR::LINE_IT line) -> double {return 1;};
+		return KdeEstimationStrikes(lines, unit_weights_func, param_penalty, out_filename);
 	}
 
-	//what does this do? //I think the chooses the id of the gaussians that 
+	//what does this do? //I think the chooses the id of the gaussians that dominate a particular angle
 	int CheckGaussians(AngleDistribution &angle_dist, double angle)
 	{
 		std::vector<std::pair<int, double>> p_classes;
