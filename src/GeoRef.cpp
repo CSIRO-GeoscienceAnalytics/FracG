@@ -68,6 +68,7 @@ namespace FracG
 				 char *ref_well_known_text;
 				 pOrigSrs->exportToWkt( & ref_well_known_text);
 				 data.refWKT = ref_well_known_text;
+				 CPLFree(ref_well_known_text);
 			}
 		} 
 
