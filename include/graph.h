@@ -4,13 +4,9 @@
 #include "../include/fracg.h"
 #include "../include/stats.h"
 
-
-
 using namespace boost;
 namespace FracG
 {
-
-
     namespace bg  = boost::geometry;
     namespace bgi = boost::geometry::index;
 
@@ -74,11 +70,6 @@ namespace FracG
         //get the nearest value to the given point, if it is within the specified distance
         std::optional<VT> GetValue(PT &point, double dist = -1)
         {
-    //         if (values_found < 1)
-    //         {
-    //             //found no points
-    //             return std::nullopt;
-    //         }
             std::optional<element> nearest = GetNearestElement(point, dist);
             if (!nearest) return std::nullopt;
             return nearest->second;
@@ -132,7 +123,7 @@ namespace FracG
         point_map<VT, PT> pm; //map to associate points (locations) with vertices in the graph
         GT &graph; //graph object to which the vertices belong
         GT graph_holder; //if the user doesn't supply a graph reference, use this to hold the data
-        std::string reference_wkt; //well-known-text which describes the 
+        std::string reference_wkt; //well-known-text which describes the reference
 
     public:
         graph_map(GT &graph_obj, double dist, std::string ref_str="") : pm(dist), graph(graph_obj), reference_wkt(ref_str)
@@ -200,9 +191,20 @@ namespace FracG
 
         //get the Well Known Text which reference information for this graph
         const char *GetRefWKT() { return reference_wkt.c_str(); }
+        
+        //calculate and return the bounding box of the edges in the graph
+        box GetBoundingBox()
+        {
+            polygon_type holder;
+            typename GT::edge_iterator e, estart, eend;
+            boost::tie(estart, eend) = boost::edges(graph);
+            for (e = estart; e != eend; e++)
+            {
+                bg::append(holder, graph[*e].trace);
+            }
+            return bg::return_envelope<box>(holder);
+        }
     };
-
-
 
     void RemoveSpurs(graph_map<> & map, double minDist);
 
@@ -210,24 +212,27 @@ namespace FracG
     vertex_type GetVertex(map_vertex_type& map, point_type const& key, Graph& graph);
     bool AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg);
     bool AddNewEdge(Graph& G, vertex_type S, vertex_type T, line_type FaultSeg, double FaultLength);
-    graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, const char *refWKT, double distance_threshold);
+    graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, std::string refWKT, double distance_threshold);
 
     graph_map<> ReadVEC4raster(double transform[8], VECTOR &lines, double distance_threshold);
 
-    Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold);
+    Graph Read4MODEL(Graph g, box bx, double map_distance_threshold);
     void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
     graph_map<> SplitFaults(graph_map<>& map, double minDist );
-    void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string name);
+    void GraphAnalysis(Graph& G, VECTOR lines, int nb, AngleDistribution angle_dist, std::string name);
 
-    VECTOR ComponentExtract(Graph G, VECTOR lines, int nb);
-    void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size);
+    void ComponentExtract(Graph G, VECTOR lines, int nb);
+    void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample);
     void ClassifyLineaments(Graph G, VECTOR &lines, AngleDistribution &angle_dist, float dist, std::string name);
 
-    Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string out_filename="");
+	void MakeCroppedGraph(Graph &g, box AOI, double crop_amount);
+	
+	void Betweeness_centrality(Graph G);
+    Graph MinTree (graph_map<> gm, std::string out_filename="");
     Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 
-    void MaximumFlow_R(Graph G, std::string st_filename, std::string type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename);
-    void MaximumFlow_HG(Graph G, std::string st_filename, float left, float rigth, std::string capacity_type, const char *refWKT, std::string out_filename);
+	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
+    double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename);
+	void MaxFlowTensor(graph_map<> G, std::string capacity_type, const char *refWKT, std::string out_filename);
 }
 #endif

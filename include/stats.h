@@ -83,13 +83,13 @@ namespace FracG
         static double EvaluateSingleGaussian(const gauss_param &gauss, double corrected_angle)
         {
             const double amp   = std::get<0>(gauss);
-                    const double size  = std::get<1>(gauss);
-                    const double pos   = std::get<2>(gauss);
-                    const double dist1 = corrected_angle - pos;
-                    const double dist2 = dist1 - std::copysign(180, dist1); //two differences in angle, to accound for how the angle values wrap around at 180 degrees
-                    const double z1    = dist1 / size;
-                    const double z2    = dist2 / size;
-                    const double amp_eff = amp / (std::sqrt(2*M_PI) * size);
+            const double size  = std::get<1>(gauss);
+            const double pos   = std::get<2>(gauss);
+            const double dist1 = corrected_angle - pos;
+            const double dist2 = dist1 - std::copysign(180, dist1); //two differences in angle, to accound for how the angle values wrap around at 180 degrees
+            const double z1    = dist1 / size;
+            const double z2    = dist2 / size;
+            const double amp_eff = amp / (std::sqrt(2*M_PI) * size);
 
             const double sum1 = amp_eff * std::exp(-0.5 * z1 * z1);
             const double sum2 = amp_eff * std::exp(-0.5 * z2 * z2);
@@ -145,16 +145,15 @@ namespace FracG
             int best_match; //a single best match (for convenience)
     };
 
-
 	void CreateStats(VECTOR &lines, AngleDistribution &angle_dist);
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
 	StatsModelData GetLengthDist(VECTOR lines);
 	void DoBoxCount(VECTOR lines);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
-	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty = 2);
+	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty = 2, std::string out_filename = "angle_distribution_KDE");
+	AngleDistribution KdeEstimationStrikes(VECTOR &lines, std::function<double(VECTOR::LINE_IT &)> &weight_func, const double param_penalty = 2, std::string out_filename = "angle_distribution_KDE");
 	int CheckGaussians(AngleDistribution &angle_dist, double angle);
-	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist);
-	void KMCluster(bool output, VECTOR &lines, AngleDistribution &angle_dist);
+	void ScanLine(VECTOR &lines, int nb_scanlines, AngleDistribution &angle_dist, double min_spaceing);
 	void RasterStatistics(VECTOR lines, double dist, std::string raster_filename);
 };
 #endif

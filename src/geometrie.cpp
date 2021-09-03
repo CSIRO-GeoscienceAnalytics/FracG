@@ -109,6 +109,35 @@ namespace FracG
 		boost::geometry::convex_hull(multiL, hull);
 		return(hull);
 	}
+	
+	//retun the centre of a line even if it stronlgy curved
+	point_type GetCentre(line_type l)
+	{
+		line_type cross;
+		point_type centre, p1, p2;
+		double len = boost::geometry::length(l);
+			
+		double rx = l.back().x() - l.front().x();
+		double ry = l.back().y() - l.front().y();
+		double le = sqrt(rx*rx + ry*ry);
+			
+		boost::geometry::centroid(l, centre);
+		p1.set<0>((centre.x() + ( ry/le) * len ));
+		p1.set<1>((centre.y() + (-rx/le) * len ));
+		p2.set<0>((centre.x() + (-ry/le) * len ));
+		p2.set<1>((centre.y() + ( rx/le) * len ));
+		
+		boost::geometry::append(cross, p1);
+		boost::geometry::append(cross, centre);
+		boost::geometry::append(cross, p2);
+		
+		std::vector<point_type> output; 
+		boost::geometry::intersection(l, cross, output);
+		
+		point_type real_centre = output.at(0);
+		return(real_centre);
+	};
+	
 
 	//return the segment of a line that is the closest to the given point
 	//the returned iterator points to the linsestring point that is *after* the given point
@@ -225,22 +254,28 @@ namespace FracG
 		std::sort(cross.begin(), cross.end(), FaultDistanceCompare());
 	}
 
-	void CentreDistanceMap(VECTOR lines, float cell_size)
+	void D_Maps(VECTOR lines, float cell_size, bool resample)
 	{
-		point_type centre;
+		typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring and its iterator
+		
 		std::vector<p_index> result;
+		std::vector<box_line> result2;
 		bgm::index::rtree<p_index, bgm::index::rstar<16>> DistTree;
-
-		int index = 0 ;
-
-		BOOST_FOREACH(line_type l, lines.data)
+		bgm::index::rtree<box_line, bgm::index::rstar<16>> line_tree;
+		
+		int index = 0;
+		for (auto it = lines.data.begin(); it < lines.data.end(); it++)
 		{
-			bgm::centroid(l, centre);
+			point_type centre;
+			bgm::centroid(*it, centre);
 			DistTree.insert(std::make_pair(centre, ++index));
+
+			box line_bounding_box = boost::geometry::return_envelope<box>(*it);
+			line_tree.insert(std::make_pair(line_bounding_box, it));
 		}
 
 	//now we nedd to create a georefernece system based on the bounding box
-	//around the features adn the size of the smallest feature--------------
+	//around the features and the size of the smallest feature--------------
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
@@ -260,52 +295,85 @@ namespace FracG
 		int y_size = (long int) ceil((bgm::distance(ll, ul) / cell_size));
 
 		std::vector<std::vector<double> > vec(x_size , std::vector<double> (y_size, 0));  
-
-		double cur_y = max_y;
-		double cur_x = min_x;
+		std::vector<std::vector<double> > vec2(x_size , std::vector<double> (y_size, 0));  
 
 	// query for distance to fault centre at every grid cell----------------
 		std::cout << "Calculating distances to lineamnet centres for raster with size \n"
 			 << vec.size()<< " x " << vec[0].size() << std::endl;
-
-		boost::progress_display * show_progress =  new boost::progress_display(x_size * y_size);
+			 
+		double cur_y, cur_x = min_x;
+		boost::progress_display show_progress =  boost::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;
 			for (int j = 0; j < y_size; j++)
 			{
+				point_type cur_pos;
 				point_type minBox(cur_x, (cur_y - cell_size));
 				point_type maxBox((cur_x + cell_size), cur_y );
 				box pixel(minBox, maxBox);
-				point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-				if (!bgm::disjoint(pixel, t_AOI))
+				bgm::centroid(pixel, cur_pos);
+
+//define number of nearest neighbours fro rtree query------------------
+//(proably better to feine kind of a step function here)------------------
+				int q_nb;
+				if (lines.data.size() > 1000)
+					q_nb = lines.data.size() / 100;
+				q_nb = lines.data.size() / 10;
+				if (q_nb < 5)
+					q_nb = 5;
+				
+				if (!bgm::disjoint(pixel, AOI))
 				{
-					point_type cur_pos((cur_x + cell_size/2), (cur_y - cell_size/2));
-					if (bgm::within(cur_pos, t_AOI))
-					{
-						DistTree.query(bgm::index::nearest(cur_pos, 1), std::back_inserter(result));
-						vec[i][j] = bgm::distance(cur_pos, result[0].first);
-					}
-					else 
-						vec[i][j] = -256;
-					result.clear();
-					cur_y-= cell_size;
-					 ++(*show_progress);
+					DistTree.query(bgm::index::nearest(cur_pos, 1), std::back_inserter(result));
+					line_tree.query(bgm::index::nearest(cur_pos, q_nb), std::back_inserter(result2));
+//cell distance to nearest fault------------------------------------------
+						double space = std::numeric_limits<double>::max();
+						for(auto it : result2)
+						{
+							double cur_spacing = bgm::distance(cur_pos, *it.second);
+							if (cur_spacing < space)
+								space = cur_spacing;
+						}
+
+//----------------------------------------------------------------------
+					vec[i][j] = bgm::distance(cur_pos, result[0].first);
+					vec2[i][j] = space;
 				}
+				else 
+				{
+					vec[i][j] = -256;
+					vec[i][j] = -256;
+				}
+						
+				result.clear();
+				result2.clear();
+				 ++show_progress;
+				cur_y -= cell_size;
 			}
 			cur_x += cell_size;
 		}
+		
 	//write the raster file---------------------------------------------
-		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "centre_distance_map", ".tif");
-		WriteRASTER(vec, lines.refWKT, newGeoTransform, lines, out_name);
+		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Centre_distance_map", ".tif");
+		WriteRASTER(vec, lines.refWKT, newGeoTransform, out_name);
+		
+		std::string out_name2 = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Distance_map", ".tif");
+		WriteRASTER(vec2, lines.refWKT, newGeoTransform, out_name2);
 		std::cout << " done \n" << std::endl;
+		
+		if (resample)
+		{
+			std::string CD_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Centre_distance_map_resampled", ".tif");
+			std::string D_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "Distance_map_resampled", ".tif");
+			gdal_resample(out_name , CD_name_res);
+			gdal_resample(out_name2, D_name_res);
+		}
 	}
 
-	void P_Maps(VECTOR lines, float box_size)
+	void P_Maps(VECTOR lines, float box_size, bool resample)
 	{
-
 		//now we nedd to create a georefernece system based on the bounding box
-
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
 
@@ -326,9 +394,6 @@ namespace FracG
 		std::vector<std::vector<double> > vec_count (x_size , std::vector<double> (y_size, 0));
 		std::vector<std::vector<double> > vec_length(x_size , std::vector<double> (y_size, 0));
 
-		double cur_y = max_y;
-		double cur_x = min_x;
-
 		//put the segments into an rtree, so we don't need to check each one----
 		typedef std::pair<box, decltype(lines.data)::iterator> box_line; //a bounding box around the linestring, and the linestring
 		bgm::index::rtree<box_line, bgm::index::rstar<16>> line_tree;
@@ -337,18 +402,20 @@ namespace FracG
 			box fault_bounding_box = boost::geometry::return_envelope<box>(*it);
 			line_tree.insert(std::make_pair(fault_bounding_box, it));
 		}
-
+			
+		std::cout << min_x << " " << max_y << " " << x_size << " " << y_size << std::endl;
 		// query intesity and density for every grid cell-----------------------
 		std::cout << "Calulating P20 and P21 maps for raster with size \n"
 			 << vec_count.size()<< " x " << vec_count[0].size() << std::endl;
-		boost::progress_display * show_progress =  new boost::progress_display(x_size * y_size);
-
+			 
+		 double cur_y, cur_x = min_x;
+		boost::progress_display show_progress = boost::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;
 			for (int j = 0; j < y_size; j++)
 			{
-				point_type cur_pos(cur_x, cur_y); //cur_pos is the top-left corner of the pixel
+				point_type cur_pos(cur_x, cur_y); 
 				point_type minBox(cur_x, (cur_y - box_size));
 				point_type maxBox((cur_x + box_size), cur_y );
 				box pixel(minBox, maxBox);
@@ -378,21 +445,31 @@ namespace FracG
 					}
 					vec_count[i][j] = intersec;
 					vec_length[i][j] = intersection_length;
-				} else {
+				} 
+				else 
+				{
 					vec_count[i][j]  = -256;
 					vec_length[i][j] = -256;
 				}
 				cur_y -= box_size;
-				++(*show_progress);
+				++show_progress;
 			}
 			cur_x += box_size;
 		}
 	//write the raster files---------------------------------------------
 		std::string p20_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P20_map", ".tif");
-		WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, lines, p20_name);
+		WriteRASTER(vec_count,  lines.refWKT, newGeoTransform, p20_name);
 
 		std::string p21_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P21_map", ".tif");
-		WriteRASTER(vec_length, lines.refWKT, newGeoTransform, lines, p21_name);
+		WriteRASTER(vec_length, lines.refWKT, newGeoTransform, p21_name);
+		
+		if (resample)
+		{
+			std::string p20_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P20_map_resampled", ".tif");
+			std::string p21_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "P21_map_resampled", ".tif");
+			gdal_resample(p20_name, p20_name_res);
+			gdal_resample(p21_name, p21_name_res);
+		}
 		std::cout << "done \n" << std::endl;
 	}
 }

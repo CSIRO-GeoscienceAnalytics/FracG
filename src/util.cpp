@@ -1,6 +1,4 @@
-
 #include <iostream>
-
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include "../include/util.h"
@@ -83,4 +81,44 @@ namespace FracG
         fs::path path(filename);
         return CreateFileStream(path);
     }
+    
+    //convert a string into a direction
+    Direction ReadDirection(std::string direction_string)
+    {
+        if (direction_string.length() < 1)
+        {
+            std::cerr << "Error: direction string is empty" << std::endl;
+            return Direction::NONE;
+        }
+        char c = std::tolower(direction_string[0]);
+        Direction direction;
+        switch(c)
+        {
+            case 'l': direction = Direction::LEFT; break;
+            case 'r': direction = Direction::RIGHT; break;
+            case 't': direction = Direction::TOP; break;
+            case 'b': direction = Direction::BOTTOM; break;
+            case 'n': direction = Direction::NONE; break;
+            default: std::cerr << "Error: Invalid direction string \""<<direction_string<<"\" given" << std::endl;
+            direction = Direction::NONE; break;
+        }
+        return direction;
+    }
+    
+    double DirectionAngleDegrees(Direction d)
+    {
+        switch (d)
+        {
+            case 'l': return 180;
+            case 'r': return 0;
+            case 't': return 90;
+            case 'b': return -90;
+            default:
+                std::cerr << "Error: None direction has no angle" << std::endl;
+                return std::nan("");
+        }
+    }
+    
+
+    
 }

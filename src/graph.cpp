@@ -10,28 +10,8 @@ const std::string graph_subdir="graph";
 
 namespace FracG
 {
-
 	namespace fs = boost::filesystem;
-
-	// // create and open filestream in folder "statistics"
-	// ofstream CreateGraphFileStream(string name)
-	// {
-	// // 	string folder_name = folder + "/graph/";
-	// // 	const char* stats_dir = folder_name.c_str();
-	// // 		if(!opendir(stats_dir))
-	// 		
-	// // 	mkdir(stats_dir, 0777);
-	//     
-	//     fs::path file(name);
-	//     system::error_code ec;
-	//     fs::create_directories(file.parent_path(), ec);
-	//     
-	// // 	string tsv_file = stats_dir + name + (string);
-	// 	ofstream txtF; 
-	// 	txtF.open (name, ios::out | ios::app); 
-	// 	return(txtF);
-	// }
-
+    namespace bgm = boost::geometry;
 
 	//take a location, and return the corresponding graph vertex, and the list of possible vertices
 	//remember that locations can be slightly different due to floating point calculations, so this function checks for vertices within a certain distance of the specified point
@@ -41,9 +21,7 @@ namespace FracG
 		*vertex_list = nullptr;
 		*found = nullptr;
 		const double threshold = 1; //verticies are considered to be in the same if the key and existing vertex are within this distance of each other
-		//check.set<0>();
-		//check.set<1>();
-		//check the "native" integer key first, then check all other integer keys around it
+
 		const long long xPos = (long long)key.x();
 		const long long yPos = (long long)key.y();
 		const long int check_threshold = lrint(ceil(threshold));
@@ -138,7 +116,7 @@ namespace FracG
 	}
 
 	//read vector data into graph------------------------------------------
-	graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, const char *refWKT, double distance_threshold)
+	graph_map<point_type, vertex_type, Graph> ConvertLinesToGraph(std::vector<line_type> &faults, std::string refWKT, double distance_threshold)
 	{
 		graph_map<point_type, vertex_type, Graph> map(distance_threshold, refWKT);
 		Graph &graph = map.GetGraph();
@@ -165,6 +143,20 @@ namespace FracG
 		return map;
 	}
 
+	//get the index of the segment that is closest to the given point
+	int closest_segment(std::vector<Segment> segments, point_type point){
+        int idx = -1;
+        double closest_dist = std::numeric_limits<double>::infinity();
+        for (decltype(segments)::iterator it = segments.begin(); it < segments.end(); it++){
+            const double dist = geometry::distance(*it, point);
+            if (dist < closest_dist)
+            {
+                idx = it - segments.begin();
+                closest_dist = dist;
+            }
+        }
+        return idx;
+    }
 
 	graph_map<> ReadVEC4raster(double transform[8], VECTOR &lines, double map_distance_threshold)
 	{
@@ -172,7 +164,9 @@ namespace FracG
 		graph_map<> map(map_distance_threshold, lines.refWKT);
 		Graph& graph = map.GetGraph();
 		geometry::model::multi_linestring<line_type> intersection;
-		std::vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double >> G;
+        //start and end points of the in-boundary portion of the fault, the trace of the fault, whether or not either end is a end node, the directions that either end intersects the bounding box, the total length of the original fault
+        typedef std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, std::pair<int, int>, double > edge_data;
+		std::vector<edge_data> G;
 		std::pair <point_type, point_type> NODES;
 		line_type TRACE;
 		long double Xmax, Xmin, Ymax, Ymin;
@@ -186,7 +180,18 @@ namespace FracG
 
 		//we crop the graph 
 		polygon_type pl = BoundingBox(transform, transform[1]);
-
+        box border = bgm::return_envelope<box>(pl);
+        double left_pos = border.min_corner().get<0>();
+        double bottom_pos = border.min_corner().get<1>();
+        double right_pos = border.max_corner().get<0>();
+        double top_pos = border.max_corner().get<1>();
+        Segment left_edge(point_type(left_pos, bottom_pos), point_type(left_pos, top_pos));
+        Segment right_edge(point_type(right_pos, bottom_pos), point_type(right_pos, top_pos));
+        Segment bottom_edge(point_type(left_pos, bottom_pos), point_type(right_pos, bottom_pos));
+        Segment top_edge(point_type(left_pos, top_pos), point_type(right_pos, top_pos));
+        std::vector<Segment> raster_edges = {left_edge, right_edge, bottom_edge, top_edge};
+        std::vector<Direction> raster_edge_directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
+        
 		//check for edge nodes (crop faults by raster area)---------------------
 		BOOST_FOREACH(line_type const& Fault, faults)
 		{
@@ -200,21 +205,33 @@ namespace FracG
 			for (auto it = intersection.begin(); it != intersection.end(); it++)
 			{
 				line_type &segment = *it;
+                int front_isect_dir = -1, back_isect_dir = -1;
+                
 				//use the distance from the original fault's end points to determine if this segment's end points are from the original fault segment, or are cut off by the boundaries of the area of interest
-				if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold) type |= FRONT_ENODE;
-				if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold) type |=  BACK_ENODE;
-				G.push_back(std::make_tuple(std::make_pair(segment.front(),segment.back()), segment, type, fault_length));
+				if (geometry::distance(segment.front(), Fault.front()) > endpoint_threshold && geometry::distance(segment.front(), Fault.back()) > endpoint_threshold)
+                {
+                    type |= FRONT_ENODE;
+                    front_isect_dir = closest_segment(raster_edges, segment.front());
+                }
+				if (geometry::distance(segment.back() , Fault.front()) > endpoint_threshold && geometry::distance(segment.back() , Fault.back()) > endpoint_threshold)
+                {
+                    type |=  BACK_ENODE;
+                    back_isect_dir = closest_segment(raster_edges, segment.back());
+                }
+				G.push_back(std::make_tuple(std::make_pair(segment.front(),segment.back()), segment, type, std::make_pair(front_isect_dir, back_isect_dir), fault_length));
+                
 			}
 			intersection.clear();
 		}
 
 		//create edges and nodes for faults in the graph-------------------------
-		for (typename std::vector <std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, double>>::const_iterator it = G.begin(); it != G.end(); ++it)
+		for (typename std::vector<edge_data>::const_iterator it = G.begin(); it != G.end(); ++it)
 		{
 			NODES = get<0> (*it);
 			TRACE = get<1> (*it);
 			type  = get<2> (*it);
-			const double fault_length = get<3>(*it);
+            std::pair<int, int> isect_dirs = get<3>(*it);
+			const double fault_length = get<4>(*it);
 
 			VA = map.AddVertex(NODES.first);
 			VB = map.AddVertex(NODES.second);
@@ -222,8 +239,15 @@ namespace FracG
 			//if( (degree(VA, graph) == 0) && (degree(VB, graph) == 0) )
 			AddNewEdge(graph, VA, VB, TRACE, fault_length);
 
-			if (type & FRONT_ENODE) graph[VA].Enode = true;
-			if (type &  BACK_ENODE) graph[VB].Enode = true;
+			if (type & FRONT_ENODE){
+                graph[VA].Enode = true;
+                graph[VA].enode_dir = raster_edge_directions[isect_dirs.first];
+            }
+			if (type &  BACK_ENODE)
+            {
+                graph[VB].Enode = true;
+                graph[VB].enode_dir = raster_edge_directions[isect_dirs.second];
+            }
 		}
 
 		std::cout << " Converted " << faults.size() << " faults into " << num_edges(graph) << " edges" << std::endl;
@@ -234,11 +258,15 @@ namespace FracG
 		return map;
 	}
 
-	Graph ReadVEC4MODEL(VECTOR &lines, box bx, double map_distance_threshold)
+	Graph Read4MODEL(Graph g, box bx, double map_distance_threshold)
 	{
-		std::vector<line_type> &faults = lines.data;
+		std::vector<line_type> faults;
+		
+		for (auto Eg : make_iterator_range(edges(g)))
+			faults.push_back(g[Eg].trace);
+		
 		Graph graph;
-		graph_map map(graph, map_distance_threshold, lines.refWKT);
+		graph_map map(graph, map_distance_threshold, "0");
 
 		geometry::model::multi_linestring<line_type> intersection;
 		std::vector<std::tuple< std::pair<point_type, point_type>, line_type, unsigned int, int >> G;
@@ -331,40 +359,34 @@ namespace FracG
 					remove_edge(U, u, G);
 					if (degree(U,G) == 0)
 					{
-	// 					cout << "WARNING: Removing edge to vertex " << endl;
-	// 					rmP.set<0>((long long).x());
-	// 					rmP.set<1>((long long)G[U].location.y());
-	// 					remove_vertex(U, G);
+
 						map.RemoveVertex(G[U].location);
 					}
 					if (degree(u,G) == 0)
 					{
-	// 					cout << "WARNING: Removing edge to vertex " << endl;
-	// 					rmP.set<0>((long long).x());
-	// 					rmP.set<1>((long long)G[u].location.y());
-	// 					remove_vertex(u, G);
 						map.RemoveVertex(G[u].location);
 					}
 					goto restart;
 				}
 			}
 		}
-		//taking this out entirely. the graph *should* be planar. if it isn't, we should fix what is wrong witht he code.
-	// 	if (!boyer_myrvold_planarity_test(G))
-	// 	{
-	// 		cout << "WARNING: Graph is non-planar!\n"
-	// 			 << "Attempting to re-split edges with r = " << split_dist/2 << endl;
-	// 		graph_map<> resplit_map = SplitFaults(map, split_dist/2);
-	//         map = resplit_map;
-	// 		if (!boyer_myrvold_planarity_test(G))
-	// 		{
-	// 			cout << "ERROR: Could not construct planar graph" << endl;
-	// 			exit(EXIT_FAILURE);
-	// 		}
-	// 	}
+		
+		for (auto eg : boost::make_iterator_range(edges(G))) 
+		{
+			double strike = (float)(atan2(G[eg].trace.front().y() - G[eg].trace.back().y(), G[eg].trace.front().x() - G[eg].trace.back().x())) 
+								* (180 / math::constants::pi<double>());
+			if (strike  < 0) 
+				strike  += 180;
+			G[eg].angle = strike;
+		}
+		
+
+		if (!boyer_myrvold_planarity_test(G))
+	 		std::cout << "WARNING: Could not construct planar graph" << std::endl;
+	
 		std::cout << " done \n" << std::endl;
 	}
-
+	
 	//return whether the given point should be attached to the front, middle, or end of this fault
 	//this is used to sort the other faults that intersect with this one
 	AttachPoint LocateAttachPoint(line_type &fault, point_type &point, double distance_along, double threshold){
@@ -399,6 +421,12 @@ namespace FracG
 
 		typedef std::vector <std::tuple < edge_iter, std::vector< std::tuple<long double, point_type, AttachPoint>> >> UpGraph;
 		UpGraph GraphBuild;
+        typedef std::pair<box, edge_iter> edge_obj;
+        geometry::index::rtree<edge_obj, geometry::index::quadratic<16> > rtree;
+        for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
+        {
+            rtree.insert(std::make_pair(boost::geometry::return_envelope<box>(graph[*Eg].trace), Eg));
+        }
 
 		for (tie(Eg, Eg_end) = edges(graph); Eg != Eg_end; ++Eg)
 		{
@@ -406,8 +434,20 @@ namespace FracG
 			int N  = graph[*Eg].FaultNb;
 			const double fault_length = geometry::length(fault);
 			cross.push_back(std::make_tuple(0, fault.front(), AttachPoint::middle));
-			for (tie(Eg2, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2)
+            
+            //use rtree to limit amount of other lines to check
+            box this_envelope = boost::geometry::return_envelope<box>(fault);
+            point_type new_min_corner(bgm::get<0>(this_envelope.min_corner()) - minDist, bgm::get<1>(this_envelope.min_corner()) - minDist);
+            point_type new_max_corner(bgm::get<0>(this_envelope.max_corner()) + minDist, bgm::get<1>(this_envelope.max_corner()) + minDist);
+            box expanded_envelope(new_min_corner, new_max_corner);
+            
+            std::vector<edge_obj> potential_intersections;
+            rtree.query(geometry::index::intersects(expanded_envelope), std::back_inserter(potential_intersections));
+            
+			for (decltype(potential_intersections)::iterator potential_it = potential_intersections.begin(); potential_it < potential_intersections.end(); potential_it++)
 			{
+                Eg2 = potential_it->second;
+//                 tie(, Eg2_end) = edges(graph); Eg2 != Eg2_end; ++Eg2
 				fault2 = graph[*Eg2].trace;
 				Intersec.clear();
 				if(Eg == Eg2) continue;
@@ -444,13 +484,11 @@ namespace FracG
 			{
 				if (I == cross.begin()) continue;
 				point_type intersect = get<1>(*I);
-				//bool is_start = geometry::distance(fault.front(), intersect) <= minDist;
-				//bool is_end   = geometry::distance(fault.back(),  intersect) <= minDist;
-				//if (is_start || is_end) continue;
+
 				NewV = split_map.AddVertex(intersect);
 				if (NewV == prev_vertex) continue;
 
-				AddNewEdge(split_graph, prev_vertex, NewV, GetSegment(fault, split_graph[prev_vertex].location, split_graph[NewV].location), fault_length);//also remember the length of the original fault
+				AddNewEdge(split_graph, prev_vertex, NewV, GetSegment(fault, split_graph[prev_vertex].location, split_graph[NewV].location), fault_length/1000);//also remember the length of the original fault
 
 				if(boost::edge(prev_vertex, NewV, split_graph).second) //if an edge exists between prev_vertex and NewV
 				{
@@ -462,10 +500,20 @@ namespace FracG
 
 			cross.clear();
 		}
-	// 	graph = g;
-	// 	map = m;
 		std::cout << " done \n" << std::endl;
 		return split_map;
+	}
+
+	void ClassifyEdgeOrientation(Graph &G, VECTOR lines, AngleDistribution angle_dist)
+	{
+		for (auto Eg : make_iterator_range(edges(G)))
+		{
+			int id = G[Eg].FaultNb;
+			line_type line = lines.data[id];
+			double strike = (double)(atan2(line.front().x() - line.back().x(), line.front().y() - line.back().y())) 
+							* (180 / math::constants::pi<double>());
+			G[Eg].set = CheckGaussians(angle_dist, strike);
+		}
 	}
 
 	void ClassifyEdges(Graph &G, int &Inodes, int &Ynodes, int &Xnodes, int &Enodes, int &II, int &IC, int &CC, int &NbB, double &totalLength, int &numK, double &Area)
@@ -494,7 +542,7 @@ namespace FracG
 					G[Eg].component = comp_it->second;
 			}
 
-			if (G[U].Enode == false || G[u].Enode == false)
+			if (!G[U].Enode || !G[u].Enode)
 			{
 				G[Eg].component = G[U].component;
 				it = COUNT.find(G[U].location);
@@ -573,7 +621,7 @@ namespace FracG
 					}
 
 	//deal with edge nodes--------------------------------------------------
-				if (G[U].Enode == true || G[u].Enode == true)
+				if (G[U].Enode || G[u].Enode)
 					Enodes++;
 
 				if ((G[U].Enode == true && degree(u, G) == 1) ||
@@ -598,8 +646,9 @@ namespace FracG
 		Area = geometry::area(envBox) * 1e-6 ; 
 	}
 
+
 	//Topolgy analysis of graph---------------------------------------------
-	void GraphAnalysis(Graph& G, VECTOR lines, int nb, const double angle_param_penalty, std::string out_filename)
+	void GraphAnalysis(Graph& G, VECTOR lines, int nb, AngleDistribution angle_dist, std::string out_filename)
 	{
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 		std::cout<< "GRAPH'S ANALYSIS OF NETWORK" << std::endl;
@@ -674,16 +723,14 @@ namespace FracG
 				Cb = (3*Ynodes + 4*Xnodes) / NbN;
 			}
 
-	//write results---------------------------------------------------------
-			//string graphFile =  + ;
-	//         cout << "saving graph stats data with name " << name << ", lines folder: " << lines.folder << " and lines name: " << lines.name << endl;
-			std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".tsv", true); //we need to clean this up //lines.folder
-	//         cout << "the resulting name is " << save_name << endl;
-			txtG = FracG::CreateFileStream(save_name);
+		//write results---------------------------------------------------------
+		std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
+		txtG = FracG::CreateFileStream(save_name);
+		
 			if (txtG.is_open())  
 			{ 
 				txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
-					<< "EDGES: " << "\t" 			 << num_edges(G) << "\n"
+					<< "Edges " << "\t" 			 << num_edges(G) << "\n"
 					<< "Edgenodes: " 				 << "\t" << Enodes << "\n"
 					<< "Inodes: " 			 		 << "\t" << Inodes <<  "\n" 
 					<< "Ynodes: " 			 		 << "\t" << Ynodes <<  "\n" 
@@ -693,21 +740,18 @@ namespace FracG
 					<< "IC-Branches: "				 << "\t" << IC << "\n"
 					<< "CC-Branches: "				 << "\t" << CC << "\n"
 					<<" Connections (Y +X): "		 << "\t" << (Ynodes + Xnodes) << "\n"
-					<<" Total length:				"<< "\t" << totalLength << "\n"
-					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n" 
-					<< "Connecting node frequency: " << "\t" << NCfreq << "\n"
+					<<" Total length:"				 << "\t" << totalLength << "\n"
+					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n \n" 
+					<< "Connecting node frequency:"<< "\t" << NCfreq << "\n"
 					<< "Branch frequency: " << "\t"  << B20 << "\n"
 					<< "Line frequency: " << "\t" 	 << P20 << "\n"
-					<< "2D Intesnsity: " << "\t" 	 << P21 << "\n"
+					<< "2D intensity: " << "\t" 	 << P21 << "\n"
 					<< "Dimensionless intesity: " 	 << "\t" << B22 << "\n"
 					<< "Average degree of network: " << "\t" << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
 					<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
 					<< "Number of components (c): "  << "\t" << numK << "\n"
 					<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
-					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n"
-					<< "KDE edge orientation" << "\n";
-					//	stat.KDE_estimation_strikes(Edges, txtG);
-				txtG << std::endl;
+					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n";
 
 	//Analyse the different component of the network------------------------
 			std::cout << " Analysing components of graph " << std::endl;
@@ -774,9 +818,6 @@ namespace FracG
 						comp_Lineamants.out_path = lines.out_path;
 						comp_Lineamants.in_path = lines.in_path;
 						
-						GetLengthDist(comp_Lineamants);
-						KdeEstimationStrikes(comp_Lineamants, angle_param_penalty);
-
 						txtG<< "COMPONENT NO." << "\t" << i << "\n"
 							<< "Branches:" << "\t" << NbB << "\n" 
 							<< "Branches (calc):" << "\t" << NbN << "\n" 
@@ -788,9 +829,8 @@ namespace FracG
 							<< "IC-Branches: " << "\t" << IC << "\n"
 							<< "CC-Branches: " << "\t" << CC << "\n"
 							<< "Connections (Y +X): " << "\t" << (Ynodes + Xnodes) << "\n"	
-							<< " Total length:" << "\t" << totalLength << "\n"
-							<< " Average length:" << "\t" << totalLength / NbB << "\n" 
-							<< " Strike of underlying lineaments" << std::endl;
+							<< "Total length:" << "\t" << totalLength << "\n"
+							<< "Average length:" << "\t" << totalLength / NbB << "\n" ;
 					}
 					Fault_in_component.clear();
 					lineaments.clear();
@@ -799,16 +839,19 @@ namespace FracG
 			}
 			else 
 				std::cout << "ERROR: FAILED TO WRITE RESULTS!" << std::endl;
-
+		
 		txtG.close();
+		ClassifyEdgeOrientation(G, lines, angle_dist);
 	}
 
 	//find shortest path between source and target--------------------------
 	Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename)
 	{
 		Graph shortP;
+		if (!in_filename.empty())
+		{
 		Graph &G = m.GetGraph();
-		line_type SV , TV;
+		line_type SV, TV;
 		point_type source, target;
 
 		GetSourceTarget(in_filename.c_str(), source, target);
@@ -818,15 +861,13 @@ namespace FracG
 
 		std::tie(S, added_source_vertex) = m.AddVertexIsNew(source);
 		std::tie(T, added_target_vertex) = m.AddVertexIsNew(target);
-	// 	BUFFER BS = DefinePointBuffer(source, radius);
-	// 	BUFFER BT = DefinePointBuffer(target, radius);
 
 		double s_dist = std::numeric_limits<double>::infinity(), t_dist = std::numeric_limits<double>::infinity();
 		vertex_type s_nearest, t_nearest;
 
 		for (auto vd : boost::make_iterator_range(vertices(G))) //these vertices aren't being added properly //they're being attached to theirselves
 		{
-			if ((S != vd)/* && geometry::within(G[vd].location, BS)*/)
+			if (S != vd)
 			{
 				double dist = geometry::distance(G[S].location, G[vd].location);
 				if (dist < s_dist)
@@ -835,7 +876,7 @@ namespace FracG
 					s_nearest = vd;
 				}
 			}
-			if((T != vd)/* && geometry::within(G[vd].location, BT)*/)
+			if(T != vd)
 			{
 				double dist = geometry::distance(G[T].location, G[vd].location);
 				if (dist < t_dist)
@@ -844,8 +885,6 @@ namespace FracG
 					t_nearest = vd;
 				}
 			}
-	// 		geometry::clear(TV);
-	// 		geometry::clear(SV);
 		}
 
 		std::cout << "Adding source and target vertices for shortest path" << std::endl;
@@ -853,13 +892,12 @@ namespace FracG
 		geometry::append(SV, source);
 		geometry::append(SV, G[s_nearest].location);
 		bool added_source = AddNewEdge(G, S, s_nearest, SV);
-		std::cout << "Added source? " << added_source << std::endl;
-
+		std::cout << "Added source: " << added_source << std::endl;
 
 		geometry::append(TV, target);
 		geometry::append(TV, G[t_nearest].location);
 		bool added_target = AddNewEdge(G, T, t_nearest, TV);
-		std::cout << "Added target? " << added_target << std::endl;
+		std::cout << "Added target: " << added_target << std::endl;
 
 		std::vector<double> distances( boost::num_vertices(G));
 		std::vector<edge_type> path;
@@ -893,8 +931,6 @@ namespace FracG
 			auto ud = add_vertex(G[u_tmp], shortP);
 			auto vd = add_vertex(G[v_tmp], shortP);
 
-	//         cout << "Added vertices " << ud << " -> " << vd << endl;
-
 			auto added_edge = add_edge(ud, vd, G[e_tmp], shortP); //<- this causes the segmentation fault //u_tmp and v_tmp are the same
 
 			distance += G[e_tmp].length;
@@ -912,24 +948,24 @@ namespace FracG
 				WriteSHP_lines(edges_shortPath, m.GetRefWKT(), save_filename);
 			}
 		}
-
-		//remove the source and target vertices that we added earlier (if we added them)
 		if (added_source_vertex) m.RemoveVertex(source);
 		if (added_target_vertex) m.RemoveVertex(target);
-
 		std::cout << " done " << std::endl;
+		}
+		else
+			std::cout <<"No source and target given. Returning empty graph!." << std::endl;
 		return(shortP);
 	}
 
 	//create minimum spanning tree (backbone of network)--------------------
-	Graph MinTree (graph_map<> gm, double map_dist_threshold, std::string filename)
+	Graph MinTree (graph_map<> gm, std::string filename)
 	{  
 		std::cout << "Generating minimum spanning tree" << std::endl;
 		Graph &G = gm.GetGraph();
 		Graph min_graph;
 		int i = 0;
 		std::string line;
-		graph_map map(min_graph, map_dist_threshold);
+		graph_map map = gm;
 		line_type fault;
 
 		std::vector<edge_type> spanning_tree;
@@ -964,46 +1000,53 @@ namespace FracG
 		return(min_graph);
 	}
 
-	VECTOR ComponentExtract(Graph G, VECTOR lines, int component)
+//extracting all the features that buit up connected component of gaph-
+	void ComponentExtract(Graph G, VECTOR lines, int component)
 	{
-		VECTOR extr_lines;
-		std::vector <line_type> Extractor;
-	//here we extract the initial lineaments--------------------------------
-		bool extract;
-		for (auto Eg : make_iterator_range(edges(G)))
+		if( component == 0 || component > 0 )
 		{
-			extract = true;
-			if (G[Eg].component == component)
+			VECTOR extr_lines;
+			std::vector <line_type> Extractor;
+//here we extract the initial lineaments--------------------------------
+			bool extract;
+			for (auto Eg : make_iterator_range(edges(G)))
 			{
-				line_type extr_line = G[Eg].trace;
-				for (auto ext_line : Extractor)
+				extract = true;
+				if (G[Eg].component == component)
 				{
-					if (geometry::equals(ext_line, extr_line))
+					line_type extr_line = G[Eg].trace;
+					for (auto ext_line : Extractor)
 					{
-						extract = false;
-						break;
+						if (geometry::equals(ext_line, extr_line))
+						{
+							extract = false;
+							break;
+						}
 					}
+					if (extract)
+						Extractor.push_back(lines.data.at(G[Eg].FaultNb));
 				}
-				if (extract)
-					Extractor.push_back(lines.data.at(G[Eg].FaultNb));
+			}
+			std::cout << " Found " << Extractor.size() << " lineaments for component " << component << std::endl;
+
+			//build the struct from the extracted data-----------------------
+			extr_lines.name =  "component_" + to_string(component); 
+			extr_lines.refWKT = lines.refWKT;
+			for (auto i : Extractor)
+				extr_lines.data.push_back(i);
+			if (extr_lines.data.size() > 0)
+			{
+				std::string comp_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "test");
+				WriteSHP_lines(extr_lines.data, extr_lines.refWKT, comp_name);
 			}
 		}
-		std::cout << " Found " << Extractor.size() << " lineaments for component " << component << std::endl;
-
-		//build the struct from the extracted data and return it------------
-		extr_lines.name = lines.name + "_component_" + to_string(component);
-		extr_lines.refWKT = lines.refWKT;
-		for (auto i : Extractor)
-			extr_lines.data.push_back(i);
-		return(extr_lines);
 	}
 
-	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size)
+	void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample)
 	{
 		//create intersection density maps
 		//(one qualitative(intersections per area) and one quantitative(sum of vertex degrees per area))
 		std::vector<std::pair<point_type, int>> graph_vertices;
-
 
 		box AOI = ReturnAOI(lines.data);
 		polygon_type t_AOI = ReturnTightAOI(lines.data);
@@ -1046,7 +1089,7 @@ namespace FracG
 				  IntersecTree.insert(std::make_pair(bounding_box, it));
 		}
 
-		progress_display * show_progress =  new boost::progress_display(x_size * y_size);
+		progress_display show_progress =  boost::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;
@@ -1086,17 +1129,25 @@ namespace FracG
 				}
 				cur_y-= cell_size;
 				result.clear();
-				 ++(*show_progress);
+				 ++show_progress;
 			}
 			cur_x += cell_size;
 			}
 
 	//write the raster file---------------------------------------------
 		std::string isec_dens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density", ".tif");
-		WriteRASTER(vec,  lines.refWKT, newGeoTransform, lines, isec_dens_name);
+		WriteRASTER(vec,  lines.refWKT, newGeoTransform, isec_dens_name);
 
 		std::string isec_intens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
-		WriteRASTER(vec2, lines.refWKT, newGeoTransform, lines, isec_intens_name);
+		WriteRASTER(vec2, lines.refWKT, newGeoTransform, isec_intens_name);
+		
+		if (resample)
+		{
+			std::string i20_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density_resample", ".tif");
+			std::string i21_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity_resample", ".tif");
+			gdal_resample(isec_dens_name, i20_name_res);
+			gdal_resample(isec_intens_name , i21_name_res);
+		}
 		std::cout << " done \n" << std::endl;
 	}
 
@@ -1158,7 +1209,6 @@ namespace FracG
 
 	//write a shp file containing the classification------------------------
 		GDALAllRegister();
-		const char* system = lines.refWKT;
 		const char *pszDriverName = "ESRI Shapefile";
 		GDALDriver *poDriver;
 		GDALDataset *poDS;
@@ -1169,7 +1219,7 @@ namespace FracG
 
 		std::cout << Name << std::endl;
 		OGRSpatialReference oSRS;
-		oSRS.importFromWkt(&system);
+		oSRS.importFromWkt(lines.refWKT.c_str());
 
 		poDriver = (GDALDriver*) GDALGetDriverByName(pszDriverName );
 		if( poDriver == NULL )
@@ -1306,147 +1356,247 @@ namespace FracG
 		std::cout << " done \n" << std::endl;
 	}
 
-	//parameters: graph, pressure1 , pressure2, adn bool whether vertical or horizontal gradient (vertical if true)
-	void AssignGrad(Graph G, float p1, float p2, bool vert, const char *refWKT)
+	void AssignGrad(Graph &G, float p1, float p2, Direction pressure_direction)
 	{
-		//creating a gradient raster with a buffer of 5 cell sizes around the AOI
-		//float** values[x_dim][y_dim];
 		RASTER<float> raster;
 		std::vector<line_type> lines;
+        bool is_vertical = pressure_direction == Direction::TOP || pressure_direction == Direction::BOTTOM;
+        bool should_reverse = pressure_direction == Direction::LEFT || pressure_direction == Direction::BOTTOM;
+        if (should_reverse) std::swap(p1, p2);
 
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
 			lines.push_back(G[Eg].trace);
 		line_type l = ShortestLine(lines);
-		double min_l = floor(geometry::length(l)/3);
-		std::cout << "Aiming for cell size of: " << min_l << std::endl;
-
+		
 		box AOI = ReturnAOI(lines);
-
-		double min_x = geometry::get<geometry::min_corner, 0>(AOI) + 5*min_l ; 
-		double max_y = geometry::get<geometry::max_corner, 1>(AOI) - 5*min_l ; 
-
-		point_type ll ,lr, ur;
-		ll.set<0>(geometry::get<geometry::min_corner, 0>(AOI) - 5*min_l );
-		ll.set<1>(geometry::get<geometry::min_corner, 1>(AOI) + 5*min_l);
-
-		lr.set<0>(geometry::get<geometry::max_corner, 0>(AOI) + 5*min_l );
-		lr.set<1>(geometry::get<geometry::min_corner, 1>(AOI) - 5*min_l );
-
-		ur.set<0>(geometry::get<geometry::max_corner, 0>(AOI) + 5*min_l );
-		ur.set<1>(geometry::get<geometry::max_corner, 1>(AOI) + 5*min_l );
-
-		int x_dim = geometry::distance(ll, lr) / min_l ;
-		int y_dim = geometry::distance(lr, ur) / min_l ;
-
-		std::cout << "Building raster with dimesnions: "<< x_dim << " " << y_dim << std::endl;
-		raster.transform[0] = ll.x();
-		raster.transform[1] = min_l;
-		raster.transform[2] = 0;
-		raster.transform[3] = ur.y();
-		raster.transform[4] = 0;
-		raster.transform[5] = -min_l;
-		raster.transform[6] = x_dim;
-		raster.transform[7] = y_dim;
-
-		//set reference to teh one of the shp file
-		raster.refWKT = refWKT;
-
-		float change;
-		if (p1 > p2)
-			change = -(p1 - p2) / x_dim;
-
-		if (p1 < p2)
-			change = (p2 - p1) / x_dim;
-
-		if (p1 == p2)
-		{
-			std::cout << "no differntial pressure" << std::endl;
-			change = 0;
-		}
-
-		raster.values = new float*[x_dim];
-		for (int i = 0; i < x_dim ; i++)
-			raster.values[i] = new float[y_dim];
-
-		float value = p1;
-		for (int x = 0; x < x_dim ; x++)
-		{
-			if (vert)
-				value = p1;
-			for (int y = 0; y < y_dim ; y++)
-			{
-				raster.values[x][y] = value;
-				if (vert)
-					value += change;
-			}
-			if (!vert)
-				value += change;
-		}
+        double x_start = AOI.min_corner().get<0>();
+        double y_start = AOI.min_corner().get<1>();
+        double dist = is_vertical ? AOI.max_corner().get<1>() - y_start : AOI.max_corner().get<0>() - x_start;
+        dist = std::fabs(dist);
+        double pressure_diff = p2 - p1;
+        
 		for (auto Ve : boost::make_iterator_range(vertices(G)))
 		{
-			G[Ve].data = GetRasterValue(G[Ve].location, raster.transform, raster.values);
+            point_type location = G[Ve].location;
+            double this_dist = is_vertical ? location.get<1>() - y_start : location.get<0>() - x_start;
+			G[Ve].data = p1 + pressure_diff * this_dist / dist;//GetRasterValue(G[Ve].location, raster.transform, raster.values);
+
 			if (std::isnan(G[Ve].data)) 
 			{
 				std::cout <<"Error: vertex " << Ve << " read a value of nan" << std::endl;
 				std::cout << G[Ve].location.x() << " " << G[Ve].location.y() << std::endl;
 			}
 		}
-		delete raster.values;
 	}
 
-	void MaximumFlow_R(Graph G, std::string st_filename, std::string capacity_type, const char *refWKT, std::string out_filename)
+	void MakeCroppedGraph(Graph &g, box AOI, double crop_amount)
+    {
+        Graph out;
+        double min_x = AOI.min_corner().get<0>();
+        double max_x = AOI.max_corner().get<0>();
+        double min_y = AOI.min_corner().get<1>();
+        double max_y = AOI.max_corner().get<1>();
+        double diff_x = max_x - min_x;
+        double diff_y = max_y - min_y;
+        double shift_x = crop_amount * diff_x / 2;
+        double shift_y = crop_amount * diff_y / 2;
+        double new_min_x = min_x + shift_x;
+        double new_max_x = max_x - shift_x;
+        double new_min_y = min_y + shift_y;
+        double new_max_y = max_y - shift_y;
+        box new_AOI = box(point_type(new_min_x, new_min_y), point_type(new_max_x, new_max_y));
+        Segment    left(point_type(new_min_x, new_min_y), point_type(new_min_x, new_max_y));
+        Segment   right(point_type(new_max_x, new_min_y), point_type(new_max_x, new_max_y));
+        Segment  bottom(point_type(new_min_x, new_min_y), point_type(new_max_x, new_min_y));
+        Segment     top(point_type(new_min_x, new_max_y), point_type(new_max_x, new_max_y));
+        std::vector<Segment> aoi_edges = {left, right, bottom, top};
+        std::vector<Direction> directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
+        Graph::edge_iterator e, estart, eend;
+        boost::tie(estart, eend) = boost::edges(g);
+        for (e = estart; e != eend; e++)
+        {
+            line_type trace = g[*e].trace;
+            if (!geometry::intersects(new_AOI, trace)) continue; //crosses is not implemented
+            for (int i = 0; i < aoi_edges.size(); i++)
+            {
+                Segment compare = aoi_edges[i];
+                if (!geometry::intersects(compare, trace)) continue; //crosses
+                vertex_type s = boost::source(*e, g), t = boost::target(*e, g);
+                double s_dist = geometry::distance(compare, g[s].location);
+                double t_dist = geometry::distance(compare, g[t].location);
+                if (s_dist < t_dist) {g[s].Enode = true; g[s].enode_dir = directions[i];}
+                else {g[t].Enode = true; g[t].enode_dir = directions[i];}
+            }
+        }
+    }
+	
+	//add artificial source and target nodes to a graph, to have the max flow involve all features that cross the boundary of the area of interest
+	void AddGradientSourceSink(DGraph &dg, Direction source, Direction target, dvertex_type &s, dvertex_type &t)
+    {
+        if (target == Direction::NONE)
+        {
+            switch(source) {
+                case LEFT: target = Direction::RIGHT; break;
+                case RIGHT: target = Direction::LEFT; break;
+                case TOP: target = Direction::BOTTOM; break;
+                case BOTTOM: target = Direction::TOP; break;
+                case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a source" << std::endl; break;
+            }
+        }
+        const double max_flow_amount = 10 * num_edges(dg); //can't set this to be infinite
+        DVertex dummy_s, dummy_t;
+        s = boost::add_vertex(dummy_s, dg);
+        t = boost::add_vertex(dummy_t, dg);
+        DGraph::vertex_iterator v, vstart, vend;
+        boost::tie(vstart, vend) = boost::vertices(dg);
+        int num_source = 0, num_target = 0;
+        for (v = vstart; v < vend; v++)
+        {
+            if (*v == s || *v == t) continue;
+            DVertex vert = dg[*v];
+            bool added;
+            dedge_type fwd, bkw;
+            if (vert.direction == source)
+            {
+                boost::tie(fwd, added) = boost::add_edge(s, *v, DEdge(max_flow_amount), dg);
+                boost::tie(bkw, added) = boost::add_edge(*v, s, DEdge(0), dg);
+                dg[fwd].reverse = bkw;
+                dg[bkw].reverse = fwd;
+                num_source++;
+            }
+            if (vert.direction == target)
+            {
+                boost::tie(fwd, added) = boost::add_edge(*v, t, DEdge(max_flow_amount), dg);
+                boost::tie(bkw, added) = boost::add_edge(t, *v, DEdge(0), dg);
+                dg[fwd].reverse = bkw;
+                dg[bkw].reverse = fwd;
+                num_target++;
+            }
+        }
+    }
+    
+    //remove the artificial source and target nodes
+    void RemoveGradientSourceSink(DGraph &dg, dvertex_type &s, dvertex_type &t)
+    {
+        boost::clear_vertex(s, dg);
+        boost::clear_vertex(t, dg);
+        boost::remove_vertex(s, dg);
+        boost::remove_vertex(t, dg);
+    }
+    
+    void AssignDistances(DGraph &dg, Direction target_direction, box &AOI, dvertex_type &s, dvertex_type &t)
+    {
+        double min_x = AOI.min_corner().get<0>();
+        double max_x = AOI.max_corner().get<0>();
+        double min_y = AOI.min_corner().get<1>();
+        double max_y = AOI.max_corner().get<1>();
+        double mid_x = (min_x + max_x) / 2;
+        double mid_y = (min_y + max_y) / 2;
+        DGraph::vertex_iterator v, vstart, vend;
+        boost::tie(vstart, vend) = boost::vertices(dg);
+        for (v = vstart; v < vend; v++)
+        {
+            if (*v == s) { dg[*v].distance = std::max(max_x - min_x, max_y - min_y); continue;}
+            if (*v == t) { dg[*v].distance = 0; continue;}
+            double distance;
+            const point_type v_loc = dg[*v].location;
+            switch (target_direction){
+                LEFT: distance = v_loc.get<0>() - min_x; break;
+                RIGHT: distance = max_x - v_loc.get<0>(); break;
+                BOTTOM: distance = v_loc.get<1>() - min_y; break;
+                TOP: distance = max_y - v_loc.get<1>(); break;
+            }
+            dg[*v].distance = distance;
+        }
+    }
+	
+	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename)
 	{
-		point_type s, t;
-		GetSourceTarget(st_filename.c_str(), s, t);
-		std::cout<< "Maximum flow with raster data." << std::endl;
+        Direction flow_source;
+        switch(flow_direction) {
+            case LEFT: flow_source = Direction::RIGHT; break;
+            case RIGHT: flow_source = Direction::LEFT; break;
+            case TOP: flow_source = Direction::BOTTOM; break;
+            case BOTTOM: flow_source = Direction::TOP; break;
+            case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a target" << std::endl; return 0;
+        }
+        box bbox = G.GetBoundingBox();
+        Graph &g = G.GetGraph();
+        
+		std::cout<< "Maximum flow with flow direction " << std::string(1,flow_direction) << " and gradient pressure direction " << std::string(1,pressure_direction) << std::endl;
 
-		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type);
-		double mf =  MaximumFlow(dg, s, t);
+		AssignGrad(g, start_pressure, end_pressure, pressure_direction);
+        MakeCroppedGraph(g, bbox, border_amount);
+
+		DGraph dg = MakeDirectedGraph(g);
+        
+        double pressure_angle = DirectionAngleDegrees(pressure_direction);
+		SetupMaximumFlow(dg, capacity_type, pressure_angle);
+		dvertex_type s, t;
+        AddGradientSourceSink(dg, flow_source, flow_direction, s, t);
+        AssignDistances(dg, flow_direction, bbox, s, t);
+		double mf = CalculateMaximumFlow(dg, s, t);
+        RemoveGradientSourceSink(dg, s, t);
+		
 		std::cout << "maximum flow is: " << mf << std::endl;
-		if (out_filename != "")
+		if (mf > 0)
 		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_R_");//
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
+			if (out_filename != "")
+			{
+				std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Gradient_");
+				WriteSHP_maxFlow(dg, refWKT, name.c_str());
+			}
 		}
-		std::cout << " done \n" << std::endl;
+        return mf;
 	}
-
-	void MaximumFlow_VG(Graph G, std::string st_filename, float top, float bottom, std::string capacity_type, const char *refWKT, std::string out_filename)
+	
+	//we need to run four experminets to obtaint the 2x2 tensor in 2D
+	void MaxFlowTensor(graph_map<> G, std::string capacity_type, std::string refWKT, std::string out_filename)
 	{
-		point_type s, t;
-		GetSourceTarget(st_filename.c_str(), s, t);
-		std::cout<< "Maximum flow with vertical gradient: " << top << "-" << bottom << std::endl;  
-		AssignGrad(G, top, bottom, false, refWKT);
+		std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "Perm_tensor_values_", ".csv", true);
+		std::ofstream txtF = FracG::CreateFileStream(name);
+		txtF << "Flow values estiamtes (normalized)" << std::endl;
+		txtF << "Pressure \t Flow \t value" << std::endl;
+		
+		std::vector<std::string> pressure_d, flow_d;
+		pressure_d.push_back("l");
+		pressure_d.push_back("b");
 
-		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type);
-		double mf =  MaximumFlow(dg, s, t);
-		std::cout << "maximum flow is: " << mf << std::endl;
-		if (out_filename != "")
+		flow_d.push_back("lr");
+		flow_d.push_back("bt");
+
+		std::vector<double> Perm_tensor;
+		int i = 0;
+		for (auto p : pressure_d)
 		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_VG_");
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
+			Direction P = ReadDirection(p);
+			 int test = 0;
+			 for (auto f : flow_d)
+			 {
+				 if (f == "lr")
+				 {
+					Direction F = ReadDirection("l");
+					std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_h1_"+ std::to_string(i))+"_";
+					double q1 = MaximumFlowGradient(G, F, P, 1, 0, 0.1, capacity_type, refWKT, name);
+					txtF << p << "\t l \t" << q1  <<std::endl;
+					F = ReadDirection("r");
+					name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_h2_"+ std::to_string(i))+"_";
+					double q2 = MaximumFlowGradient(G, F, P, 1, 0, 0.1, capacity_type, refWKT, name);
+					txtF << p << "\t r \t" << q2  <<std::endl;
+				 }
+				if (f == "bt")
+				{
+					Direction F = ReadDirection("b");
+					std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_v1_"+ std::to_string(i))+"_";
+					double q1 = MaximumFlowGradient(G, F, P, 1, 0, 0.01, capacity_type, refWKT, name);
+					txtF << p << "\t b \t" << q1  <<std::endl;
+					F = ReadDirection("t");
+					name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_Tensor_v2_"+ std::to_string(i))+"_";
+					double q2 = MaximumFlowGradient(G, F, P, 1, 0, 0.01, capacity_type, refWKT, name);
+					txtF << p << "\t t \t" << q2  <<std::endl;
+				}
+				i++;
+			}
 		}
-		std::cout << " done \n" << std::endl;
 	}
-
-	void MaximumFlow_HG(Graph G, std::string st_filename, float left, float right, std::string capacity_type, const char *refWKT, std::string out_filename)
-	{
-		point_type s, t;
-		GetSourceTarget(st_filename.c_str(), s, t);
-		std::cout<< "Maximum flow with horizontal gradient: " << left << "-" << right << std::endl;  
-		AssignGrad(G, left, right, false, refWKT);
-
-		DGraph dg = MakeDirectedGraph(G);
-		SetupMaximumFlow(dg, capacity_type);
-		double mf =  MaximumFlow(dg, s, t);
-		if (out_filename != "")
-		{
-			std::string name = FracG::AddPrefixSuffixSubdirs(out_filename, {graph_subdir}, "max_flow_HG_");
-			WriteSHP_maxFlow(dg, refWKT, name.c_str());
-		}
-		std::cout << " done \n" << std::endl;
-	}
-
 }

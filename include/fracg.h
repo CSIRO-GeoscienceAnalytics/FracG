@@ -38,7 +38,11 @@
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/random_device.hpp>
 
-#include <boost/progress.hpp>
+#if (BOOST_VERSION >= 107200)
+	#include <boost/timer/progress_display.hpp>
+#else
+	#include <boost/progress.hpp>
+#endif
 #include "boost/multi_array.hpp"
 
 #include <boost/range/adaptors.hpp>
@@ -54,8 +58,9 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/adjacency_iterator.hpp>
 #include <boost/property_map/property_map.hpp>
-#include <boost/graph/connected_components.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/graph/betweenness_centrality.hpp>
+#include <boost/graph/connected_components.hpp>
 #include <boost/graph/boyer_myrvold_planar_test.hpp>
 #include <boost/graph/kruskal_min_spanning_tree.hpp>
 #include <boost/graph/prim_minimum_spanning_tree.hpp>
@@ -98,9 +103,6 @@
 
 namespace FracG
 {
-// 	extern vector<std::tuple<double, double, double>> gauss_params;		// orientations obtained from KDE
-// 	extern double split_dist;											//splitting distance fro graph
-// 	extern const char* refWKT_shp;										//reference system of shp file
 	//======================GEOMETRY======================================== 
 	//typedef geometry::model::point<double, 2, geometry::cs::geographic <geometry::degree>> point_type;  
 	typedef boost::geometry::model::d2::point_xy<long double>  point_type;
@@ -121,8 +123,9 @@ namespace FracG
             std::string out_folder;
             boost::filesystem::path out_path;
             std::string name;
-            char *refWKT;
+            std::string refWKT;
             std::vector<line_type> data;
+            using LINE_IT = decltype(data)::iterator;
 	};
 	
 	
@@ -130,28 +133,32 @@ namespace FracG
 	struct RASTER
 	{
             std::string name;
-            const char *refWKT;
+            std::string refWKT;
             double transform[8];
             T** values;
 	}; 
-	
+    
+    //enum for directions, used for specifiying borders of the area of interest
+	enum Direction: char {LEFT='l', RIGHT='r', TOP='t', BOTTOM='b', NONE='\0'};
 	//=======================GRAPH==========================================
 	// Fault Vetex Properties
 	template <typename Point>
 	struct FVertex
 	{
-            FVertex()
-            {
-                    boost::geometry::assign_zero(location);
-            }
-            FVertex(Point const& loc)
-                    : location(loc)
-            {
-            }
-            Point location;
-            bool Enode = false;
-            int component;
-            double data;
+        
+        FVertex()
+        {
+                boost::geometry::assign_zero(location);
+        }
+        FVertex(Point const& loc)
+                : location(loc)
+        {
+        }
+        Point location;
+        bool Enode = false;
+        Direction enode_dir = Direction::NONE; //which edge of bounding box that this vertex intersects
+        int component;
+        double data;
 	};
 
 	// Fault Edges Properties
@@ -163,7 +170,9 @@ namespace FracG
             int FaultNb;
             int component;
             double fault_length; //the length of the entire fault that the fault segment is taken from
-
+			double angle;
+			int set;
+			
             double Centre;
             double MeanValue;
             double CentreGrad;
@@ -216,13 +225,16 @@ namespace FracG
 	{
             point_type location; //the node's physical location
             bool Enode; //whether or not this node is an end node (off the edge of the raster file)
-            double data; //the data value at the vertex's location
-            long long index;
+            Direction direction = Direction::NONE;
+            double data = 0; //the data value at the vertex's location
+            long long index = 0;
             dedge_type predecessor; //store the edge to this vertex's predecessor
             boost::default_color_type colour; //colour property used by the maximum flow algorithm
-            double distance; //distance from this vertex to the sink
+            double distance = 0; //distance from this vertex to the sink
             DVertex(){};
-            DVertex(point_type loc, bool end, double data, long long ind) : location(loc), Enode(end), data(data), index(ind) {};
+            DVertex(point_type loc, bool end, Direction dir, double data, long long ind) : location(loc), Enode(end), direction(dir), data(data), index(ind) {};
+            DVertex(FVertex<point_type> v) : location(v.location), Enode(v.Enode), direction(v.enode_dir), data(v.data) {};
+            DVertex(FVertex<point_type> v, long long ind) : location(v.location), Enode(v.Enode), direction(v.enode_dir), data(v.data), index(ind) {};
 	};
 	
 	//Structure for a directed edge, for use in the maximum flow algorithm
@@ -238,6 +250,8 @@ namespace FracG
             DEdge() : length(0), full_length(0), capacity(0), residual_capacity(0) {};
             DEdge(double len, double full_len, line_type tra, double cap) : length(len), full_length(full_len), trace(tra), capacity(cap), residual_capacity(cap) {};
             DEdge(double len, double full_len, line_type tra)             : length(len), full_length(full_len), trace(tra), capacity(  0), residual_capacity(  0) {};
+            
+            DEdge(double cap) : capacity(cap), residual_capacity(cap) {};
             friend std::ostream& operator<<(std::ostream &os, const DEdge &de) {return os << "l " << de.length << ", full length = " << de.full_length;}
 	};
 	//<edge list for each vertex, vectex list, un/directed, vertex properties, edge properties, graph properties, (all?) edges list>
@@ -248,5 +262,4 @@ namespace FracG
 
 	typedef boost::geometry::index::rtree<p_index, boost::geometry::index::rstar<16> > p_tree;
 	typedef boost::geometry::index::rtree<pl_index, boost::geometry::index::rstar<16> > pl_tree;
-    
 }
