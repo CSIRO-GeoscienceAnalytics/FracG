@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #ifndef _geo_h
 #define _geo_h
 #include "../include/fracg.h"
@@ -31,7 +43,6 @@ namespace FracG
 	};
 	
 	void WriteGraph(Graph g, VECTOR lines, std::string subF, bool raster, bool skip_betweenness_centrality);
-// 	void WriteGraph_R(Graph G, VECTOR lines, std::string subF);
 	
 	VECTOR ReadVector(std::string in_file, std::string out_directory="");
 	void ReadPoints(std::string const& filename, VECTOR lines, std::pair<point_type, point_type> &source_target);
@@ -51,7 +62,7 @@ namespace FracG
 	polygon_type BoundingBox(double transform[8], double buffer);
 	template<typename T> void AnalyseRaster(VECTOR lines, double dist, RASTER<T> raster);
 	
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_dist, AngleDistribution angle_dist, std::string name, bool skip_betweenness_centrality);
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_dist, AngleDistribution angle_dist, const double param_penalty, std::string name, bool skip_betweenness_centrality);
 	template<typename T> T** RasterConvert(int rows, int cols, T **M);
 	template<typename T> void AssignValuesGraph(Graph& G, RASTER<T> raster);
 	template<typename T> T GetRasterValue(point_type p, double transform[8], T** values);

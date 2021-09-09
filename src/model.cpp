@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #include "../include/model.h"
 #include "../include/util.h"
 
@@ -5,14 +17,45 @@ namespace FracG
 {
 	namespace bgm = boost::geometry;
 	
-	/* create a bounding box of the area around the network.
-	 * At the moment it is just a rectangular box derived from the envelope around all 
-	 * lines */
-	std::vector<double> BoundingBox_2D(Graph G, int nb_cells, double& x_m, double& y_m, int &p_tag, int &l_tag, float &lc, bool gmsh_in_meters)
+	void CleanGraph(Graph &G, double crop)
 	{
 		std::vector<line_type> lines;
 
-		double crop = 0;
+		for (auto Eg : make_iterator_range(edges(G)))
+			lines.push_back(G[Eg].trace);  
+
+		box AOI = ReturnAOI(lines);
+
+		long double min_x  = bgm::get<bgm::min_corner, 0>(AOI) + crop ;
+		long double min_y  = bgm::get<bgm::min_corner, 1>(AOI) + crop;
+		long double max_x  = bgm::get<bgm::max_corner, 0>(AOI) - crop ;
+		long double max_y  = bgm::get<bgm::max_corner, 1>(AOI) - crop;
+		
+		box boundaries{{min_x, min_y}, {max_x, max_y}};
+		std::vector<edge_type> edged;
+		
+		for (auto Eg : make_iterator_range(edges(G)))
+		{
+			if (bgm::disjoint(G[Eg].trace, boundaries))
+				edged.push_back(Eg);
+		}
+		
+		std::cout << "removing " << edged.size() << " edges outside bounding box." << std::endl;
+		
+		for (auto remove : edged)
+			G.remove_edge(remove);
+			
+		G = FracG::Read4MODEL(G, boundaries, 1e-5);	
+	}
+	
+
+	/* create a bounding box of the area around the network.
+	 * At the moment it is just a rectangular box derived from the envelope around all 
+	 * lines */
+	std::vector<double> BoundingBox_2D(Graph &G, int nb_cells, double& x_m, double& y_m, int &p_tag, int &l_tag, float &lc, double crop, bool gmsh_in_meters)
+	{
+		std::vector<line_type> lines;
+
 		for (auto Eg : make_iterator_range(edges(G)))
 			lines.push_back(G[Eg].trace);  
 
@@ -50,6 +93,8 @@ namespace FracG
 		xy.push_back(max_x);
 		xy.push_back(min_y);
 		xy.push_back(max_y);
+		CleanGraph(G, crop);
+	
 		return(xy);
 	}
 	
@@ -386,35 +431,42 @@ namespace FracG
 		
 		std::vector<int> lines_tags_1;
 		std::vector<int> lines_tags_2;
-	   //get the tags of lineaments that are not the bounding box
+
+	   gmsh::vectorpair line_t;
+	   gmsh::model::getEntities(line_t, 1);
+	   
 		int i =0;
 		for (auto Eg : make_iterator_range(edges(G)))
 		{
 			std::vector<int>phys_group;
 			std::vector<std::pair<int,int>> this_line_tags = fused_lines[i + nb_bb_pts];
-			if (this_line_tags.empty())
-				continue;
-
-			for (auto ii : this_line_tags)
-			{
-				line_tags.push_back(ii.second);
-				phys_group.push_back(ii.second);
-				all_lines_tags.push_back(ii.second);
-			}
 			
-			if (name_ss)
+			if (!this_line_tags.empty())
 			{
-				model::addPhysicalGroup(1, phys_group, nb_bb_pts+i+1);
-				model::setPhysicalName(1, nb_bb_pts+i+1, "line_"+ to_string(nb_bb_pts+i+1));
-				model::mesh::embed(1, phys_group, 2, 1);
-				ss_names << " line_"+ to_string(i);
-				lowD_ss_name << " lowerD_line_"+ to_string(i);
-				interface_ss_name << " interface_line_"+ to_string(i);
-				ss_properties <<"line_"+ to_string(i) <<"\t"<< G[Eg].FaultNb <<"\t"<<  G[Eg].length <<"\t"<< G[Eg].fault_length << "\t"<< G[Eg].angle << "\t"<< G[Eg].set << std::endl;	
+				for (auto ii : this_line_tags)
+				{
+					if ( std::find(line_t.begin(), line_t.end(), ii) != line_t.end() )
+					{
+						line_tags.push_back(ii.second);
+						phys_group.push_back(ii.second);
+						all_lines_tags.push_back(ii.second);
+					}
+				}
+				
+				if (name_ss)
+				{
+					model::addPhysicalGroup(1, phys_group, nb_bb_pts+i+1);
+					model::setPhysicalName(1, nb_bb_pts+i+1, "line_"+ to_string(nb_bb_pts+i+1));
+					model::mesh::embed(1, phys_group, 2, 1);
+					ss_names << " line_"+ to_string(i);
+					lowD_ss_name << " lowerD_line_"+ to_string(i);
+					interface_ss_name << " interface_line_"+ to_string(i);
+					ss_properties <<"line_"+ to_string(i) <<"\t"<< G[Eg].FaultNb <<"\t"<<  G[Eg].length <<"\t"<< G[Eg].fault_length << "\t"<< G[Eg].angle << "\t"<< G[Eg].set << std::endl;	
+				}
 			}
 		i++;
 		}
-		
+
 		if(!name_ss)
 		{
 			model::addPhysicalGroup(1, all_lines_tags, nb_bb_pts+num_edges(G)+1);
@@ -500,7 +552,9 @@ namespace FracG
 		return dist_tree;
 	}
 	
-	void AddLineament(line_type line, double x_min, double y_min, int &p_tag, int &l_tag, float lc)
+		
+	
+	void AddLineament(line_type line, std::vector<double> xy, double x_min, double y_min, int &p_tag, int &l_tag, float lc)
 	{
 		int init_p_tag = p_tag + 1;
 		std::vector<int> spline_points;
@@ -508,19 +562,17 @@ namespace FracG
 		bgm::unique(line);
 		line_type simpl_line;	
 		bgm::simplify(line, simpl_line, 1);
-
-		BOOST_FOREACH(point_type p, simpl_line)
+		
+		if (simpl_line.size() > 1)
 		{
-			factory::addPoint(p.x()-x_min, p.y()-y_min, 0, ( lc ), ++p_tag);
+			BOOST_FOREACH(point_type p, simpl_line)
+				factory::addPoint(p.x()-x_min, p.y()-y_min, 0, ( lc ), ++p_tag);
 		}
 		
 		if (line.size() > 2)
 		{
 			for( int i = init_p_tag; i < p_tag+1; i++ )
 				spline_points.push_back( i );
-
-			if (spline_points.size() < 2)
-				std::cout << spline_points.size() << std::endl;
 			factory::addSpline(spline_points, ++l_tag);
 		}
 		if (line.size() == 2)
@@ -656,14 +708,13 @@ namespace FracG
 		return(surface_tag);
 	}
 	
-	
 	void Translate(int nb_bb_pts, int &l_tag, std::vector<double> xy)
 	{
 		gmsh::vectorpair l_lines;
 		gmsh::vectorpair out;
 		
-		double dx = xy[1]-xy[0];
-		double dy = xy[3]-xy[2];
+		double dx = xy[1]-xy[0] ;
+		double dy = xy[3]-xy[2] ;
 		for( int i = nb_bb_pts+1; i < l_tag+1; i++ )
 			l_lines.push_back(std::make_pair(1, i));
 		
@@ -694,9 +745,10 @@ namespace FracG
 		l_tag = l_lines.size();
 	}
 	
-	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, bool gmsh_in_meters, bool name_ss, std::string out_filename)
+	void WriteGmsh_2D(bool output, Graph G, int nb_cells, double gmsh_min_cl, double gmsh_min_dist, double gmsh_max_dist, double crop, bool gmsh_in_meters, bool name_ss, bool periodic, std::string out_filename)
 	{
-		bool periodic = false;
+		std::cout << "Generating 2D mesh comprising "<< num_edges(G) << " edges" << std::endl;
+		
 		float lc;
 		int nb_bb_pts;
 		int p_tag = 0;
@@ -717,23 +769,35 @@ namespace FracG
 		gmsh::option::setNumber("General.NumThreads", 4);
 		gmsh::option::setNumber("Geometry.Tolerance", 1e-15); 
 		gmsh::option::setNumber("Geometry.MatchMeshTolerance", 1e-15); 
-		std::vector<double> xy = BoundingBox_2D(G, nb_cells, x_m,  y_m, p_tag, l_tag, lc, gmsh_in_meters);
-
+		
+		std::vector<double> xy = BoundingBox_2D(G, nb_cells, x_m,  y_m, p_tag, l_tag, lc, crop, gmsh_in_meters);
+		
 		nb_bb_pts = p_tag;
 		for (auto Eg : make_iterator_range(edges(G)))
-			AddLineament(G[Eg].trace, x_m,  y_m, p_tag, l_tag, lc);
-			
+				AddLineament(G[Eg].trace, xy, x_m,  y_m, p_tag, l_tag, lc);
+		
 		if (periodic)
 			Translate(nb_bb_pts, l_tag, xy);
 			
+		std::cout << " Manage topology" << std::endl;
 		MangeIntersections_bb(l_tag, nb_bb_pts, fused_lines);
+		factory::synchronize();
 		
+		std::cout << "  Cropping to bounding box" << std::endl;
 		NameBoundingBox(nb_bb_pts, fused_lines, intersec);
+		factory::synchronize();
+		
+		std::cout << "   Embedding entities" << std::endl;
 		std::vector<int> line_tags = EmbedLineaments_all(G, fused_lines, intersec, nb_bb_pts, FracG::AddPrefixSuffix(out_filename, "", "_SideSet_names", true), name_ss);
+		factory::synchronize();
+		
+		
 		MeshRefine_line(line_tags , lc, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist);
+		factory::synchronize();
 
 		if (periodic)
 		{
+			std::cout << "    Attempting affine transform" << std::endl;
 			std::vector<int> bottom, right, top, left;
 			for (auto ii : fused_lines[0])
 				bottom.push_back(ii.second);
@@ -745,15 +809,13 @@ namespace FracG
 				top.push_back(ii.second);
 				
 			for (auto ii : fused_lines[3])
-			{
-				std::cout << ii.second << std::endl;
 				left.push_back(ii.second);
-			}
 			
 			std::vector<double> affineTransform{1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 			gmsh::model::mesh::setPeriodic(1, top, bottom, affineTransform);
 			gmsh::model::mesh::setPeriodic(1, left, right, affineTransform);
 		}
+		factory::synchronize();
 
 		model::mesh::generate(2);
 		gmsh::write(out_filename);
@@ -827,7 +889,7 @@ namespace FracG
 		nb_bb_pts = p_tag;
 		for (auto Eg : make_iterator_range(edges(G)))
 		{
-			AddLineament(G[Eg].trace, x_m, y_m, p_tag, l_tag, lc);
+			AddLineament(G[Eg].trace, xyz, x_m, y_m, p_tag, l_tag, lc);
 			line_dim_tags.push_back(std::make_pair(1, l_tag));
 			edge_tag.push_back(std::make_pair(Eg, l_tag));
 		}
@@ -871,7 +933,7 @@ namespace FracG
 			for (int w = 0; w < sampling_windows.size(); w++)
 			{
 				box AOI = sampling_windows.at(w);
-				Graph G = Read4MODEL(g, AOI, 0.1);
+				Graph G = Read4MODEL(g, AOI, 1e-5);
 				
 				std::cout << "Min corner: " << std::setprecision(15) << AOI.min_corner().get<0>() <<" " << AOI.min_corner().get<1>() << std::endl;
 				std::cout << "Max corner: " << std::setprecision(15) << AOI.max_corner().get<0>() <<" " << AOI.max_corner().get<1>() << std::endl;
@@ -881,7 +943,7 @@ namespace FracG
 				if (num_edges(G) > 0)
 				{
 					std::string output_filename = filename + "_sample_" + std::to_string(w);
-					WriteGmsh_2D(show_output, G, 5, 50, 10, 20, gmsh_in_meters, true, output_filename );
+					WriteGmsh_2D(show_output, G, 5, 50, 10, 20, 0.0, gmsh_in_meters, false, false, output_filename );
 				}
 				else
 					std::cout << "No features in sampling window  " << w << std::endl;

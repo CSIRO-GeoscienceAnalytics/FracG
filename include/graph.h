@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #ifndef _GRAPH_h
 #define _GRAPH_h
 #include <type_traits>
@@ -219,7 +231,7 @@ namespace FracG
     Graph Read4MODEL(Graph g, box bx, double map_distance_threshold);
     void CreateGraph(Graph& graph, map_vertex_type& map, double minDist );
     graph_map<> SplitFaults(graph_map<>& map, double minDist );
-    void GraphAnalysis(Graph& G, VECTOR lines, int nb, AngleDistribution angle_dist, std::string name);
+    void GraphAnalysis(Graph& G, VECTOR lines, AngleDistribution angle_dist, const double param_penalty, std::string name);
 
     void ComponentExtract(Graph G, VECTOR lines, int nb);
     void IntersectionMap(Graph G, VECTOR lines, float cell_size, float search_size, bool resample);

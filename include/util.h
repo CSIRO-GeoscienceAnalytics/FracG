@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #ifndef fracg_util
 #define fracg_util
 
@@ -8,7 +20,6 @@
 
 namespace FracG
 {
-
     std::string AddPrefixSuffix(boost::filesystem::path path, std::string prefix="", std::string suffix="", bool remove_extension=false);
     std::string AddPrefixSuffixSubdirs(boost::filesystem::path path, std::initializer_list<std::string> subdirs, std::string prefix="", std::string suffix="", bool remove_extension=false);
     
@@ -24,5 +35,4 @@ namespace FracG
     Direction ReadDirection(std::string direction_string);
     double DirectionAngleDegrees(Direction d);
 }
-
 #endif

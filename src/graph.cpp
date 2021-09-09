@@ -1,9 +1,20 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #include "../include/graph.h"
 #include "../include/geometrie.h"
 #include "../include/GeoRef.h"
 #include "../include/stats.h"
 #include "../include/util.h"
-
 #include <random>
 
 const std::string graph_subdir="graph";
@@ -370,7 +381,7 @@ namespace FracG
 				}
 			}
 		}
-		
+		int id = 0;
 		for (auto eg : boost::make_iterator_range(edges(G))) 
 		{
 			double strike = (float)(atan2(G[eg].trace.front().y() - G[eg].trace.back().y(), G[eg].trace.front().x() - G[eg].trace.back().x())) 
@@ -378,6 +389,8 @@ namespace FracG
 			if (strike  < 0) 
 				strike  += 180;
 			G[eg].angle = strike;
+			G[eg].index = id;
+			id++;
 		}
 		
 
@@ -643,24 +656,26 @@ namespace FracG
 			}
 		}
 		envBox = boost::geometry::return_envelope<box>(all_lines); 
-		Area = geometry::area(envBox) * 1e-6 ; 
+		Area = geometry::area(envBox)  ; 
 	}
 
-
 	//Topolgy analysis of graph---------------------------------------------
-	void GraphAnalysis(Graph& G, VECTOR lines, int nb, AngleDistribution angle_dist, std::string out_filename)
+	void GraphAnalysis(Graph& G, VECTOR lines, AngleDistribution angle_dist, const double param_penalty, std::string out_filename)
 	{
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 		std::cout<< "GRAPH'S ANALYSIS OF NETWORK" << std::endl;
+		std::ofstream txtG;
+		std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
+		txtG = FracG::CreateFileStream(save_name);
+		
 		/***********************************************************************
 		* Graph analysis based on:												*
 		* Sanderson, D. J., Peacock, D. C., Nixon, C. W., & Rotevatn, A. (2018)* 
 		* Graph theory and the analysis of fracture networks.					*
 		* Journal of Structural Geology.										*
 		**********************************************************************/
-		std::ofstream txtG;
+		
 		std::vector<line_type> faults = lines.data;
-
 		int Inodes = 0,  Xnodes = 0, Ynodes = 0, Enodes = 0, NbB = 0, Nc, NbN, Nl, numK, II = 0 , IC = 0, CC = 0;
 		float Cl, Cb, NCfreq, B20,  P20, P21 , B22;
 		double Area, totalLength = 0, avLenL, avLenB;
@@ -675,7 +690,26 @@ namespace FracG
 			std::cout << " WARNING: GRAPH IS NOT PLANAR! Proceed with caution" << std::endl;
 
 			ClassifyEdges(G, Inodes, Ynodes, Xnodes, Enodes, II, IC, CC, NbB, totalLength, numK, Area);
-
+			ClassifyEdgeOrientation(G, lines, angle_dist);
+			
+			VECTOR graph_lines;
+			graph_lines.out_path = lines.out_path;
+			txtG << lines.name << std::endl;
+			txtG << "id \t angle \t length \t component \t type" << std::endl; 
+			for (auto Eg : make_iterator_range(edges(G)))
+			{
+				graph_lines.data.push_back(G[Eg].trace);
+				txtG << G[Eg].index << "\t" << G[Eg].angle << "\t" << G[Eg].length << "\t" << G[Eg].component << "\t" << G[Eg].BranchType << std::endl;
+			}
+			
+			FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(graph_lines, param_penalty, "graph_angle_distribution_kde");	 //kernel density estimation
+			std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [&graph_lines](FracG::VECTOR::LINE_IT &it) -> double
+			{
+				double length = boost::geometry::length(*it);
+				return length;
+			};
+			FracG::AngleDistribution weighted_angle_distribution = FracG::KdeEstimationStrikes(graph_lines, length_weights, param_penalty, "graph_angle_distribution_kde_length_weights");
+		
 			//Number of connections
 			Nc = Ynodes + Xnodes;
 
@@ -724,12 +758,9 @@ namespace FracG
 			}
 
 		//write results---------------------------------------------------------
-		std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
-		txtG = FracG::CreateFileStream(save_name);
-		
 			if (txtG.is_open())  
 			{ 
-				txtG<< "Nodes: " << "\t" 			 << num_vertices(G) << "\n"
+				txtG<< "\nNodes: " << "\t" 			 << num_vertices(G) << "\n"
 					<< "Edges " << "\t" 			 << num_edges(G) << "\n"
 					<< "Edgenodes: " 				 << "\t" << Enodes << "\n"
 					<< "Inodes: " 			 		 << "\t" << Inodes <<  "\n" 
@@ -741,7 +772,7 @@ namespace FracG
 					<< "CC-Branches: "				 << "\t" << CC << "\n"
 					<<" Connections (Y +X): "		 << "\t" << (Ynodes + Xnodes) << "\n"
 					<<" Total length:"				 << "\t" << totalLength << "\n"
-					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n \n" 
+					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n " 
 					<< "Connecting node frequency:"<< "\t" << NCfreq << "\n"
 					<< "Branch frequency: " << "\t"  << B20 << "\n"
 					<< "Line frequency: " << "\t" 	 << P20 << "\n"
@@ -752,96 +783,10 @@ namespace FracG
 					<< "Number of components (c): "  << "\t" << numK << "\n"
 					<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
 					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n";
-
-	//Analyse the different component of the network------------------------
-			std::cout << " Analysing components of graph " << std::endl;
-
-				for (int i = 0; i < numK; i++)
-				{
-					Inodes = 0, Ynodes = 0, Xnodes = 0, Enodes = 0, NbB = 0, totalLength = 0;
-					II = 0, IC =0, CC = 0;
-					for (auto Eg : make_iterator_range(edges(G)))
-					{
-						U = source(Eg, G);
-						u = target(Eg, G);
-
-						if (G[U].component == i && G[u].component == i)
-						{
-							Fault_in_component.push_back(G[Eg].trace);
-							if (G[U].Enode == false || G[u].Enode == false)
-							{
-								if (G[Eg].BranchType == "I-I")
-									II++;
-
-								if (G[Eg].BranchType == "I-Y" || G[Eg].BranchType == "I-X")
-									IC++;
-
-								if (G[Eg].BranchType == "Y-Y" || G[Eg].BranchType == "X-X")
-									CC++;
-
-								if (degree(U, G) == 1 && G[U].Enode == false)
-								Inodes++;
-
-								if (degree(u, G) == 1 && G[u].Enode == false)
-								Inodes++;
-
-								if (degree(U, G) == 3 && G[U].Enode == false) 
-								Ynodes++;
-
-								if (degree(u, G) == 3 && G[u].Enode == false)
-								Ynodes++;
-
-								if (degree(U, G) == 4 && G[U].Enode == false)
-								Xnodes++;
-
-								if (degree(u, G) == 4 && G[u].Enode == false)
-								Xnodes++;
-
-								if (G[U].Enode == true || G[u].Enode == true)
-								Enodes++;
-							}
-							totalLength += G[Eg].length;
-							NbB++;
-						}
-					}
-					NbN = (Inodes + 3*Ynodes + 4*Xnodes) / 2;
-					if (NbB > nb)
-					{
-						std::cout << "Component no " << i << " containing " << NbB << " branches " << std::endl;
-						std::string comp = lines.name + "_Graph_component_" + std::to_string(i);// + name
-						VECTOR comp_Lineamants;
-						comp_Lineamants.folder = lines.folder;
-						comp_Lineamants.name = comp;
-						comp_Lineamants.refWKT = lines.refWKT;
-						comp_Lineamants.data = Fault_in_component ;
-						comp_Lineamants.out_folder = lines.out_folder;
-						comp_Lineamants.out_path = lines.out_path;
-						comp_Lineamants.in_path = lines.in_path;
-						
-						txtG<< "COMPONENT NO." << "\t" << i << "\n"
-							<< "Branches:" << "\t" << NbB << "\n" 
-							<< "Branches (calc):" << "\t" << NbN << "\n" 
-							<< "Inodes: " << "\t" << Inodes <<  "\n" 
-							<< "Ynodes: " << "\t" << Ynodes <<  "\n" 
-							<< "Xnodes: " << "\t" << Xnodes  << "\n" 
-							<< "Enodes: " << "\t" << Enodes  << "\n"
-							<< "II-Branches: " << "\t" << II << "\n"
-							<< "IC-Branches: " << "\t" << IC << "\n"
-							<< "CC-Branches: " << "\t" << CC << "\n"
-							<< "Connections (Y +X): " << "\t" << (Ynodes + Xnodes) << "\n"	
-							<< "Total length:" << "\t" << totalLength << "\n"
-							<< "Average length:" << "\t" << totalLength / NbB << "\n" ;
-					}
-					Fault_in_component.clear();
-					lineaments.clear();
-					Fault_length.clear();
-				}
 			}
 			else 
 				std::cout << "ERROR: FAILED TO WRITE RESULTS!" << std::endl;
-		
 		txtG.close();
-		ClassifyEdgeOrientation(G, lines, angle_dist);
 	}
 
 	//find shortest path between source and target--------------------------
@@ -1118,7 +1063,6 @@ namespace FracG
 							d2 += r->second->second;
 						}
 					}
-
 					vec[i][j]  = d;
 					vec2[i][j] = d2;
 				}

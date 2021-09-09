@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #define _DEFAULT_SOURCE 1
 
 #include <omp.h>
@@ -164,22 +176,23 @@ namespace FracG
 	// Fault Edges Properties
 	struct FEdge
 	{
-            long double length; //length of the fault segment that makes up this edge
-            line_type trace; //the fault segment that makes up this edge
-            std::string BranchType;
-            int FaultNb;
-            int component;
-            double fault_length; //the length of the entire fault that the fault segment is taken from
-			double angle;
-			int set;
-			
-            double Centre;
-            double MeanValue;
-            double CentreGrad;
-            double CrossGrad;
-            double ParalGrad;
-            friend std::ostream& operator<<(std::ostream &os, const FEdge &de) 
-                {return os << "l " << de.length << ", full length = " << de.fault_length;}
+		long double length; //length of the fault segment that makes up this edge
+		line_type trace; //the fault segment that makes up this edge
+		std::string BranchType;
+		int FaultNb;
+		int component;
+		double fault_length; //the length of the entire fault that the fault segment is taken from
+		double angle;
+		int set;
+		int index;
+		
+		double Centre;
+		double MeanValue;
+		double CentreGrad;
+		double CrossGrad;
+		double ParalGrad;
+		friend std::ostream& operator<<(std::ostream &os, const FEdge &de) 
+			{return os << "l " << de.length << ", full length = " << de.fault_length;}
 	};
 	
         struct FEdge2

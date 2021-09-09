@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #ifndef _STATS_h
 #define _STATS_h
 #include "../include/fracg.h"
@@ -147,7 +159,7 @@ namespace FracG
 
 	void CreateStats(VECTOR &lines, AngleDistribution &angle_dist);
 	double PointExtractor(point_type P, double radius, double Transform[8], double** raster);
-	StatsModelData GetLengthDist(VECTOR lines);
+	StatsModelData GetLengthDist(VECTOR lines, std::string name);
 	void DoBoxCount(VECTOR lines);
 	double MinVarBuf(line_type L,  double GeoTransform[8], double** raster);
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty = 2, std::string out_filename = "angle_distribution_KDE");

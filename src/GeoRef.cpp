@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #include "../include/GeoRef.h"
 #include "../include/graph.h"
 #include "../include/geometrie.h"
@@ -1018,7 +1030,7 @@ namespace FracG
 	template void AnalyseRaster<float>(VECTOR lines, double dist, RASTER<float> raster);
 	template void AnalyseRaster<double>(VECTOR lines, double dist, RASTER<double> raster);
 
-	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, AngleDistribution angle_dist, std::string raster_filename, bool skip_betweenness_centrality)
+	Graph BuildRasterGraph(VECTOR lines, double split, double spur, double map_distance_threshold, double raster_stats_dist, AngleDistribution angle_dist, const double param_penalty, std::string raster_filename, bool skip_betweenness_centrality)
 	{
 		Graph raster_graph;
 		if (!raster_filename.empty())
@@ -1072,7 +1084,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
+					GraphAnalysis(raster_graph, lines, angle_dist, param_penalty, raster_filename);
 					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
@@ -1084,7 +1096,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
+					GraphAnalysis(raster_graph, lines, angle_dist, param_penalty, raster_filename);
 					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
@@ -1096,7 +1108,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
+					GraphAnalysis(raster_graph, lines, angle_dist, param_penalty, raster_filename);
 					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
@@ -1108,7 +1120,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<int>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
+					GraphAnalysis(raster_graph, lines, angle_dist, param_penalty, raster_filename);
 					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
@@ -1120,7 +1132,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<float>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
+					GraphAnalysis(raster_graph, lines, angle_dist, param_penalty, raster_filename);
 					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 				} break;
 
@@ -1132,7 +1144,7 @@ namespace FracG
 					graph_map<> map = RasterGraph(lines, split, spur, R, map_distance_threshold);
 					raster_graph = map.GetGraph();
 					AssignValuesGraph<double>(raster_graph, R, raster_stats_dist);
-					GraphAnalysis(raster_graph, lines, 10, angle_dist, raster_filename);
+					GraphAnalysis(raster_graph, lines, angle_dist, param_penalty, raster_filename);
 					WriteGraph(raster_graph, lines, "raster", true, skip_betweenness_centrality);
 
 				} break;

@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #include <boost/program_options.hpp>
 #include "../include/graph.h"
 #include "../include/GeoRef.h" 
@@ -49,6 +61,7 @@ const char *GRAPH_RESULTS_FILE="graph_results_file";
 const char *GRAPH_RESULTS_FOLDER="graph_results_folder";
 
 const char *GMSH_CELL_COUNT="gmsh_cell_count";
+const char *GMSH_CROP="gmsh_crop";
 const char *GMSH_SHOW_OUTPUT="gmsh_show_output";
 const char *GMSH_MIN_CL="gmsh_min_cl";
 const char *GMSH_MAX_DIST="gmsh_max_dist";
@@ -56,6 +69,7 @@ const char *GMSH_MIN_DIST="gmsh_min_dist";
 const char *GMSH_IN_METERS="gmsh_in_meters";
 const char *GMSH_NAME_SS="gmsh_name_ss";
 const char *GMSH_POINT_TOL="gmsh_point_tol";
+const char *GMSH_SET_PERIODIC="gmsh_set_periodic";
 
 const char *GMSH_SAMPLE_WINDOW_SIZE="gmsh_sw_size";
 const char *GMSH_SAMPLE_CELL_COUNT="gmsh_sample_cell_count";
@@ -101,7 +115,6 @@ int main(int argc, char *argv[])
 
 		(ANGLE_PARAM_PENALTY, po::value<double>()->default_value(2), "Penalty per parameter, when fitting Gaussians to the angle distribution")
 
-		(GRAPH_MIN_BRANCHES, po::value<int>()->default_value(100), "Minimum number of branches(?) required in a component, in order to apply graph(?) analysis")
 		(GRAPH_COMPONENT, po::value<int>()->default_value(-1), "Connected component of graph to extract")
 
 		(MAX_FLOW_CAP_TYPE, po::value<std::string>()->default_value("l"), "Type of capacity to use in maximum flow calculations, l for length, o for orientation, lo for both")
@@ -114,6 +127,7 @@ int main(int argc, char *argv[])
 		(GRAPH_RESULTS_FOLDER, po::value<std::string>()->default_value("graph"), "Save the resulting graph to this folder")
 
 		(GMSH_CELL_COUNT, po::value<int>()->default_value(10), "GMSH Cell Count")
+		(GMSH_CROP, po::value<double>()->default_value(0.0),"Boundaries will by cropped by this length")
 		(GMSH_SHOW_OUTPUT, po::bool_switch(), "Show GMSH output in the GMSH viewer")
 		(GMSH_NAME_SS, po::value<bool>()->default_value(false), "Tag side sets individually")
 		(GMSH_POINT_TOL, po::value<double>()->default_value(0.1),"Point tolerance for tagging model boundaries")
@@ -121,6 +135,7 @@ int main(int argc, char *argv[])
 		(GMSH_MIN_DIST, po::value<double>()->default_value(-1), "Minimum distance for mesh refinemnt around lineament")
 		(GMSH_MAX_DIST, po::value<double>()->default_value(-1), "Maximum distance for mesh refinemnt around lineament")
 		(GMSH_IN_METERS, po::value<bool>()->default_value(false),"Generate mesh in metre units")
+		(GMSH_SET_PERIODIC, po::bool_switch()->default_value(false),"Attempt affine transformation for periodic boundaries")
 		
 		(GMSH_SAMPLE_WINDOW_SIZE, po::value<double>()->default_value(-1), "GMSH Sample windows size")
 		(GMSH_SAMPLE_CELL_COUNT, po::value<int>()->default_value(10), "GMSH Sample Network cell count")
@@ -180,7 +195,6 @@ int main(int argc, char *argv[])
     
     const double angle_param_penalty = vm[ANGLE_PARAM_PENALTY].as<double>();
     
-    const int graph_min_branches = vm[GRAPH_MIN_BRANCHES].as<int>();
     const int component = vm[GRAPH_COMPONENT].as<int>();
     
     //some of these distances are int's, maybe they should be doubles
@@ -202,6 +216,7 @@ int main(int argc, char *argv[])
     const std::string graph_results_folder = vm[GRAPH_RESULTS_FOLDER].as<std::string>(); //we should allow for this to be empty/null, and use that to signify not saving these results
     
     const int gmsh_cell_count = vm[GMSH_CELL_COUNT].as<int>();
+    const double gmsh_crop = vm[GMSH_CROP].as<double>();
     const bool gmsh_show_output = vm[GMSH_SHOW_OUTPUT].as<bool>(); 
 	const double gmsh_min_cl = vm[GMSH_MIN_CL].as<double>();
     const double gmsh_min_dist = vm[GMSH_MIN_DIST].as<double>();
@@ -213,6 +228,7 @@ int main(int argc, char *argv[])
     const int gmsh_sample_cell_count = vm[GMSH_SAMPLE_CELL_COUNT].as<int>();
     const int gmsh_sample_count = vm[GMSH_SAMPLE_COUNT].as<int>();
     const bool gmsh_sample_show_output = vm[GMSH_SAMPLE_SHOW_OUTPUT].as<bool>();
+    const bool gmsh_set_periodic = vm[GMSH_SET_PERIODIC].as<bool>();
 	
     //input and output files and directories
     fs::path vector_file(shapefile_name);
@@ -233,15 +249,14 @@ int main(int argc, char *argv[])
 	// the following functions analyse statistical properties of the network
 	if (!vm[SKIP_LENGTH_DISTRIBUTION].as<bool>())
 	{
-		FracG::GetLengthDist(lines); // test for three distributions of length 
+		FracG::GetLengthDist(lines, "length_distributions.csv"); // test for three distributions of length 
 	}
- 	FracG::DoBoxCount(lines); 																				  // Boxcounting algorithm 
- 	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty, "angle_distribution_kde");	 //kernel density estimation
 	
-	FracG::WriteShapefile(lines, angle_distribution, FracG::AddPrefixSuffix(shapefile_name, "corrected_"));		// this writes the shp file after correction of orientations (fits gaussians to the data) 
-	
-	FracG::ScanLine(lines, scanline_count, angle_distribution, scanline_spaceing);							  // sanline analysis of density and spacing (number is number of scalines to generate)
+	FracG::DoBoxCount(lines); 																				  // Boxcounting algorithm 
+	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty, "angle_distribution_kde");	 //kernel density estimation
 	FracG::CreateStats(lines, angle_distribution); 															// statistical analysis of network	
+	FracG::ScanLine(lines, scanline_count, angle_distribution, scanline_spaceing);							  // sanline analysis of density and spacing (number is number of scalines to generate)
+	FracG::WriteShapefile(lines, angle_distribution, FracG::AddPrefixSuffix(shapefile_name, "corrected_"));		// this writes the shp file after correction of orientations (fits gaussians to the data) 
 	
 	//calculate angle distribution, weighted by the length of the feature
 	std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [&lines](FracG::VECTOR::LINE_IT &it) -> double
@@ -264,9 +279,8 @@ int main(int argc, char *argv[])
 	graph = split_map.GetGraph();
 
 	//graph analysis and maps
-	FracG::GraphAnalysis(graph, lines, graph_min_branches, angle_distribution, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
+	FracG::GraphAnalysis(graph, lines, angle_distribution, angle_param_penalty, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
 	FracG::WriteGraph(graph, lines, graph_results_folder, false, skip_betweenness_centrality); //write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
-	
 	FracG::ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());		  // number is the vritical distance between lineamnt and intersection point and the string is the filename
 	FracG::IntersectionMap(graph, lines, raster_spacing, isect_search_size, resample);											 //2000 2500 need to check what values to use here, also need to check the function itself
 	FracG::ComponentExtract( graph, lines, component )	;																		//extracting features of connected component
@@ -285,15 +299,15 @@ int main(int argc, char *argv[])
 	{
 		//building a graph with raster values assigned to elemnets. 
 		FracG::RasterStatistics(lines, raster_stats_dist, raster_name);							//parameters are the lineament set , the pixel size for the cross gradinet and the name of the raster file
-	// 	if (raster)
-		FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_distribution, raster_name, skip_betweenness_centrality); //another distance threshold to check
+		FracG::Graph r_graph = FracG::BuildRasterGraph(lines, split_dist_thresh, spur_dist_thresh, dist_threshold, raster_stats_dist, angle_distribution, angle_param_penalty, raster_name, skip_betweenness_centrality); //another distance threshold to check
 	}
 	
 	if (!vm[SKIP_MESHING].as<bool>())
 	{
-		fs::path mesh_dir = out_path / "mesh/";
-		FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_in_meters, gmsh_name_ss, (mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
-		FracG::SampleNetwork_2D(gmsh_show_output, gmsh_sw_size, graph, gmsh_cell_count, gmsh_sample_count, gmsh_in_meters, (mesh_dir / "2D_mesh_sample_").string());
+		
+	fs::path mesh_dir = out_path / "mesh/";
+	FracG::WriteGmsh_2D(gmsh_show_output, graph, gmsh_cell_count, gmsh_min_cl, gmsh_min_dist, gmsh_max_dist, gmsh_crop, gmsh_in_meters, gmsh_name_ss, gmsh_set_periodic, ( mesh_dir / "2D_mesh").string());				//create a 2D mesh. Number is the target elemnt number in x and y and string is the filename
+	FracG::SampleNetwork_2D(gmsh_show_output, gmsh_sw_size, graph, gmsh_cell_count, gmsh_sample_count, gmsh_in_meters, (mesh_dir / "2D_mesh_sample_").string());
 	}
 //----------------------------------------------------------------------
 	auto t_end = std::chrono::high_resolution_clock::now();

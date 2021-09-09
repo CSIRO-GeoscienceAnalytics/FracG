@@ -1,3 +1,15 @@
+#****************************************************************/
+#*				DO NOT MODIFY THIS HEADER							*/
+#*					FRACG - FRACture Graph							*/
+#*				Network analysis and meshing software					*/
+#*																		*/
+#*						(c) 2021 CSIRO									*/
+#*			GNU General Public Licence version 3 (GPLv3)				*/
+#*																		*/
+#*						Prepared by CSIRO								*/
+#*																		*/
+#*					See license for full restrictions 						*/
+#****************************************************************/
 cmake_minimum_required(VERSION 3.9)
 set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fopenmp ")
@@ -5,7 +17,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #Name of the Project and version
-project(FracG VERSION 0.0.1 DESCRIPTION "Lineament Network Analysis")
+project(FracG VERSION 1.0.0 DESCRIPTION "FracG")
 
 #Check fro all required external libaries-------------------------------
 find_package(GDAL REQUIRED)

@@ -1,3 +1,15 @@
+/****************************************************************/
+/*				DO NOT MODIFY THIS HEADER							*/
+/*					FRACG - FRACture Graph							*/
+/*				Network analysis and meshing software					*/
+/*																		*/
+/*						(c) 2021 CSIRO									*/
+/*			GNU General Public Licence version 3 (GPLv3)				*/
+/*																		*/
+/*						Prepared by CSIRO								*/
+/*																		*/
+/*					See license for full restrictions 						*/
+/****************************************************************/
 #include "../include/stats.h"
 #include "../include/geometrie.h"
 #include "../include/GeoRef.h"
@@ -941,13 +953,13 @@ namespace FracG
 		//done
 	}
 
-	StatsModelData GetLengthDist(VECTOR lines)
+	StatsModelData GetLengthDist(VECTOR lines, std::string out_name)
 	{
 		StatsModelData results;
 		random::random_device rd{};
 		std::vector <double> values;
 
-		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / ("length_distributions.csv"));
+		std::ofstream txtF = FracG::CreateFileStream(lines.out_path / stats_subdir / out_name);
 
 		BOOST_FOREACH(line_type l , lines.data)
 			values.push_back(geometry::length(l));
@@ -1271,7 +1283,6 @@ namespace FracG
 		arma::vec dummy_weights((int)0); //use an array of 0 elements to signal that weights will not be used
 		return AngleKdeFillArray(nsamples, angles, dummy_weights, smooth);
 	}
-
 
 	//perform a moving average of the KDE, that wraps around
 	void MovingAverageFilterWraparound(std::vector< std::pair<double,double>> &KDE, int window_size)
