@@ -1,7 +1,3 @@
-IMPORTANT – PLEASE READ CAREFULLY
-
-This document contains the terms under which CSIRO agrees to licence its Software to you.  This is a template and further information relevant to the licence is set out in the Supplementary Licence specific to the Software you are licensing from CSIRO.  Both documents together form this agreement.  
-
 The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) ABN 41 687 119 230.
 
 Except where otherwise indicated, including in the Supplementary Licence, CSIRO grants you a licence to the Software on the terms of the GNU General Public Licence version 3 (GPLv3), distributed at: http://www.gnu.org/licenses/gpl.html.
