@@ -11,10 +11,15 @@
 #*					See license for full restrictions 						*/
 #****************************************************************/
 cmake_minimum_required(VERSION 3.9)
-set(CMAKE_BUILD_TYPE Release)
+if (NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release)
+endif()
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fopenmp ")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(CMakePrintHelpers)
+cmake_print_variables(CMAKE_BUILD_TYPE)
 
 #Name of the Project and version
 project(FracG VERSION 1.0.0 DESCRIPTION "FracG")

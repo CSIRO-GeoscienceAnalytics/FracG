@@ -1,14 +1,14 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #ifndef _GRAPH_h
 #define _GRAPH_h
@@ -21,6 +21,8 @@ namespace FracG
 {
     namespace bg  = boost::geometry;
     namespace bgi = boost::geometry::index;
+
+	const std::string graph_subdir="graph";
 
     //an rtree-backed map which associates a value with a particular point location
     template <typename VT = vertex_type, typename PT = point_type>

@@ -1,14 +1,14 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #include "../include/GeoRef.h"
 #include "../include/graph.h"
@@ -19,8 +19,6 @@
 namespace FracG
 {
 	namespace fs = boost::filesystem;
-
-	const std::string raster_subdir="raster";
 
 	//compare two well known text strings, to check if they are equivalent
 	void CheckReferenceSystem(std::string wkt1, std::string wkt2)
@@ -1950,7 +1948,9 @@ namespace FracG
 		if (!skip_betweenness_centrality)
 		{
 			brandes_betweenness_centrality(G, vertex_property_map);
-			factor = 2 / (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
+			long long int scale = (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
+			if (scale <= 0) scale = 1; //if there is only one vertex, then this denumerator becomes zero, causing a divide by zero error
+			factor = 2 / scale;
 		}
 		
 		std::cout << "centrality done" << std::endl;

@@ -1,22 +1,20 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #include "../include/stats.h"
 #include "../include/geometrie.h"
 #include "../include/GeoRef.h"
 #include "../include/graph.h"
 #include "../include/util.h"
-
-const std::string stats_subdir = "/statisics/";
 
 namespace FracG
 {
@@ -1260,7 +1258,7 @@ namespace FracG
 			sum += weight * std::exp(-0.5 * xd1 * xd1 / s2);
 			sum += weight * std::exp(-0.5 * xd2 * xd2 / s2);
 		}
-		return sum/(sqrt(2*M_PI) * angles.size() * smooth);
+		return sum;// /(sqrt(2*M_PI) * angles.size() * smooth)
 	}
 
 	//return an evenly-sampled array of the kde that represents the given values and smoothing factor
@@ -1268,11 +1266,15 @@ namespace FracG
 	//weighted version
 	arma::vec AngleKdeFillArray(int nsamples, arma::vec &angles, arma::vec &weights, const double smooth)
 	{
-		const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to flaoting point later
+		const double dn = (double) nsamples; //convenience name, and to avoid forgetting to convert to floating point later
 		arma::vec sampled(nsamples);
+		double total_weight = 0; //use this to normalise the KDE array, accounting for variable weights
 		for (int i = 0; i < nsamples; i++){
 			sampled[i] = EvaluateAngleKde(angles, weights, smooth, MAX_ANGLE * i / dn);// * MAX_ANGLE / dn //actually, don't scale it here
+			total_weight += sampled[i];
 		}
+		//should sum to 1/(samples_per_degree) = MAX_ANGLE / dn
+		sampled *= dn / (MAX_ANGLE * total_weight);
 		return sampled;
 	}
 	
@@ -1545,7 +1547,7 @@ namespace FracG
 	}
 
 	//fit gaussians to a KDE, they are in the format <amplitude, sigma, position/angle>
-	AngleDistribution FitGaussiansWraparound(std::vector<std::pair<double, double>> &KDE, std::vector<double> &fault_angles, const double param_penalty = 2, const int max_gaussians = 10)
+	AngleDistribution FitGaussiansWraparound(std::vector<std::pair<double, double>> &KDE, std::vector<double> &fault_angles, std::vector<double> &fault_weights, const double param_penalty = 2, const int max_gaussians = 10)
 	{
 	// 	std::cout << "starting gaussian fit" << std::endl;
 		arma::vec pdf(KDE.size());
@@ -1621,11 +1623,13 @@ namespace FracG
 
 			double llikelihood = 1; //calculate the log likelihood
 			double llikelihood_unif = 1;
-			for (auto it = fault_angles.begin(); it < fault_angles.end(); it++)
+			for (auto it = fault_angles.begin(), weights_it = fault_weights.begin(); it < fault_angles.end(); it++, weights_it++)
 			{
+				const double weight = *weights_it;
 				double likelihood = results.EvaluateDistribution(*it);
 				llikelihood += likelihood > 0 ? std::log(likelihood) : 0;
-				llikelihood_unif += std::log(results_unif.EvaluateDistribution(*it));
+				llikelihood *= weight;
+				llikelihood_unif += weight * std::log(results_unif.EvaluateDistribution(*it));
 			}
 			int nParams = PPG * nGaussians; //number of free parameters
 			int nParams_unif = nParams + 1;
@@ -1655,8 +1659,8 @@ namespace FracG
 		std::string out_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, out_filename, ".csv");
 		std::ofstream txtF = FracG::CreateFileStream(out_name);
 		int index = 0 ;
-		arma::vec ANGLE(lineaments.size(), arma::fill::zeros);
-		arma::vec WEIGHTS(lineaments.size(), arma::fill::zeros);
+		arma::vec ANGLE(lineaments.size(), arma::fill::zeros); //array of the angle of each feature
+		arma::vec WEIGHTS(lineaments.size(), arma::fill::zeros); //the weight associated with each feature
 		for (VECTOR::LINE_IT line_it = lineaments.begin(); line_it < lineaments.end(); line_it++)
 		{
 			line_type F = *line_it;
@@ -1670,9 +1674,9 @@ namespace FracG
 		}
 
 		//KDE estimation of orientation to obtain number of lineament sets------
-		std::sort(ANGLE.begin(), ANGLE.end());
+// 		std::sort(ANGLE.begin(), ANGLE.end()); //this shouldn't be needed
 
-		std::vector< std::pair<double, double>> GAUSS, GAUSS_WEIGHTED;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) std::pairs
+		std::vector< std::pair<double, double>> GAUSS;// =  kde( ANGLE, ANGLE.size(), 10); //these are (angle, pdf) std::pairs
 		const int samples_per_degree = 10;
 		arma::vec est_pdf = AngleKdeFillArray(MAX_ANGLE * samples_per_degree, ANGLE, WEIGHTS, samples_per_degree);
 		for (unsigned int i = 0; i < est_pdf.size(); i++)
@@ -1686,25 +1690,16 @@ namespace FracG
 
 		for (unsigned int i = 0; i < GAUSS.size(); i++)
 		{
-			if (i == 0)
-				if (GAUSS[i].second > GAUSS[GAUSS.size()-1].second && 
-					GAUSS[i].second > GAUSS[i+1].second)
-						Maximas.push_back(std::make_pair(GAUSS[i].first, GAUSS[i].second));
-
-			if (i > 0 && i+1 < GAUSS.size())
-				if (GAUSS[i].second > GAUSS[i-1].second &&
-					GAUSS[i].second > GAUSS[i+1].second)
-						Maximas.push_back(std::make_pair(GAUSS[i].first, GAUSS[i].second));
-
-
-			if (i == GAUSS.size())
-				if (GAUSS[i].second > GAUSS[i-1].second && 
-					GAUSS[i].second > GAUSS[0].second)
-						Maximas.push_back(std::make_pair(GAUSS[i].first, GAUSS[i].second));
+			const unsigned int next = (i+1             ) % GAUSS.size();
+			const unsigned int prev = (i-1+GAUSS.size()) % GAUSS.size();
+			if (GAUSS[i].second > GAUSS[prev].second && 
+				GAUSS[i].second > GAUSS[next].second)
+					Maximas.push_back(GAUSS[i]);
 		}
 
 		std::vector<double> angles_vector(ANGLE.begin(), ANGLE.end());
-		AngleDistribution angle_dist = FitGaussiansWraparound(GAUSS, angles_vector, param_penalty);
+		std::vector<double> weights_vector(WEIGHTS.begin(), WEIGHTS.end());
+		AngleDistribution angle_dist = FitGaussiansWraparound(GAUSS, angles_vector, weights_vector, param_penalty);
 		gauss_params gauss_p = angle_dist.gaussians;
 
 		txtF << "Amplitude\tSigma\tMean" << std::endl;
@@ -1730,7 +1725,7 @@ namespace FracG
 	
 	AngleDistribution KdeEstimationStrikes(VECTOR &lines, const double param_penalty, std::string out_filename)
 	{
-		std::function<double(VECTOR::LINE_IT &)> unit_weights_func = [](VECTOR::LINE_IT line) -> double {return 1;};
+		std::function<double(VECTOR::LINE_IT &)> unit_weights_func = [](VECTOR::LINE_IT &line) -> double {return 1;};
 		return KdeEstimationStrikes(lines, unit_weights_func, param_penalty, out_filename);
 	}
 
@@ -1762,11 +1757,9 @@ namespace FracG
 			return(0);
 	}
 
-	line_type RandomLine(std::vector<std::pair<int, line_type>> all_lines, box AOI, polygon_type t_AOI, double angle, double min_spaceing, int d)
+	line_type RandomLine(std::vector<std::pair<int, line_type>> all_lines, box AOI, polygon_type t_AOI, double angle, double min_spaceing, int d, boost::mt19937 rng)
 	{
 		line_type basis, r_line;
-		boost::random_device dev;
-		boost::mt19937 rng(dev);
 
 		double min_x = geometry::get<geometry::min_corner, 0>(AOI);
 		double min_y = geometry::get<geometry::min_corner, 1>(AOI);
@@ -1844,8 +1837,8 @@ namespace FracG
 				}
 				if (iter_total > 100)
 				{
-					std::cout << "Error: Maximum number of iterations fro scaline sampling reached." << std::endl;
-					exit (EXIT_FAILURE);
+					std::cout << "Error: Maximum number of iterations for scaline sampling reached." << std::endl;
+					return line_type();
 				}
 			}
 		} while(search);
@@ -1884,7 +1877,11 @@ namespace FracG
 				else
 					d = 0;
 					
-				line_type scanline = RandomLine(all_lines, AOI, t_AOI, std::get<2>(angle_dist.gaussians.at(d)), scanline_spaceing, d);
+				line_type scanline = RandomLine(all_lines, AOI, t_AOI, std::get<2>(angle_dist.gaussians.at(d)), scanline_spaceing, d, rng_d);
+				if (boost::size(scanline) <= 0)
+				{
+					return;
+				}
 				all_lines.push_back(std::make_pair(d, scanline));
 				
 				//find intersections with lineamnts
