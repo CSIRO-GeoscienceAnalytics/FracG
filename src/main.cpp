@@ -1,14 +1,14 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #include <boost/program_options.hpp>
 #include "../include/graph.h"
@@ -38,8 +38,8 @@ const char *SPUR_DIST_THRESH="spur_dist_thresh";
 const char *CLASSIFY_LINEAMENTS_DIST="classify_lineaments_dist";
 const char *RASTER_STATS_DIST="raster_stats_dist";
 
-const char *RASTER_SPACING="raster_spacing";
-const char *RASTER_SPACING2="raster_spacing2";
+const char *DI_RASTER_SPACING="di_raster_spacing";
+const char *DIST_RASTER_SPACING="dist_raster_spacing";
 const char *ISECT_SEARCH_SIZE="isect_search_size";
 const char *RESAMPLE="resample";
 
@@ -105,10 +105,10 @@ int main(int argc, char *argv[])
 		(CLASSIFY_LINEAMENTS_DIST, po::value<double>()->default_value(-1), "Distance used in ClassifyLineaments") 
 		(RASTER_STATS_DIST, po::value<double>()->default_value(1.25), "Distance used in RasterStatistics") 
 
-		(RASTER_SPACING, po::value<double>()->default_value(1000.0), "Pixel size of output density/intensity maps")
-		(RASTER_SPACING2, po::value<double>()->default_value(500.0), "Pixel size of output distance maps")
+		(DI_RASTER_SPACING, po::value<double>()->default_value(1000.0), "Pixel size of output density/intensity maps")
+		(DIST_RASTER_SPACING, po::value<double>()->default_value(500.0), "Pixel size of output distance maps")
 		(ISECT_SEARCH_SIZE, po::value<double>()->default_value(-1), "Search for intersections within this distance")
-		(RESAMPLE, po::value<bool>()->default_value(false), "Resample raster fiele to 1/10 of pixel size (bicubic spline)")
+		(RESAMPLE, po::value<bool>()->default_value(false), "Resample raster to 1/10 of pixel size (bicubic spline)")
 
 		(SCANLINE_COUNT, po::value<int>()->default_value(50), "Number of scalines for determining intesity and spacing")
 		(SCANLINE_SPACE, po::value<double>()->default_value(10), "Minimum spacing of scanlines")
@@ -184,10 +184,10 @@ int main(int argc, char *argv[])
     double spur_dist_thresh = vm[SPUR_DIST_THRESH].as<double>();
     if (spur_dist_thresh < 0) spur_dist_thresh = dist_threshold;
     
-    const double raster_spacing = vm[RASTER_SPACING].as<double>();
-    const double raster_spacing2 = vm[RASTER_SPACING2].as<double>();
+    const double di_raster_spacing = vm[DI_RASTER_SPACING].as<double>();
+    const double dist_raster_spacing = vm[DIST_RASTER_SPACING].as<double>();
     double isect_search_size = vm[ISECT_SEARCH_SIZE].as<double>();
-    if (isect_search_size < 0) isect_search_size = raster_spacing;
+    if (isect_search_size < 0) isect_search_size = di_raster_spacing;
 	const bool resample = vm[RESAMPLE].as<bool>();
     
     const int scanline_count = vm[SCANLINE_COUNT].as<int>();
@@ -253,23 +253,23 @@ int main(int argc, char *argv[])
 	}
 	
 	FracG::DoBoxCount(lines); 																				  // Boxcounting algorithm 
-	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty, "angle_distribution_kde");	 //kernel density estimation
+	FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(lines, angle_param_penalty, "angle_distribution_kde");	 //kernel density estimation of the angle distribution
+	//calculate angle distribution, weighted by the length of the feature
+	std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [](FracG::VECTOR::LINE_IT &it) -> double
+	{
+		double length = boost::geometry::length(*it);
+		return length;
+	};
+	FracG::AngleDistribution weighted_angle_distribution = FracG::KdeEstimationStrikes(lines, length_weights, angle_param_penalty, "angle_distribution_kde_length_weights"); //the same estimation, but weighting the angles according to length
+	
 	FracG::CreateStats(lines, angle_distribution); 															// statistical analysis of network	
 	FracG::ScanLine(lines, scanline_count, angle_distribution, scanline_spaceing);							  // sanline analysis of density and spacing (number is number of scalines to generate)
 	FracG::WriteShapefile(lines, angle_distribution, FracG::AddPrefixSuffix(shapefile_name, "corrected_"));		// this writes the shp file after correction of orientations (fits gaussians to the data) 
 	
-	//calculate angle distribution, weighted by the length of the feature
-	std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [&lines](FracG::VECTOR::LINE_IT &it) -> double
-	{
-// 		int idx = it - lines.data.begin();
-		double length = boost::geometry::length(*it);
-		return length;
-	};
-	FracG::AngleDistribution weighted_angle_distribution = FracG::KdeEstimationStrikes(lines, length_weights, angle_param_penalty, "angle_distribution_kde_length_weights");
 	
 	//density and spacing maps
-	FracG::P_Maps(lines, raster_spacing, resample); 			 //create P20 and P21 map (second argument is the pixel resolution)
-	FracG::D_Maps(lines, raster_spacing2, resample);			//create distance maps (second argument is the pixel resolution)
+	FracG::P_Maps(lines, di_raster_spacing, resample); 			 //create P20 and P21 map (second argument is the pixel resolution)
+	FracG::D_Maps(lines, dist_raster_spacing, resample);			//create distance maps (second argument is the pixel resolution)
 
 	//building the graph
 	FracG::graph_map<FracG::point_type, FracG::vertex_type, FracG::Graph> gm = FracG::ConvertLinesToGraph(lines.data, lines.refWKT, dist_threshold); 	  //convert the faults into a graph
@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
 	FracG::GraphAnalysis(graph, lines, angle_distribution, angle_param_penalty, (out_path / graph_results_filename).string());	//graph, vector data, minimum number of branches per component to analyse
 	FracG::WriteGraph(graph, lines, graph_results_folder, false, skip_betweenness_centrality); //write a point-and line-shapefile containing the elements of the graph (string is subfolder name)
 	FracG::ClassifyLineaments(graph, lines, angle_distribution, classify_lineaments_dist, (out_path / "classified").string());		  // number is the vritical distance between lineamnt and intersection point and the string is the filename
-	FracG::IntersectionMap(graph, lines, raster_spacing, isect_search_size, resample);											 //2000 2500 need to check what values to use here, also need to check the function itself
+	FracG::IntersectionMap(graph, lines, di_raster_spacing, isect_search_size, resample);											 //2000 2500 need to check what values to use here, also need to check the function itself
 	FracG::ComponentExtract( graph, lines, component )	;																		//extracting features of connected component
 	
 	//simple graph algorithms

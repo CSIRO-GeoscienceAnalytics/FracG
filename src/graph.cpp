@@ -1,14 +1,14 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #include "../include/graph.h"
 #include "../include/geometrie.h"
@@ -16,8 +16,6 @@
 #include "../include/stats.h"
 #include "../include/util.h"
 #include <random>
-
-const std::string graph_subdir="graph";
 
 namespace FracG
 {
@@ -665,7 +663,7 @@ namespace FracG
 		assert (num_vertices(G) != 0 && num_edges(G) != 0);
 		std::cout<< "GRAPH'S ANALYSIS OF NETWORK" << std::endl;
 		std::ofstream txtG;
-		std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder
+		std::string save_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {stats_subdir}, "graph_statistics", ".csv", true); //we need to clean this up //lines.folder //graph
 		txtG = FracG::CreateFileStream(save_name);
 		
 		/***********************************************************************
@@ -689,103 +687,103 @@ namespace FracG
 		if (!boyer_myrvold_planarity_test(G))
 			std::cout << " WARNING: GRAPH IS NOT PLANAR! Proceed with caution" << std::endl;
 
-			ClassifyEdges(G, Inodes, Ynodes, Xnodes, Enodes, II, IC, CC, NbB, totalLength, numK, Area);
-			ClassifyEdgeOrientation(G, lines, angle_dist);
-			
-			VECTOR graph_lines;
-			graph_lines.out_path = lines.out_path;
-			txtG << lines.name << std::endl;
-			txtG << "id \t angle \t length \t component \t type" << std::endl; 
-			for (auto Eg : make_iterator_range(edges(G)))
-			{
-				graph_lines.data.push_back(G[Eg].trace);
-				txtG << G[Eg].index << "\t" << G[Eg].angle << "\t" << G[Eg].length << "\t" << G[Eg].component << "\t" << G[Eg].BranchType << std::endl;
-			}
-			
-			FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(graph_lines, param_penalty, "graph_angle_distribution_kde");	 //kernel density estimation
-			std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [&graph_lines](FracG::VECTOR::LINE_IT &it) -> double
-			{
-				double length = boost::geometry::length(*it);
-				return length;
-			};
-			FracG::AngleDistribution weighted_angle_distribution = FracG::KdeEstimationStrikes(graph_lines, length_weights, param_penalty, "graph_angle_distribution_kde_length_weights");
+		ClassifyEdges(G, Inodes, Ynodes, Xnodes, Enodes, II, IC, CC, NbB, totalLength, numK, Area);
+		ClassifyEdgeOrientation(G, lines, angle_dist);
 		
-			//Number of connections
-			Nc = Ynodes + Xnodes;
+		VECTOR graph_lines;
+		graph_lines.out_path = lines.out_path;
+		txtG << lines.name << std::endl;
+		txtG << "id \t angle \t length \t component \t type" << std::endl; 
+		for (auto Eg : make_iterator_range(edges(G)))
+		{
+			graph_lines.data.push_back(G[Eg].trace);
+			txtG << G[Eg].index << "\t" << G[Eg].angle << "\t" << G[Eg].length << "\t" << G[Eg].component << "\t" << G[Eg].BranchType << std::endl;
+		}
+		
+		FracG::AngleDistribution angle_distribution = FracG::KdeEstimationStrikes(graph_lines, param_penalty, "graph_angle_distribution_kde");	 //kernel density estimation
+		std::function<double(FracG::VECTOR::LINE_IT &)> length_weights = [](FracG::VECTOR::LINE_IT &it) -> double
+		{
+			double length = boost::geometry::length(*it);
+			return length;
+		};
+		FracG::AngleDistribution weighted_angle_distribution = FracG::KdeEstimationStrikes(graph_lines, length_weights, param_penalty, "graph_angle_distribution_kde_length_weights");
+	
+		//Number of connections
+		Nc = Ynodes + Xnodes;
 
-			//Number of branches NB = (I + 3Y + 4X) / 2 
-			NbN = (Inodes + 3*Ynodes + 4*Xnodes) / 2;
+		//Number of branches NB = (I + 3Y + 4X) / 2 
+		NbN = (Inodes + 3*Ynodes + 4*Xnodes) / 2;
 
-			//Number of lines NL = (I + 2Y) / 2 
-			Nl = (Inodes + 2*Ynodes) / 2;
+		//Number of lines NL = (I + 2Y) / 2 
+		Nl = (Inodes + 2*Ynodes) / 2;
 
-			//Average Length of lines L / NL 
-			if (Nl != 0)
-			{
-				//average length of lines
-				avLenL = totalLength / Nl;
+		//Average Length of lines L / NL 
+		if (Nl != 0)
+		{
+			//average length of lines
+			avLenL = totalLength / Nl;
 
-				//Connections per line 2(Y+X) / NL 
-				Cl = 2*(Ynodes + Xnodes) / Nl;
-			}
+			//Connections per line 2(Y+X) / NL 
+			Cl = 2*(Ynodes + Xnodes) / Nl;
+		}
 
-			if (Area != 0)
-			{
-				//Connecting node frequency (NC km-2)
-				NCfreq = Nc / Area;
+		if (Area != 0)
+		{
+			//Connecting node frequency (NC km-2)
+			NCfreq = Nc / Area;
 
-				//Branch frequency (B20)
-				B20 = NbN / Area;
+			//Branch frequency (B20)
+			B20 = NbN / Area;
 
-				//Line frequency (P20)
-				P20 = Nl / Area;
+			//Line frequency (P20)
+			P20 = Nl / Area;
 
-				//2D intesity (P21 = L / A 
-				P21 = totalLength / Area;
-			}
+			//2D intesity (P21 = L / A 
+			P21 = totalLength / Area;
+		}
 
-			if (NbN != 0)
-			{
-				//Average length of branches L/NB 
-				avLenB = totalLength / NbN;
+		if (NbN != 0)
+		{
+			//Average length of branches L/NB 
+			avLenB = totalLength / NbN;
 
-				if (avLenB != 0)
-					//Dimensionless intesity B22 
-					B22 = P21 * avLenB;
+			if (avLenB != 0)
+				//Dimensionless intesity B22 
+				B22 = P21 * avLenB;
 
-				//Conections per branch (3Y + 4X)/ NB 
-				Cb = (3*Ynodes + 4*Xnodes) / NbN;
-			}
+			//Conections per branch (3Y + 4X)/ NB 
+			Cb = (3*Ynodes + 4*Xnodes) / NbN;
+		}
 
 		//write results---------------------------------------------------------
-			if (txtG.is_open())  
-			{ 
-				txtG<< "\nNodes: " << "\t" 			 << num_vertices(G) << "\n"
-					<< "Edges " << "\t" 			 << num_edges(G) << "\n"
-					<< "Edgenodes: " 				 << "\t" << Enodes << "\n"
-					<< "Inodes: " 			 		 << "\t" << Inodes <<  "\n" 
-					<< "Ynodes: " 			 		 << "\t" << Ynodes <<  "\n" 
-					<< "Xnodes: " 			 		 << "\t" << Xnodes  << "\n" 
-					<< "Enodes: " 			 		 << "\t" << Enodes  << "\n"
-					<< "II-Branches: "				 << "\t" << II << "\n"
-					<< "IC-Branches: "				 << "\t" << IC << "\n"
-					<< "CC-Branches: "				 << "\t" << CC << "\n"
-					<<" Connections (Y +X): "		 << "\t" << (Ynodes + Xnodes) << "\n"
-					<<" Total length:"				 << "\t" << totalLength << "\n"
-					<<" Average length: "			 << "\t" << totalLength / NbB<< "\n " 
-					<< "Connecting node frequency:"<< "\t" << NCfreq << "\n"
-					<< "Branch frequency: " << "\t"  << B20 << "\n"
-					<< "Line frequency: " << "\t" 	 << P20 << "\n"
-					<< "2D intensity: " << "\t" 	 << P21 << "\n"
-					<< "Dimensionless intesity: " 	 << "\t" << B22 << "\n"
-					<< "Average degree of network: " << "\t" << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
-					<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
-					<< "Number of components (c): "  << "\t" << numK << "\n"
-					<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
-					<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n";
-			}
-			else 
-				std::cout << "ERROR: FAILED TO WRITE RESULTS!" << std::endl;
+		if (!txtG.is_open())  
+		{ 
+			std::cout << "ERROR: FAILED TO WRITE RESULTS!" << std::endl;
+			return;
+		}
+		txtG<< "\nNodes: " << "\t" 			 << num_vertices(G) << "\n"
+			<< "Edges " << "\t" 			 << num_edges(G) << "\n"
+			<< "Edgenodes: " 				 << "\t" << Enodes << "\n"
+			<< "Inodes: " 			 		 << "\t" << Inodes <<  "\n" 
+			<< "Ynodes: " 			 		 << "\t" << Ynodes <<  "\n" 
+			<< "Xnodes: " 			 		 << "\t" << Xnodes  << "\n" 
+			<< "Enodes: " 			 		 << "\t" << Enodes  << "\n"
+			<< "II-Branches: "				 << "\t" << II << "\n"
+			<< "IC-Branches: "				 << "\t" << IC << "\n"
+			<< "CC-Branches: "				 << "\t" << CC << "\n"
+			<<" Connections (Y +X): "		 << "\t" << (Ynodes + Xnodes) << "\n"
+			<<" Total length:"				 << "\t" << totalLength << "\n"
+			<<" Average length: "			 << "\t" << totalLength / NbB<< "\n " 
+			<< "Connecting node frequency:"<< "\t" << NCfreq << "\n"
+			<< "Branch frequency: " << "\t"  << B20 << "\n"
+			<< "Line frequency: " << "\t" 	 << P20 << "\n"
+			<< "2D intensity: " << "\t" 	 << P21 << "\n"
+			<< "Dimensionless intesity: " 	 << "\t" << B22 << "\n"
+			<< "Average degree of network: " << "\t" << (float) 2 * num_edges(G)/ num_vertices(G) << "\n"
+			<< "Average connections: " 		 << "\t" << (float) 2 * (Xnodes + Ynodes) / num_vertices(G) << "\n"
+			<< "Number of components (c): "  << "\t" << numK << "\n"
+			<< "Number of faces (f): " << "\t" << num_edges(G) + numK - num_vertices(G) +1 << "\n" 
+			<< "Density (d): " << "\t" << num_edges(G)*(totalLength*totalLength) /(4*Area) << "\n";
 		txtG.close();
 	}
 
@@ -1079,16 +1077,16 @@ namespace FracG
 			}
 
 	//write the raster file---------------------------------------------
-		std::string isec_dens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density", ".tif");
+		std::string isec_dens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "intersection_density", ".tif");
 		WriteRASTER(vec,  lines.refWKT, newGeoTransform, isec_dens_name);
 
-		std::string isec_intens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity", ".tif");
+		std::string isec_intens_name = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "intersection_intensity", ".tif");
 		WriteRASTER(vec2, lines.refWKT, newGeoTransform, isec_intens_name);
 		
 		if (resample)
 		{
-			std::string i20_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_density_resample", ".tif");
-			std::string i21_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {graph_subdir}, "intersection_intensity_resample", ".tif");
+			std::string i20_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "intersection_density_resample", ".tif");
+			std::string i21_name_res = FracG::AddPrefixSuffixSubdirs(lines.out_path, {geom_subdir}, "intersection_intensity_resample", ".tif");
 			gdal_resample(isec_dens_name, i20_name_res);
 			gdal_resample(isec_intens_name , i21_name_res);
 		}

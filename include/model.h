@@ -1,14 +1,14 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #ifndef _MODEL_h
 #define _MODEL_h

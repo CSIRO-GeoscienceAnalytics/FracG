@@ -1,14 +1,14 @@
 /****************************************************************/
-/*				DO NOT MODIFY THIS HEADER							*/
-/*					FRACG - FRACture Graph							*/
-/*				Network analysis and meshing software					*/
-/*																		*/
-/*						(c) 2021 CSIRO									*/
-/*			GNU General Public Licence version 3 (GPLv3)				*/
-/*																		*/
-/*						Prepared by CSIRO								*/
-/*																		*/
-/*					See license for full restrictions 						*/
+/*				DO NOT MODIFY THIS HEADER						*/
+/*					FRACG - FRACture Graph						*/
+/*				Network analysis and meshing software			*/
+/*																*/
+/*						(c) 2021 CSIRO							*/
+/*			GNU General Public Licence version 3 (GPLv3)		*/
+/*																*/
+/*						Prepared by CSIRO						*/
+/*																*/
+/*					See license for full restrictions 			*/
 /****************************************************************/
 #ifndef _geo_h
 #define _geo_h
@@ -18,6 +18,8 @@
 
 namespace FracG
 {
+	const std::string raster_subdir="raster";
+
 	struct different_id_p
 	{
 		different_id_p(size_t i) : id(i) {}
