@@ -1550,13 +1550,19 @@ namespace FracG
 	AngleDistribution FitGaussiansWraparound(std::vector<std::pair<double, double>> &KDE, std::vector<double> &fault_angles, std::vector<double> &fault_weights, const double param_penalty = 2, const int max_gaussians = 10)
 	{
 	// 	std::cout << "starting gaussian fit" << std::endl;
-		arma::vec pdf(KDE.size());
 		arma::vec angle(KDE.size());
+		arma::vec pdf(KDE.size());
+		double pdf_sum = 0; //sum of the probability density function
 		for (unsigned int i = 0; i < KDE.size(); i++)
 		{
 			angle[i] = KDE[i].first;
 			pdf[i] = KDE[i].second;
+			pdf_sum += pdf[i];
 		}
+		
+		const double pdf_area_threshold = 0.05;
+		const double pdf_threshold_low  = pdf_sum * (1 - pdf_area_threshold);
+		const double pdf_threshold_high = pdf_sum * (1 + pdf_area_threshold);
 
 		arma::cx_vec ft = arma::fft(pdf); //conveniently, our data does actually wrap around, so we don't need a taper function
 		//the frequency order isn't specified in the arma documentation, assuming that it's 0-freq -> +ve freqs -> most negative freqs -> -1/N
@@ -1566,13 +1572,14 @@ namespace FracG
 			freqs[i] = i + (i <= freqs.size() / 2 ? 0 : -freqs.size()) / (double) freqs.size();
 		}
 
-		int nGaussians = 0;
-
 		arma::vec residual(KDE.size()); //residuals, used to calculate the error
+		arma::vec residual_uniform(KDE.size()); //residuals from the calculattions that include a uniform component
 
 		AngleDistribution results, results_unif, previous_results;
 
-		std::vector<std::pair<double, decltype(results)>> ic; //information criteria - used to chosse the number of gaussians
+		std::vector<std::pair<double, decltype(results)>> ic; //information criteria - used to choose the number of gaussians
+
+		int nGaussians = 0;
 
 		while (nGaussians < max_gaussians)
 		{
@@ -1582,6 +1589,7 @@ namespace FracG
 
 			//now make scale image
 			const int max_peaks = base_crossings.size() / 2;
+// 			std::cout << "Attempting " << nGaussians << " gaussians, with max peaks of " << max_peaks << std::endl;
 			if (max_peaks < nGaussians) break; //we don't have enough peaks to get the required amount, so use the best result before this
 			int peak_count = max_peaks;
 			std::vector<std::vector<crossing_type>> scale_image = {base_crossings};
@@ -1596,7 +1604,7 @@ namespace FracG
 					for (unsigned int i = 0; i < scaled_ft.size(); i++) scaled_ft[i] = ft[i] * std::sqrt(M_PI * next_scale) * std::exp(-M_PI * M_PI * freqs[i] * freqs[i] * next_scale);
 					std::vector<crossing_type> next_crossings = FindZerocrossings(scaled_ft, freqs);
 					int this_peaks = next_crossings.size() / 2;
-	// 				std::cout << "At scale " << next_scale << " there are " << this_peaks << " peaks, diff = " << peak_count - this_peaks << std::endl;
+// 					std::cout << "At scale " << next_scale << " there are " << this_peaks << " peaks, diff = " << peak_count - this_peaks << std::endl;
 					if (peak_count - this_peaks <= 1){
 						scale = next_scale;
 						scale_image.push_back(next_crossings);
@@ -1615,20 +1623,37 @@ namespace FracG
 			results = FitGaussians(positions, pdf, angle, false);
 			results_unif = FitGaussians(positions, pdf, angle, true);
 
-			for (int i = 0; i < (int)residual.size(); i++) residual[i] = pdf[i] - results.EvaluateDistribution(angle[i]);
+			for (int i = 0; i < (int)residual.size(); i++)
+			{
+				residual[i]         = pdf[i] - results.EvaluateDistribution(angle[i]);
+				residual_uniform[i] = pdf[i] - results_unif.EvaluateDistribution(angle[i]);
+			}
 			double rss = 0;
 			for (int i = 0; i < (int)residual.size(); i++) rss += residual[i]*residual[i];
 	//  		double err = arma::norm(residual, 2);
+			
+			//we use these sums to check if the fit has gone wrong somehow - if the area is too different, don't use the result
+			double fitted_sum = 0, fitted_sum_uniform = 0;
+			for (unsigned int i = 0; i < angle.size(); i++)
+			{
+				fitted_sum += results.EvaluateDistribution(angle[i]);
+				fitted_sum_uniform += results_unif.EvaluateDistribution(angle[i]);
+			}
+			
+			//if we don't have enough peaks to try a larger number of gaussians, try using the residuals to find more peaks
 			if (nGaussians >= max_peaks) ft = arma::fft(residual); //If there aren't any more peaks to find, use the residuals of the fit with the current data
+// 			if (nGaussians >= max_peaks) std::cout << "Replacing ft with ft of the residuals" << std::endl;
+			const int new_max_peaks = FindZerocrossings(ft, freqs).size()/2;
+			if (nGaussians >= new_max_peaks) ft = arma::fft(residual_uniform); //if using the regular residuals doesn't work, try using the residuals from using the uniform component
 
 			double llikelihood = 1; //calculate the log likelihood
 			double llikelihood_unif = 1;
 			for (auto it = fault_angles.begin(), weights_it = fault_weights.begin(); it < fault_angles.end(); it++, weights_it++)
 			{
-				const double weight = *weights_it;
+				const double weight = *weights_it;//1;
 				double likelihood = results.EvaluateDistribution(*it);
-				llikelihood += likelihood > 0 ? std::log(likelihood) : 0;
-				llikelihood *= weight;
+				likelihood = (likelihood > 0 ? std::log(likelihood) : 0);
+				llikelihood += weight * likelihood;
 				llikelihood_unif += weight * std::log(results_unif.EvaluateDistribution(*it));
 			}
 			int nParams = PPG * nGaussians; //number of free parameters
@@ -1639,12 +1664,13 @@ namespace FracG
 			double aicc_unif = param_penalty * nParams_unif - 2 * llikelihood_unif;
 			bool has_negative = false;
 			for (auto it = results.gaussians.begin(); it < results.gaussians.end(); it++) if (std::get<0>(*it) < 0) has_negative = true; //reject fittings with negative gaussians, all the groups should be positive
-			std::cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", unif ll is " << llikelihood_unif << ", unif aicc = " << aicc_unif << ", has neg: " << has_negative << std::endl;
-
-	// 		 //error err
-	//         has_negative = false; //debug
-			if (!std::isnan(aicc) && !has_negative) ic.push_back(std::make_pair(aicc, results));
-			if (!std::isnan(aicc_unif)) ic.push_back(std::make_pair(aicc_unif, results_unif));
+			
+			const bool use_gaussians = !std::isnan(aicc) && !has_negative && pdf_threshold_low <= fitted_sum && fitted_sum <= pdf_threshold_high;
+			const bool use_uniform = !std::isnan(aicc_unif) && pdf_threshold_low <= fitted_sum_uniform && fitted_sum_uniform <= pdf_threshold_high;
+			std::cout << "At ng " << nGaussians << " the log likelihood is " << llikelihood << " with AICC = " << aicc << ", usable? " << use_gaussians << ", unif ll is " << llikelihood_unif << ", unif aicc = " << aicc_unif << ", usable? " << use_uniform << std::endl;
+			
+			if (use_gaussians) ic.push_back(std::make_pair(aicc     , results));
+			if (use_uniform  ) ic.push_back(std::make_pair(aicc_unif, results_unif));
 
 		}
 	// 	return ic[5-1].second; //debug
@@ -1710,12 +1736,12 @@ namespace FracG
 			std::cout << std::get<0>(*it) << "\t" << std::get<1>(*it) << "\t" << std::get<2>(*it) << std::endl;
 		}
 
-		std::cout << "Uniform Level:\t" << angle_dist.uniform_prob << std::endl;
+		std::cout << "Uniform Level:\t" << angle_dist.uniform_prob << (angle_dist.with_uniform ? " - using uniform level" : " - using only Gaussians" ) << std::endl;
 		txtF      << "Uniform Level:\t" << angle_dist.uniform_prob << std::endl;
 		std::cout << std::endl;
 
 		txtF << "Fault sets:" << "\t" << gauss_p.size() << std::endl;
-		txtF << "Angle \t Density \t Smoothed Density" << std::endl;
+		txtF << "Angle \t Density \t Fitted Density" << std::endl;
 		for(unsigned int i =0; i < GAUSS.size(); i++)
 			txtF << GAUSS[i].first << "\t " << GAUSS[i].second << "\t" << angle_dist.EvaluateDistribution(GAUSS[i].first) <<  std::endl;   
 		txtF << std::endl;
