@@ -1,0 +1,8 @@
+This template helps you to create a properly formatted \LaTeX\ manuscript.
+
+\noindent\texttt{\textbackslash begin{abstract}} \dots
+\texttt{\textbackslash end{abstract}} and
+\verb+\begin{keyword}+ \verb+...+ \verb+\end{keyword}+
+which
+contain the abstract and keywords respectively.
+Each keyword shall be separated by a \verb+\sep+ command.

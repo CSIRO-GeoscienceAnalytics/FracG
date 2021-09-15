@@ -1,0 +1,488 @@
+\begin{thebibliography}{55}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\href}[2]{#2}
+\providecommand{\path}[1]{#1}
+\providecommand{\DOIprefix}{doi:}
+\providecommand{\ArXivprefix}{arXiv:}
+\providecommand{\URLprefix}{URL: }
+\providecommand{\Pubmedprefix}{pmid:}
+\providecommand{\doi}[1]{\href{http://dx.doi.org/#1}{\path{#1}}}
+\providecommand{\Pubmed}[1]{\href{pmid:#1}{\path{#1}}}
+\providecommand{\bibinfo}[2]{#2}
+\ifx\xfnm\relax \def\xfnm[#1]{\unskip,\space#1}\fi
+%Type = Misc
+\bibitem[{Fra(2011)}]{Fracman2011}
+, \bibinfo{year}{2011}.
+\newblock \bibinfo{title}{Fracman7 user documentation}.
+%Type = Article
+\bibitem[{Abbasi et~al.(2020)Abbasi, Sharifi and Kazemi}]{Abbasi2020}
+\bibinfo{author}{Abbasi, M.}, \bibinfo{author}{Sharifi, M.},
+  \bibinfo{author}{Kazemi, A.}, \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{Fluid flow in fractured reservoirs: Estimation of
+  fracture intensity distribution, capillary diffusion coefficient and shape
+  factor from saturation data}.
+\newblock \bibinfo{journal}{Journal of Hydrology} \bibinfo{volume}{582},
+  \bibinfo{pages}{124461}.
+%Type = Article
+\bibitem[{Andresen et~al.(2013)Andresen, Hansen, Le~Goc, Davy and
+  Hope}]{Andresen2013}
+\bibinfo{author}{Andresen, C.A.}, \bibinfo{author}{Hansen, A.},
+  \bibinfo{author}{Le~Goc, R.}, \bibinfo{author}{Davy, P.},
+  \bibinfo{author}{Hope, S.M.}, \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Topology of fracture networks}.
+\newblock \bibinfo{journal}{Frontiers in Physics} \bibinfo{volume}{1},
+  \bibinfo{pages}{7}.
+%Type = Incollection
+\bibitem[{Barton(1995)}]{Barton1995}
+\bibinfo{author}{Barton, C.C.}, \bibinfo{year}{1995}.
+\newblock \bibinfo{title}{Fractal analysis of scaling and spatial clustering of
+  fractures}, in: \bibinfo{booktitle}{Fractals in the earth sciences}.
+  \bibinfo{publisher}{Springer}, pp. \bibinfo{pages}{141--178}.
+%Type = Article
+\bibitem[{Bauer et~al.(2017)Bauer, Krumbholz, Meier and Tanner}]{Bauer2017}
+\bibinfo{author}{Bauer, J.F.}, \bibinfo{author}{Krumbholz, M.},
+  \bibinfo{author}{Meier, S.}, \bibinfo{author}{Tanner, D.C.},
+  \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Predictability of properties of a fractured
+  geothermal reservoir: the opportunities and limitations of an outcrop
+  analogue study}.
+\newblock \bibinfo{journal}{Geothermal Energy} \bibinfo{volume}{5},
+  \bibinfo{pages}{1--27}.
+%Type = Article
+\bibitem[{Bonnet et~al.(2001)Bonnet, Bour, Odling, Davy, Main, Cowie and
+  Berkowitz}]{Bonnet2001}
+\bibinfo{author}{Bonnet, E.}, \bibinfo{author}{Bour, O.},
+  \bibinfo{author}{Odling, N.E.}, \bibinfo{author}{Davy, P.},
+  \bibinfo{author}{Main, I.}, \bibinfo{author}{Cowie, P.},
+  \bibinfo{author}{Berkowitz, B.}, \bibinfo{year}{2001}.
+\newblock \bibinfo{title}{Scaling of fracture systems in geological media}.
+\newblock \bibinfo{journal}{Reviews of geophysics} \bibinfo{volume}{39},
+  \bibinfo{pages}{347--383}.
+%Type = Article
+\bibitem[{Bour and Davy(1999)}]{Bour1999}
+\bibinfo{author}{Bour, O.}, \bibinfo{author}{Davy, P.}, \bibinfo{year}{1999}.
+\newblock \bibinfo{title}{Clustering and size distributions of fault patterns:
+  Theory and measurements}.
+\newblock \bibinfo{journal}{Geophysical Research Letters} \bibinfo{volume}{26},
+  \bibinfo{pages}{2001--2004}.
+%Type = Article
+\bibitem[{Bridwell(1975)}]{Bridwell1975}
+\bibinfo{author}{Bridwell, R.}, \bibinfo{year}{1975}.
+\newblock \bibinfo{title}{Sinuosity of strike-slip fault traces}.
+\newblock \bibinfo{journal}{Geology} \bibinfo{volume}{3},
+  \bibinfo{pages}{630--632}.
+%Type = Article
+\bibitem[{Clauset et~al.(2009)Clauset, Shalizi and Newman}]{Clauset2009}
+\bibinfo{author}{Clauset, A.}, \bibinfo{author}{Shalizi, C.R.},
+  \bibinfo{author}{Newman, M.E.}, \bibinfo{year}{2009}.
+\newblock \bibinfo{title}{Power-law distributions in empirical data}.
+\newblock \bibinfo{journal}{SIAM review} \bibinfo{volume}{51},
+  \bibinfo{pages}{661--703}.
+%Type = Article
+\bibitem[{Contributors(2018)}]{Gdal2018}
+\bibinfo{author}{Contributors, G.}, \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Gdal/ogr geospatial data abstraction software
+  library}.
+\newblock \bibinfo{journal}{Open Source Geospatial Foundation} .
+%Type = Article
+\bibitem[{Dagum and Menon(1998)}]{Dagum1998}
+\bibinfo{author}{Dagum, L.}, \bibinfo{author}{Menon, R.}, \bibinfo{year}{1998}.
+\newblock \bibinfo{title}{Openmp: an industry standard api for shared-memory
+  programming}.
+\newblock \bibinfo{journal}{Computational Science \& Engineering, IEEE}
+  \bibinfo{volume}{5}, \bibinfo{pages}{46--55}.
+%Type = Article
+\bibitem[{Dimmen et~al.(2017)Dimmen, Rotevatn, Peacock, Nixon and
+  N{\ae}rland}]{Dimmen2017}
+\bibinfo{author}{Dimmen, V.}, \bibinfo{author}{Rotevatn, A.},
+  \bibinfo{author}{Peacock, D.C.}, \bibinfo{author}{Nixon, C.W.},
+  \bibinfo{author}{N{\ae}rland, K.}, \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Quantifying structural controls on fluid flow:
+  Insights from carbonate-hosted fault damage zones on the maltese islands}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{101}, \bibinfo{pages}{43--57}.
+%Type = Article
+\bibitem[{Faulkner et~al.(2010)Faulkner, Jackson, Lunn, Schlische, Shipton,
+  Wibberley and Withjack}]{Faulkner2010}
+\bibinfo{author}{Faulkner, D.}, \bibinfo{author}{Jackson, C.},
+  \bibinfo{author}{Lunn, R.}, \bibinfo{author}{Schlische, R.},
+  \bibinfo{author}{Shipton, Z.}, \bibinfo{author}{Wibberley, C.},
+  \bibinfo{author}{Withjack, M.}, \bibinfo{year}{2010}.
+\newblock \bibinfo{title}{A review of recent developments concerning the
+  structure, mechanics and fluid flow properties of fault zones}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{32}, \bibinfo{pages}{1557--1575}.
+%Type = Misc
+\bibitem[{Gehrels et~al.(2016)Gehrels, Lalande, Loskot and
+  Wulkiewicz}]{Gehrels2016}
+\bibinfo{author}{Gehrels, B.}, \bibinfo{author}{Lalande, B.},
+  \bibinfo{author}{Loskot, M.}, \bibinfo{author}{Wulkiewicz, A.},
+  \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Boost geometry library}.
+%Type = Book
+\bibitem[{Gough(2009)}]{Gough2009}
+\bibinfo{author}{Gough, B.}, \bibinfo{year}{2009}.
+\newblock \bibinfo{title}{GNU scientific library reference manual}.
+\newblock \bibinfo{publisher}{Network Theory Ltd.}
+%Type = Article
+\bibitem[{Gudmundsson et~al.(2013)Gudmundsson, De~Guidi and
+  Scudero}]{Gudmundsson2013}
+\bibinfo{author}{Gudmundsson, A.}, \bibinfo{author}{De~Guidi, G.},
+  \bibinfo{author}{Scudero, S.}, \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Length--displacement scaling and fault growth}.
+\newblock \bibinfo{journal}{Tectonophysics} \bibinfo{volume}{608},
+  \bibinfo{pages}{1298--1309}.
+%Type = Article
+\bibitem[{Hardebol and Bertotti(2013)}]{Hardebol2013}
+\bibinfo{author}{Hardebol, N.}, \bibinfo{author}{Bertotti, G.},
+  \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Digifract: A software and data model implementation
+  for flexible acquisition and processing of fracture data from outcrops}.
+\newblock \bibinfo{journal}{Computers \& Geosciences} \bibinfo{volume}{54},
+  \bibinfo{pages}{326--336}.
+%Type = Article
+\bibitem[{Healy et~al.(2017)Healy, Rizzo, Cornwell, Farrell, Watkins, Timms,
+  Gomez-Rivas and Smith}]{Healy2017}
+\bibinfo{author}{Healy, D.}, \bibinfo{author}{Rizzo, R.E.},
+  \bibinfo{author}{Cornwell, D.G.}, \bibinfo{author}{Farrell, N.J.},
+  \bibinfo{author}{Watkins, H.}, \bibinfo{author}{Timms, N.E.},
+  \bibinfo{author}{Gomez-Rivas, E.}, \bibinfo{author}{Smith, M.},
+  \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Fracpaq: A matlab™ toolbox for the quantification
+  of fracture patterns}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{95}, \bibinfo{pages}{1 -- 16}.
+\newblock \URLprefix
+  \url{http://www.sciencedirect.com/science/article/pii/S0191814116302073},
+  \DOIprefix\doi{https://doi.org/10.1016/j.jsg.2016.12.003}.
+%Type = Article
+\bibitem[{Idziak and Teper(1996)}]{Idziak1996}
+\bibinfo{author}{Idziak, A.}, \bibinfo{author}{Teper, L.},
+  \bibinfo{year}{1996}.
+\newblock \bibinfo{title}{Fractal dimension of faults network in the upper
+  silesian coal basin (poland): Preliminary studies}.
+\newblock \bibinfo{journal}{pure and applied geophysics} \bibinfo{volume}{147},
+  \bibinfo{pages}{239--247}.
+%Type = Article
+\bibitem[{Kincaid and Phillips(2011)}]{Kincaid2011}
+\bibinfo{author}{Kincaid, R.K.}, \bibinfo{author}{Phillips, D.J.},
+  \bibinfo{year}{2011}.
+\newblock \bibinfo{title}{Network topology measures}.
+\newblock \bibinfo{journal}{Wiley Interdisciplinary Reviews: Computational
+  Statistics} \bibinfo{volume}{3}, \bibinfo{pages}{557--565}.
+%Type = Article
+\bibitem[{Kong et~al.(2019)Kong, Jiang, Shu, Sainoki and Wang}]{Kong2019}
+\bibinfo{author}{Kong, P.}, \bibinfo{author}{Jiang, L.}, \bibinfo{author}{Shu,
+  J.}, \bibinfo{author}{Sainoki, A.}, \bibinfo{author}{Wang, Q.},
+  \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{Effect of fracture heterogeneity on rock mass
+  stability in a highly heterogeneous underground roadway}.
+\newblock \bibinfo{journal}{Rock Mechanics and Rock Engineering}
+  \bibinfo{volume}{52}, \bibinfo{pages}{4547--4564}.
+%Type = Article
+\bibitem[{Laubach et~al.(2018a)Laubach, Hundley, Hooker and
+  Marrett}]{Laubach2018b}
+\bibinfo{author}{Laubach, S.}, \bibinfo{author}{Hundley, T.},
+  \bibinfo{author}{Hooker, J.}, \bibinfo{author}{Marrett, R.},
+  \bibinfo{year}{2018}a.
+\newblock \bibinfo{title}{Spatial arrangement and size distribution of normal
+  faults, buckskin detachment upper plate, western arizona}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{108}, \bibinfo{pages}{230--242}.
+%Type = Article
+\bibitem[{Laubach et~al.(2018b)Laubach, Lamarche, Gauthier, Dunne and
+  Sanderson}]{Laubach2018}
+\bibinfo{author}{Laubach, S.E.}, \bibinfo{author}{Lamarche, J.},
+  \bibinfo{author}{Gauthier, B.D.}, \bibinfo{author}{Dunne, W.M.},
+  \bibinfo{author}{Sanderson, D.J.}, \bibinfo{year}{2018}b.
+\newblock \bibinfo{title}{Spatial arrangement of faults and opening-mode
+  fractures}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{108}, \bibinfo{pages}{2--15}.
+%Type = Article
+\bibitem[{Lei and Gao(2018)}]{Lei2018}
+\bibinfo{author}{Lei, Q.}, \bibinfo{author}{Gao, K.}, \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Correlation between fracture network properties and
+  stress variability in geological media}.
+\newblock \bibinfo{journal}{Geophysical Research Letters} \bibinfo{volume}{45},
+  \bibinfo{pages}{3994--4006}.
+%Type = Article
+\bibitem[{Liu et~al.(2017)Liu, Yu, Jiang, Wang and Li}]{Liu2017}
+\bibinfo{author}{Liu, R.}, \bibinfo{author}{Yu, L.}, \bibinfo{author}{Jiang,
+  Y.}, \bibinfo{author}{Wang, Y.}, \bibinfo{author}{Li, B.},
+  \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Recent developments on relationships between the
+  equivalent permeability and fractal dimension of two-dimensional rock
+  fracture networks}.
+\newblock \bibinfo{journal}{Journal of Natural Gas Science and Engineering}
+  \bibinfo{volume}{45}, \bibinfo{pages}{771--785}.
+%Type = Article
+\bibitem[{L{\'o}pez and Smith(1995)}]{Lopez1995}
+\bibinfo{author}{L{\'o}pez, D.L.}, \bibinfo{author}{Smith, L.},
+  \bibinfo{year}{1995}.
+\newblock \bibinfo{title}{Fluid flow in fault zones: analysis of the interplay
+  of convective circulation and topographically driven groundwater flow}.
+\newblock \bibinfo{journal}{Water resources research} \bibinfo{volume}{31},
+  \bibinfo{pages}{1489--1503}.
+%Type = Article
+\bibitem[{Maerten et~al.(2016)Maerten, Maerten, Lejri and
+  Gillespie}]{Maerten2016}
+\bibinfo{author}{Maerten, L.}, \bibinfo{author}{Maerten, F.},
+  \bibinfo{author}{Lejri, M.}, \bibinfo{author}{Gillespie, P.},
+  \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Geomechanical paleostress inversion using fracture
+  data}.
+\newblock \bibinfo{journal}{Journal of structural Geology}
+  \bibinfo{volume}{89}, \bibinfo{pages}{197--213}.
+%Type = Article
+\bibitem[{Manzocchi(2002)}]{Manzocchi2002}
+\bibinfo{author}{Manzocchi, T.}, \bibinfo{year}{2002}.
+\newblock \bibinfo{title}{The connectivity of two-dimensional networks of
+  spatially correlated fractures}.
+\newblock \bibinfo{journal}{Water Resources Research} \bibinfo{volume}{38},
+  \bibinfo{pages}{1--1}.
+%Type = Article
+\bibitem[{Mayrhofer et~al.(2019)Mayrhofer, Sch{\"o}pfer and
+  Grasemann}]{Mayrhofer2019}
+\bibinfo{author}{Mayrhofer, F.}, \bibinfo{author}{Sch{\"o}pfer, M.P.},
+  \bibinfo{author}{Grasemann, B.}, \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{Universal and nonuniversal aperture-to-length scaling
+  of opening mode fractures developing in a particle-based lattice solid
+  model}.
+\newblock \bibinfo{journal}{Journal of Geophysical Research: Solid Earth}
+  \bibinfo{volume}{124}, \bibinfo{pages}{3197--3218}.
+%Type = Article
+\bibitem[{Miyoshi et~al.(2018)Miyoshi, Elmo and Rogers}]{Miyoshi2018}
+\bibinfo{author}{Miyoshi, T.}, \bibinfo{author}{Elmo, D.},
+  \bibinfo{author}{Rogers, S.}, \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Influence of data analysis when exploiting dfn model
+  representation in the application of rock mass classification systems}.
+\newblock \bibinfo{journal}{Journal of Rock Mechanics and Geotechnical
+  Engineering} \bibinfo{volume}{10}, \bibinfo{pages}{1046--1062}.
+%Type = Article
+\bibitem[{Morley and Nixon(2016)}]{Morley2016}
+\bibinfo{author}{Morley, C.}, \bibinfo{author}{Nixon, C.},
+  \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Topological characteristics of simple and complex
+  normal fault networks}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{84}, \bibinfo{pages}{68--84}.
+%Type = Article
+\bibitem[{Nyberg et~al.(2018)Nyberg, Nixon and Sanderson}]{Nyberg2018}
+\bibinfo{author}{Nyberg, B.}, \bibinfo{author}{Nixon, C.W.},
+  \bibinfo{author}{Sanderson, D.J.}, \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Networkgt: A gis tool for geometric and topological
+  analysis of two-dimensional fracture networks}.
+\newblock \bibinfo{journal}{Geosphere} \bibinfo{volume}{14},
+  \bibinfo{pages}{1618--1634}.
+%Type = Article
+\bibitem[{Olson et~al.(2009)Olson, Laubach and Lander}]{Olson2009}
+\bibinfo{author}{Olson, J.E.}, \bibinfo{author}{Laubach, S.E.},
+  \bibinfo{author}{Lander, R.H.}, \bibinfo{year}{2009}.
+\newblock \bibinfo{title}{Natural fracture characterization in tight gas
+  sandstones: Integrating mechanics and diagenesis}.
+\newblock \bibinfo{journal}{AAPG bulletin} \bibinfo{volume}{93},
+  \bibinfo{pages}{1535--1549}.
+%Type = Incollection
+\bibitem[{Partsinevelou et~al.(2011)Partsinevelou, Lozios and
+  Stournaras}]{Partsinevelou2011}
+\bibinfo{author}{Partsinevelou, A.}, \bibinfo{author}{Lozios, S.},
+  \bibinfo{author}{Stournaras, G.}, \bibinfo{year}{2011}.
+\newblock \bibinfo{title}{Fracture pattern description and analysis of the hard
+  rock hydrogeological environment in naxos island, hellas}, in:
+  \bibinfo{booktitle}{Advances in the Research of Aquatic Environment}.
+  \bibinfo{publisher}{Springer}, pp. \bibinfo{pages}{45--52}.
+%Type = Article
+\bibitem[{Peacock et~al.(2017)Peacock, Dimmen, Rotevatn and
+  Sanderson}]{Peacock2017}
+\bibinfo{author}{Peacock, D.}, \bibinfo{author}{Dimmen, V.},
+  \bibinfo{author}{Rotevatn, A.}, \bibinfo{author}{Sanderson, D.},
+  \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{A broader classification of damage zones}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{102}, \bibinfo{pages}{179--192}.
+%Type = Article
+\bibitem[{Poulet et~al.(2021)Poulet, Lesueur and Kelka}]{Poulet2021}
+\bibinfo{author}{Poulet, T.}, \bibinfo{author}{Lesueur, M.},
+  \bibinfo{author}{Kelka, U.}, \bibinfo{year}{2021}.
+\newblock \bibinfo{title}{Dynamic modelling of overprinted low-permeability
+  fault cores and surrounding damage zones as lower dimensional interfaces for
+  multiphysics simulations}.
+\newblock \bibinfo{journal}{Computers \& Geosciences} \bibinfo{volume}{150},
+  \bibinfo{pages}{104719}.
+%Type = Book
+\bibitem[{Reeves et~al.(2012)Reeves, Parashar, Zhang and Rahman}]{Reeves2012}
+\bibinfo{author}{Reeves, D.M.}, \bibinfo{author}{Parashar, R.},
+  \bibinfo{author}{Zhang, Y.}, \bibinfo{author}{Rahman, R.},
+  \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{Hydrogeologic characterization of fractured rock
+  masses intended for disposal of radioactive waste}.
+\newblock \bibinfo{publisher}{INTECH Open Access Publisher}.
+%Type = Article
+\bibitem[{Renard and Allard(2013)}]{Renard2013}
+\bibinfo{author}{Renard, P.}, \bibinfo{author}{Allard, D.},
+  \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Connectivity metrics for subsurface flow and
+  transport}.
+\newblock \bibinfo{journal}{Advances in Water Resources} \bibinfo{volume}{51},
+  \bibinfo{pages}{168--196}.
+%Type = Article
+\bibitem[{Renshaw and Park(1997)}]{Renshaw1997}
+\bibinfo{author}{Renshaw, C.}, \bibinfo{author}{Park, J.},
+  \bibinfo{year}{1997}.
+\newblock \bibinfo{title}{Effect of mechanical interactions on the scaling of
+  fracture length and aperture}.
+\newblock \bibinfo{journal}{Nature} \bibinfo{volume}{386},
+  \bibinfo{pages}{482--484}.
+%Type = Article
+\bibitem[{Rohrbaugh~Jr et~al.(2002)Rohrbaugh~Jr, Dunne and
+  Mauldon}]{Rohrbaugh2002}
+\bibinfo{author}{Rohrbaugh~Jr, M.}, \bibinfo{author}{Dunne, W.},
+  \bibinfo{author}{Mauldon, M.}, \bibinfo{year}{2002}.
+\newblock \bibinfo{title}{Estimating fracture trace intensity, density, and
+  mean length using circular scan lines and windows}.
+\newblock \bibinfo{journal}{AAPG bulletin} \bibinfo{volume}{86},
+  \bibinfo{pages}{2089--2104}.
+%Type = Article
+\bibitem[{Roy et~al.(2007)Roy, Perfect, Dunne and McKay}]{Roy2007}
+\bibinfo{author}{Roy, A.}, \bibinfo{author}{Perfect, E.},
+  \bibinfo{author}{Dunne, W.M.}, \bibinfo{author}{McKay, L.D.},
+  \bibinfo{year}{2007}.
+\newblock \bibinfo{title}{Fractal characterization of fracture networks: An
+  improved box-counting technique}.
+\newblock \bibinfo{journal}{Journal of Geophysical Research: Solid Earth}
+  \bibinfo{volume}{112}.
+%Type = Article
+\bibitem[{Sanderson and Nixon(2015)}]{Sanderson2015}
+\bibinfo{author}{Sanderson, D.J.}, \bibinfo{author}{Nixon, C.W.},
+  \bibinfo{year}{2015}.
+\newblock \bibinfo{title}{The use of topology in fracture network
+  characterization}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{72}, \bibinfo{pages}{55--66}.
+%Type = Article
+\bibitem[{Sanderson and Nixon(2018)}]{Sanderson2018}
+\bibinfo{author}{Sanderson, D.J.}, \bibinfo{author}{Nixon, C.W.},
+  \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{Topology, connectivity and percolation in fracture
+  networks}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{115}, \bibinfo{pages}{167--177}.
+%Type = Article
+\bibitem[{Sanderson et~al.(2019)Sanderson, Peacock, Nixon and
+  Rotevatn}]{Sanderson2019}
+\bibinfo{author}{Sanderson, D.J.}, \bibinfo{author}{Peacock, D.C.},
+  \bibinfo{author}{Nixon, C.W.}, \bibinfo{author}{Rotevatn, A.},
+  \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{Graph theory and the analysis of fracture networks}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{125}, \bibinfo{pages}{155--165}.
+%Type = Book
+\bibitem[{Siek et~al.(2001)Siek, Lee and Lumsdaine}]{Siek2001}
+\bibinfo{author}{Siek, J.G.}, \bibinfo{author}{Lee, L.Q.},
+  \bibinfo{author}{Lumsdaine, A.}, \bibinfo{year}{2001}.
+\newblock \bibinfo{title}{The boost graph library: User guide and reference
+  manual, portable documents}.
+\newblock \bibinfo{publisher}{Pearson Education}.
+%Type = Article
+\bibitem[{Soliva et~al.(2006)Soliva, Benedicto and Maerten}]{Soliva2006}
+\bibinfo{author}{Soliva, R.}, \bibinfo{author}{Benedicto, A.},
+  \bibinfo{author}{Maerten, L.}, \bibinfo{year}{2006}.
+\newblock \bibinfo{title}{Spacing and linkage of confined normal faults:
+  importance of mechanical thickness}.
+\newblock \bibinfo{journal}{Journal of Geophysical Research: Solid Earth}
+  \bibinfo{volume}{111}.
+%Type = Article
+\bibitem[{Sutherland et~al.(2012)Sutherland, Toy, Townend, Cox, Eccles,
+  Faulkner, Prior, Norris, Mariani, Boulton, Carpenter, Menzies, Little,
+  Hasting, De~Pascale, Langridge, Scott, Lindroos, Fleming and
+  Kopf}]{Sutherland2012}
+\bibinfo{author}{Sutherland, R.}, \bibinfo{author}{Toy, V.},
+  \bibinfo{author}{Townend, J.}, \bibinfo{author}{Cox, S.},
+  \bibinfo{author}{Eccles, J.}, \bibinfo{author}{Faulkner, D.},
+  \bibinfo{author}{Prior, D.}, \bibinfo{author}{Norris, R.},
+  \bibinfo{author}{Mariani, E.}, \bibinfo{author}{Boulton, C.},
+  \bibinfo{author}{Carpenter, B.}, \bibinfo{author}{Menzies, C.},
+  \bibinfo{author}{Little, T.}, \bibinfo{author}{Hasting, M.},
+  \bibinfo{author}{De~Pascale, G.}, \bibinfo{author}{Langridge, R.},
+  \bibinfo{author}{Scott, H.}, \bibinfo{author}{Lindroos, Z.R.},
+  \bibinfo{author}{Fleming, B.}, \bibinfo{author}{Kopf, A.},
+  \bibinfo{year}{2012}.
+\newblock \bibinfo{title}{{Drilling reveals fluid control on architecture and
+  rupture of the Alpine fault, New Zealand}}.
+\newblock \bibinfo{journal}{Geology} \bibinfo{volume}{40},
+  \bibinfo{pages}{1143--1146}.
+\newblock \URLprefix \url{https://doi.org/10.1130/G33614.1},
+  \DOIprefix\doi{10.1130/G33614.1},
+  \href{http://arxiv.org/abs/https://pubs.geoscienceworld.org/geology/article-pdf/40/12/1143/3543987/1143.pdf}{\tt
+  arXiv:https://pubs.geoscienceworld.org/geology/article-pdf/40/12/1143/3543987/1143.pdf}.
+%Type = Article
+\bibitem[{Tsang et~al.(2015)Tsang, Neretnieks and Tsang}]{Tsang2015}
+\bibinfo{author}{Tsang, C.F.}, \bibinfo{author}{Neretnieks, I.},
+  \bibinfo{author}{Tsang, Y.}, \bibinfo{year}{2015}.
+\newblock \bibinfo{title}{Hydrologic issues associated with nuclear waste
+  repositories}.
+\newblock \bibinfo{journal}{Water Resources Research} \bibinfo{volume}{51},
+  \bibinfo{pages}{6923--6972}.
+%Type = Article
+\bibitem[{Von~Hagke et~al.(2019)Von~Hagke, Kettermann, Bitsch, B{\"u}cken,
+  Weism{\"u}ller and Urai}]{vonHagke2019}
+\bibinfo{author}{Von~Hagke, C.}, \bibinfo{author}{Kettermann, M.},
+  \bibinfo{author}{Bitsch, N.}, \bibinfo{author}{B{\"u}cken, D.},
+  \bibinfo{author}{Weism{\"u}ller, C.}, \bibinfo{author}{Urai, J.L.},
+  \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{The effect of obliquity of slip in normal faults on
+  distribution of open fractures}.
+\newblock \bibinfo{journal}{Frontiers in Earth Science} \bibinfo{volume}{7},
+  \bibinfo{pages}{18}.
+%Type = Article
+\bibitem[{Walsh and Watterson(1993)}]{Walsh1993}
+\bibinfo{author}{Walsh, J.}, \bibinfo{author}{Watterson, J.},
+  \bibinfo{year}{1993}.
+\newblock \bibinfo{title}{Fractal analysis of fracture patterns using the
+  standard box-counting technique: valid and invalid methodologies}.
+\newblock \bibinfo{journal}{Journal of structural Geology}
+  \bibinfo{volume}{15}, \bibinfo{pages}{1509--1512}.
+%Type = Article
+\bibitem[{Wang et~al.(2017)Wang, Jing, Su and Xie}]{Wang2017}
+\bibinfo{author}{Wang, Y.}, \bibinfo{author}{Jing, H.}, \bibinfo{author}{Su,
+  H.}, \bibinfo{author}{Xie, J.}, \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Effect of a fault fracture zone on the stability of
+  tunnel-surrounding rock}.
+\newblock \bibinfo{journal}{International Journal of Geomechanics}
+  \bibinfo{volume}{17}, \bibinfo{pages}{04016135}.
+%Type = Article
+\bibitem[{Watkins et~al.(2015)Watkins, Bond, Healy and Butler}]{Watkins2015}
+\bibinfo{author}{Watkins, H.}, \bibinfo{author}{Bond, C.E.},
+  \bibinfo{author}{Healy, D.}, \bibinfo{author}{Butler, R.W.},
+  \bibinfo{year}{2015}.
+\newblock \bibinfo{title}{Appraisal of fracture sampling methods and a new
+  workflow to characterise heterogeneous fracture networks at outcrop}.
+\newblock \bibinfo{journal}{Journal of Structural Geology}
+  \bibinfo{volume}{72}, \bibinfo{pages}{67--82}.
+%Type = Article
+\bibitem[{Wilson(2000)}]{Wilson2000}
+\bibinfo{author}{Wilson, T.H.}, \bibinfo{year}{2000}.
+\newblock \bibinfo{title}{Some distinctions between self-similar and
+  self-affine estimates of fractal dimension with case history}.
+\newblock \bibinfo{journal}{Mathematical geology} \bibinfo{volume}{32},
+  \bibinfo{pages}{319--335}.
+%Type = Article
+\bibitem[{Wilson(2001)}]{Wilson2001}
+\bibinfo{author}{Wilson, T.H.}, \bibinfo{year}{2001}.
+\newblock \bibinfo{title}{Scale transitions in fracture and active fault
+  networks}.
+\newblock \bibinfo{journal}{Mathematical Geology} \bibinfo{volume}{33},
+  \bibinfo{pages}{591--613}.
+%Type = Article
+\bibitem[{Zeeb et~al.(2013)Zeeb, Gomez-Rivas, Bons and Blum}]{Zeeb2013}
+\bibinfo{author}{Zeeb, C.}, \bibinfo{author}{Gomez-Rivas, E.},
+  \bibinfo{author}{Bons, P.D.}, \bibinfo{author}{Blum, P.},
+  \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Evaluation of sampling methods for fracture network
+  characterization using outcrops}.
+\newblock \bibinfo{journal}{AAPG bulletin} \bibinfo{volume}{97},
+  \bibinfo{pages}{1545--1566}.
+
+\end{thebibliography}
