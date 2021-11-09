@@ -166,10 +166,10 @@ namespace FracG
                 : location(loc)
         {
         }
-        Point location;
-        bool Enode = false;
+        Point location; //this vertex's position in 2D space
+        bool Enode = false; //whether or not this vertex intersects with the bounding box/area of interest (AOI)
         Direction enode_dir = Direction::NONE; //which edge of bounding box that this vertex intersects
-        int component;
+        int component; //the ID of the Connected Component that this vertex is a part of
         double data;
 	};
 

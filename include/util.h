@@ -34,5 +34,7 @@ namespace FracG
     
     Direction ReadDirection(std::string direction_string);
     double DirectionAngleDegrees(Direction d);
+	
+	Direction OppositeDirection(const Direction d);
 }
 #endif

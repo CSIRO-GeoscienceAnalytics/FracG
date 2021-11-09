@@ -131,6 +131,20 @@ namespace FracG
         }
     }
     
+    
+	//convenience function to get the opposite of a given direction
+	Direction OppositeDirection(const Direction d)
+	{
+		switch (d)
+		{
+			case LEFT: return Direction::RIGHT;
+			case RIGHT: return Direction::LEFT;
+			case TOP: return Direction::BOTTOM;
+			case BOTTOM: return Direction::TOP;
+			default: return Direction::NONE;
+		}
+	}
+    
 
     
 }

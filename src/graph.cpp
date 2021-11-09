@@ -15,12 +15,14 @@
 #include "../include/GeoRef.h"
 #include "../include/stats.h"
 #include "../include/util.h"
+// #include <boost/numeric/ublas/matrix.hpp>
 #include <random>
 
 namespace FracG
 {
 	namespace fs = boost::filesystem;
     namespace bgm = boost::geometry;
+// 	namespace ublas = boost::numeric::ublas;
 
 	//take a location, and return the corresponding graph vertex, and the list of possible vertices
 	//remember that locations can be slightly different due to floating point calculations, so this function checks for vertices within a certain distance of the specified point
@@ -1330,14 +1332,208 @@ namespace FracG
 			}
 		}
 	}
+	
+	//function that returns the amount of flow across an edge. This is done before calculating the pressures.
+	double EdgeCapacity(FEdge &e)
+	{
+		return 1; //currently, the model is to set the edge capacities to a uniform value
+	}
+	double EdgeCapacity(DEdge &de)
+	{
+		return 1; //same thing as above, but with a directed edge
+	}
+	
+	//Assign pressure values to the vertex's data value, with pressure flowing towards pressure_direction and from a high/start of p_high and a low/end value of p_low
+	void AssignPressureMatrix(Graph &g, float p_high, float p_low, Direction pressure_direction)
+	{
+		Direction source_direction = OppositeDirection(pressure_direction); //the pressure flow is from the source_direction, towards the pressure_direction
+// 		std::cout << "The pressure is from " << source_direction << " to " << pressure_direction << std::endl;
+		const int num_vertices = boost::num_vertices(g);
+		//Sp
+		arma::SpMat<double> L(num_vertices, num_vertices);//, arma::fill::zeros
+		arma::Col<double> P(num_vertices, arma::fill::zeros);//
+		arma::Col<double> B(num_vertices, arma::fill::zeros);//
+// 		//initialise the matrix and vector values
+// 		for (int i = 0; i < num_vertices; i++)
+// 		{
+// 			P(i) = 0;
+// 			B(i) = 0;
+// 			for (int j = 0; j < num_vertices; j++) L(i, j) = 0;
+// 		}
+		boost::property_map<Graph, boost::vertex_index_t>::type vertex_idx_map = boost::get(boost::vertex_index, g); //a map for the integer index of each vertex
+		std::vector<int> components(num_vertices);
+		const int num_components = boost::connected_components(g, &components[0]);
+		std::vector<bool> have_source(num_components, false), have_target(num_components, false);
+		Graph::vertex_iterator vit, vend;
+		//; i++,int i = 0
+		int num_edge_verts = 0;
+		int source_verts = 0;
+		int target_verts = 0;
+		for (boost::tie(vit, vend) = boost::vertices(g); vit < vend; vit++)
+		{
+			const int v_idx = vertex_idx_map[*vit];
+			FVertex<point_type> &v = g[*vit];
+			const bool is_boundary = (v.enode_dir == source_direction || v.enode_dir == pressure_direction);
+			
+// 			//testing
+			
+			//setup conditions for vertices on the boundary
+			if (is_boundary)
+			{
+				L(v_idx, v_idx) = 1;
+				const int component_number = components[v_idx];
+				if (v.enode_dir == source_direction)
+				{
+					B(v_idx) = p_high;
+					have_source[component_number] = true;
+					source_verts++;
+				}
+				if (v.enode_dir == pressure_direction)
+				{
+// 					L(v_idx, v_idx) = 1;
+					B(v_idx) = p_low;
+					have_target[component_number] = true;
+					target_verts++;
+				}
+				num_edge_verts += 1;
+				continue; //only do the rest if v is NOT a boudnary vertex
+			}
+// 			;
+			double vertex_flow_sum = 0;
+			Graph::out_edge_iterator oeit, oeend;
+			for (boost::tie(oeit, oeend) = boost::out_edges(*vit, g); oeit < oeend; oeit++)
+			{
+				Graph::vertex_descriptor src = boost::source(*oeit, g);
+				Graph::vertex_descriptor trg = boost::target(*oeit, g);
+				int s_idx = vertex_idx_map[src];//index of the source vertex
+				int t_idx = vertex_idx_map[trg];//index of the target vertex
+				if (t_idx == v_idx) std::swap(s_idx, t_idx); //s_idx should be v_idx, but I am not sure it is guaranteed that the edges are in the form (source == *vit, target == the other vertex)
+				assert(s_idx == v_idx);
+				assert(t_idx != v_idx);
+				FEdge &edge = g[*oeit];
+				const double edge_capacity = EdgeCapacity(edge);
+				L(s_idx, t_idx) -= edge_capacity;//if (!is_boundary) 
+				vertex_flow_sum += edge_capacity;
+			}
+			//else {
+			L(v_idx, v_idx) = vertex_flow_sum;
+			//}
+		}
+// 		std::cout << "There are " << num_edge_verts << " edge vertices" << std::endl;
+// 		std::cout << "There are " << source_verts << " source vertices and " << target_verts << " target vertices" << std::endl;
+		
+		//for now, if a component is not connected to both the source and target direction, set all of its vertices to be boundary nodes
+		//leave the boundary value itself at zero
+		int num_unconnected_vertices = 0;
+		for (boost::tie(vit, vend) = boost::vertices(g); vit < vend; vit++)
+		{
+			const int v_idx = vertex_idx_map[*vit];
+			const int component_number = components[v_idx];
+			if (have_source[component_number] && have_target[component_number]) continue;
+// 			{
+			num_unconnected_vertices++;
+			L(v_idx, v_idx) = 1;
+			Graph::out_edge_iterator oeit, oeend;
+			for (boost::tie(oeit, oeend) = boost::out_edges(*vit, g); oeit < oeend; oeit++)
+			{
+				Graph::vertex_descriptor src = boost::source(*oeit, g);
+				Graph::vertex_descriptor trg = boost::target(*oeit, g);
+				int s_idx = vertex_idx_map[src];//index of the source vertex
+				int t_idx = vertex_idx_map[trg];//index of the target vertex
+				if (t_idx == v_idx) std::swap(s_idx, t_idx);
+				L(v_idx, t_idx) = 0;
+// 				B(v_idx) = p_high;
+// 				
+			}
+		}
+// 		std::cout << "There are " << num_unconnected_vertices << " vertices that are unconnected to the source and target" << std::endl;
+		
+		//now solve the linear equations L P = B, solving for P
+// 		std::cout << "L is:" << std::endl << L << std::endl;
+// 		std::cout << "B is:" << std::endl << B << std::endl;
+		//sp
+		P = arma::spsolve(L, B);//, , "superlu", arma::solve_opts::likely_sympd
+		//and assign the solution back to the vertices
+		for (boost::tie(vit, vend) = boost::vertices(g); vit < vend; vit++)
+		{
+			const int v_idx = vertex_idx_map[*vit];
+			FVertex<point_type> &v = g[*vit];
+			v.data = P[v_idx];
+		}
+	}
+	
+	//assign edge capacities to a directed graph, based on the pressure values (stored in the vertex.data value)
+	//the boolean controls whether the capacities are normalised to [0 , 1]
+	void AssignPressureCapacities(DGraph &dg, bool normalise_capacities)
+	{
+		DGraph::edge_iterator eit, eend;
+		double max_capacity = 0;
+		for (boost::tie(eit, eend) = boost::edges(dg); eit != eend; eit++)
+		{
+			DEdge &e = dg[*eit];
+			DVertex &s = dg[boost::source(*eit, dg)];
+			DVertex &t = dg[boost::target(*eit, dg)];
+			const double sp = s.data;
+			const double tp = t.data;
+			double this_capacity = (sp >= tp) ? EdgeCapacity(e) : 0;
+			e.capacity = this_capacity;
+			e.residual_capacity = this_capacity;
+			if (this_capacity > max_capacity) max_capacity = this_capacity;
+		}
+		if (normalise_capacities)
+		{
+			for (boost::tie(eit, eend) = boost::edges(dg); eit != eend; eit++)
+			{
+				DEdge &e = dg[*eit];
+				const double normalised_capacity = e.capacity / max_capacity;
+				e.capacity = normalised_capacity;
+				e.residual_capacity = normalised_capacity;
+			}
+		}
+	}
+    
+    //mark the edges of the graph that cross the given box
+    void MakeCroppedGraphFromBox(Graph &g, box crop_AOI)
+	{
+		
+        double min_x = crop_AOI.min_corner().get<0>();
+        double max_x = crop_AOI.max_corner().get<0>();
+        double min_y = crop_AOI.min_corner().get<1>();
+        double max_y = crop_AOI.max_corner().get<1>();
+        Segment    left(point_type(min_x, min_y), point_type(min_x, max_y));
+        Segment   right(point_type(max_x, min_y), point_type(max_x, max_y));
+        Segment  bottom(point_type(min_x, min_y), point_type(max_x, min_y));
+        Segment     top(point_type(min_x, max_y), point_type(max_x, max_y));
+        std::vector<Segment> aoi_edges = {left, right, bottom, top};
+        std::vector<Direction> directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
+        Graph::edge_iterator e, estart, eend;
+        boost::tie(estart, eend) = boost::edges(g);
+        for (e = estart; e != eend; e++)
+        {
+            line_type trace = g[*e].trace;
+            if (!geometry::intersects(crop_AOI, trace)) continue; //crosses is not implemented
+            //TODO: put in code for the case where a feature crosses more than one boundary of the AOI
+            for (int i = 0; i < aoi_edges.size(); i++)
+            {
+                Segment compare = aoi_edges[i];
+                if (!geometry::intersects(compare, trace)) continue; // if the feature doesn't cross, go to the next one
+                //now figure out which end of the feature crosses the given AOI box
+                vertex_type s = boost::source(*e, g), t = boost::target(*e, g);
+                double s_dist = geometry::distance(compare, g[s].location);
+                double t_dist = geometry::distance(compare, g[t].location);
+                if (s_dist < t_dist) {g[s].Enode = true; g[s].enode_dir = directions[i];}
+                else {g[t].Enode = true; g[t].enode_dir = directions[i];}
+            }
+        }
+	}
 
-	void MakeCroppedGraph(Graph &g, box AOI, double crop_amount)
+	//mark the edges of the graph that cross an area of interest that is made by reducing a given AOI by a given portion. The portion goes from 0 to 1, and larger crop amounts result in a smaller new AOI
+	void MakeCroppedGraph(Graph &g, box original_AOI, double crop_amount)
     {
-        Graph out;
-        double min_x = AOI.min_corner().get<0>();
-        double max_x = AOI.max_corner().get<0>();
-        double min_y = AOI.min_corner().get<1>();
-        double max_y = AOI.max_corner().get<1>();
+        double min_x = original_AOI.min_corner().get<0>();
+        double max_x = original_AOI.max_corner().get<0>();
+        double min_y = original_AOI.min_corner().get<1>();
+        double max_y = original_AOI.max_corner().get<1>();
         double diff_x = max_x - min_x;
         double diff_y = max_y - min_y;
         double shift_x = crop_amount * diff_x / 2;
@@ -1347,29 +1543,7 @@ namespace FracG
         double new_min_y = min_y + shift_y;
         double new_max_y = max_y - shift_y;
         box new_AOI = box(point_type(new_min_x, new_min_y), point_type(new_max_x, new_max_y));
-        Segment    left(point_type(new_min_x, new_min_y), point_type(new_min_x, new_max_y));
-        Segment   right(point_type(new_max_x, new_min_y), point_type(new_max_x, new_max_y));
-        Segment  bottom(point_type(new_min_x, new_min_y), point_type(new_max_x, new_min_y));
-        Segment     top(point_type(new_min_x, new_max_y), point_type(new_max_x, new_max_y));
-        std::vector<Segment> aoi_edges = {left, right, bottom, top};
-        std::vector<Direction> directions = {Direction::LEFT, Direction::RIGHT, Direction::BOTTOM, Direction::TOP};
-        Graph::edge_iterator e, estart, eend;
-        boost::tie(estart, eend) = boost::edges(g);
-        for (e = estart; e != eend; e++)
-        {
-            line_type trace = g[*e].trace;
-            if (!geometry::intersects(new_AOI, trace)) continue; //crosses is not implemented
-            for (int i = 0; i < aoi_edges.size(); i++)
-            {
-                Segment compare = aoi_edges[i];
-                if (!geometry::intersects(compare, trace)) continue; //crosses
-                vertex_type s = boost::source(*e, g), t = boost::target(*e, g);
-                double s_dist = geometry::distance(compare, g[s].location);
-                double t_dist = geometry::distance(compare, g[t].location);
-                if (s_dist < t_dist) {g[s].Enode = true; g[s].enode_dir = directions[i];}
-                else {g[t].Enode = true; g[t].enode_dir = directions[i];}
-            }
-        }
+		MakeCroppedGraphFromBox(g, new_AOI);
     }
 	
 	//add artificial source and target nodes to a graph, to have the max flow involve all features that cross the boundary of the area of interest
@@ -1385,7 +1559,7 @@ namespace FracG
                 case NONE: std::cerr <<"ERROR: attempting maximum flow gradient without specifying a source" << std::endl; break;
             }
         }
-        const double max_flow_amount = 10 * num_edges(dg); //can't set this to be infinite
+        const double max_flow_amount = 10 * num_edges(dg); //can't set this to be infinite, so set it to a large number
         DVertex dummy_s, dummy_t;
         s = boost::add_vertex(dummy_s, dg);
         t = boost::add_vertex(dummy_t, dg);
@@ -1452,7 +1626,7 @@ namespace FracG
         }
     }
 	
-	double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename)
+	double MaximumFlowGradient(graph_map<> &G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename)
 	{
         Direction flow_source;
         switch(flow_direction) {
@@ -1465,22 +1639,24 @@ namespace FracG
         box bbox = G.GetBoundingBox();
         Graph &g = G.GetGraph();
         
-		std::cout<< "Maximum flow with flow direction " << std::string(1,flow_direction) << " and gradient pressure direction " << std::string(1,pressure_direction) << std::endl;
+// 		std::cout<< "Maximum flow with flow direction " << std::string(1,flow_direction) << " and gradient pressure direction " << std::string(1,pressure_direction) << std::endl;
 
-		AssignGrad(g, start_pressure, end_pressure, pressure_direction);
         MakeCroppedGraph(g, bbox, border_amount);
+// 		AssignGrad
+		AssignPressureMatrix(g, start_pressure, end_pressure, pressure_direction);
 
 		DGraph dg = MakeDirectedGraph(g);
         
         double pressure_angle = DirectionAngleDegrees(pressure_direction);
-		SetupMaximumFlow(dg, capacity_type, pressure_angle);
+// 		SetupMaximumFlow(dg, capacity_type, pressure_angle);
+		AssignPressureCapacities(dg, true);
 		dvertex_type s, t;
         AddGradientSourceSink(dg, flow_source, flow_direction, s, t);
         AssignDistances(dg, flow_direction, bbox, s, t);
 		double mf = CalculateMaximumFlow(dg, s, t);
         RemoveGradientSourceSink(dg, s, t);
 		
-		std::cout << "maximum flow is: " << mf << std::endl;
+// 		std::cout << "maximum flow is: " << mf << std::endl;
 		if (mf > 0)
 		{
 			if (out_filename != "")
@@ -1540,5 +1716,26 @@ namespace FracG
 				i++;
 			}
 		}
+	}
+	
+	arma::Mat<double> MaximumFlowMatrix(graph_map<> &g, double border_amount)
+	{
+		std::vector<Direction> dirs = {Direction::RIGHT, Direction::TOP, Direction::LEFT, Direction::BOTTOM};
+		const int num_dirs = dirs.size();
+		arma::Mat<double> flows(num_dirs, num_dirs, arma::fill::zeros);
+		const double p_high = 1.0;
+		const double p_low  = 0;
+		for (auto pressure_it = dirs.begin(); pressure_it < dirs.end(); pressure_it++)
+		{
+			const int pressure_idx = pressure_it - dirs.begin();
+			for (auto flow_it = dirs.begin(); flow_it < dirs.end(); flow_it++)
+			{
+				if (*pressure_it == OppositeDirection(*flow_it)) continue; //the flow in the opposite direction is zero
+				const int flow_idx = flow_it - dirs.begin();
+				double flow = MaximumFlowGradient(g, *flow_it, *pressure_it, p_high, p_low, border_amount, "", "", "");
+				flows(pressure_idx, flow_idx) = flow;
+			}
+		}
+		return flows;
 	}
 }
