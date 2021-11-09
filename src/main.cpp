@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
 	//building the graph
 	FracG::graph_map<FracG::point_type, FracG::vertex_type, FracG::Graph> gm = FracG::ConvertLinesToGraph(lines.data, lines.refWKT, dist_threshold); 	  //convert the faults into a graph
 	graph = gm.GetGraph();
-	FracG::graph_map<> split_map = FracG::SplitFaults(gm, split_dist_thresh); 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radsius around line tips)
+	FracG::graph_map<> split_map = FracG::SplitFaults(gm, split_dist_thresh); 						 //split the faults in the graph into fault segments, according to the intersections of the  (number is merging radius around line tips)
 	FracG::RemoveSpurs(split_map, spur_dist_thresh); 													 //remove any spurs from the graph network (number is the minimum length of lineamants; everything below will be removed)
 	graph = split_map.GetGraph();
 
@@ -294,6 +294,10 @@ int main(int argc, char *argv[])
 	}
 	
 	FracG::MaximumFlowGradient(split_map, max_flow_gradient_flow_direction, max_flow_gradient_pressure_direction, 1, 0, max_flow_gradient_border_amount, max_flow_cap_type, lines.refWKT, (out_path/in_stem).string());	//maximum flow 
+	
+	std::cout << "Starting maximum flow matrix, reducing border by " << 100*max_flow_gradient_border_amount << "%" << std::endl;
+	arma::Mat<double> max_flow_matrix = FracG::MaximumFlowMatrix(split_map, max_flow_gradient_border_amount);
+	std::cout << "The maximum flow matrix is:" << std::endl << max_flow_matrix << std::endl;
 
 	if (raster_name.empty() && fs::exists(raster_name))
 	{

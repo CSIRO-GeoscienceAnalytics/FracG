@@ -246,7 +246,8 @@ namespace FracG
     Graph ShortPath(graph_map<> m, std::string in_filename, std::string out_filename="");
 
 	void SetBoundaryPoints(Graph G, point_type& s, point_type& t, bool vert_grad);
-    double MaximumFlowGradient(graph_map<> G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename);
+    double MaximumFlowGradient(graph_map<> &G, Direction flow_direction, Direction pressure_direction, double start_pressure, double end_pressure, double border_amount, std::string capacity_type, std::string refWKT, std::string out_filename);
 	void MaxFlowTensor(graph_map<> G, std::string capacity_type, const char *refWKT, std::string out_filename);
+	arma::Mat<double> MaximumFlowMatrix(graph_map<> &g, double border_amount);
 }
 #endif
