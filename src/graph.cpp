@@ -1034,7 +1034,7 @@ namespace FracG
 				  IntersecTree.insert(std::make_pair(bounding_box, it));
 		}
 
-		progress_display show_progress =  boost::progress_display(x_size * y_size);
+		boost::timer::progress_display show_progress =  boost::timer::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;

@@ -571,8 +571,8 @@ namespace FracG
 		samples.reserve(n_samples);
 		const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
 		const double p_lower = (xmin - values.begin())/(double)values.size(); //probability with which to use the below-xmin portion of the samples 
-		std::uniform_real_distribution<double> uniform01(0.0, 1.0);
-		std::uniform_int_distribution<int> lower_selector(0, max_low);
+		boost::random::uniform_real_distribution<double> uniform01(0.0, 1.0);
+		boost::random::uniform_int_distribution<int> lower_selector(0, max_low);
 		for (int i = 0; i < n_samples; i++)
 		{
 			double value;
@@ -600,8 +600,8 @@ namespace FracG
 		samples.reserve(n_generations*per_call);
 		const int max_low = std::max(0, (int) (xmin - values.begin() - 1)); //index of the final value in the data that is below xmin. Inclusive value.
 		const double p_lower = (xmin - values.begin())/values.size(); //probability with which to use the below-xmin portion of the samples 
-		std::uniform_real_distribution<double> uniform01(0.0, 1.0);
-		std::uniform_int_distribution<int> lower_selector(0, max_low);
+		boost::random::uniform_real_distribution<double> uniform01(0.0, 1.0);
+		boost::random::uniform_int_distribution<int> lower_selector(0, max_low);
 		std::vector<double> random_values;
 		random_values.reserve(per_call);
 		for (int i = 0; i < n_generations; i++)

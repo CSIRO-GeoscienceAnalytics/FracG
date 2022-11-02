@@ -312,7 +312,7 @@ namespace FracG
 			 << vec.size()<< " x " << vec[0].size() << std::endl;
 			 
 		double cur_y, cur_x = min_x;
-		boost::progress_display show_progress =  boost::progress_display(x_size * y_size);
+		boost::timer::progress_display show_progress =  boost::timer::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;
@@ -419,7 +419,7 @@ namespace FracG
 			 << vec_count.size()<< " x " << vec_count[0].size() << std::endl;
 			 
 		 double cur_y, cur_x = min_x;
-		boost::progress_display show_progress = boost::progress_display(x_size * y_size);
+		boost::timer::progress_display show_progress = boost::timer::progress_display(x_size * y_size);
 		for (int i = 0; i < x_size; i++)
 		{
 			cur_y = max_y;

@@ -1305,7 +1305,7 @@ namespace FracG
 
 		float *rowBuff = (float*) CPLMalloc(sizeof(float)*x);
 		std::cout << "Writing raster (struc) " << std::endl;
-		progress_display* show_progress =  new boost::progress_display(y * x);
+		boost::timer::progress_display* show_progress =  new boost::timer::progress_display(y * x);
 
 		for(int row = 0; row < y; row++) 
 		{
@@ -1862,7 +1862,6 @@ namespace FracG
 	{
 		GDALAllRegister();
 		point_type point;
-		std::string Point;
 		GDALDataset *poDS;
 		GDALDriver *poDriver;
 		OGRLayer *poLayer;
@@ -1913,17 +1912,19 @@ namespace FracG
 		
 		OGRFieldDefn oField3( "Rel_bc", OFTReal );
 		oField3.SetWidth(10);
+		oField3.SetPrecision(6); //this might not be enough precision for non-centralised networks
 		if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
 		{
-			printf( "Creating betweeness centrality field failed.\n" );
+			printf( "Creating relative betweeness centrality field failed.\n" );
 			exit( 1 );
 		}
 		
-		OGRFieldDefn oField4( "Abs_bc", OFTInteger );
+		OGRFieldDefn oField4( "Abs_bc", OFTReal );
 		oField4.SetWidth(10);
+		oField3.SetPrecision(2);
 		if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
 		{
-			printf( "Creating betweeness centrality field failed.\n" );
+			printf( "Creating absolute betweeness centrality field failed.\n" );
 			exit( 1 );
 		}
 		
@@ -1944,19 +1945,20 @@ namespace FracG
 		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
 		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
 		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
-		float factor = 0;
+		double factor = 0;
 		if (!skip_betweenness_centrality)
 		{
 			brandes_betweenness_centrality(G, vertex_property_map);
 			long long int scale = (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
 			if (scale <= 0) scale = 1; //if there is only one vertex, then this denumerator becomes zero, causing a divide by zero error
-			factor = 2 / scale;
+			factor = 2 / (double) scale;
 		}
 		
 		std::cout << "centrality done" << std::endl;
 		
 		int NO = 0;
 		poFeature = OGRFeature::CreateFeature( poLayer->GetLayerDefn() );
+
 		//write shp file----------------------------------------------------
 		for (auto Ve : boost::make_iterator_range(vertices(G))) 
 		{
@@ -1969,7 +1971,7 @@ namespace FracG
 			
 			poFeature->SetField( "Abs_bc", (double) vertex_property_map[Ve]);
 			if (factor != 0)
-				poFeature->SetField( "Rel_bc",  (float) vertex_property_map[Ve]/factor);
+				poFeature->SetField( "Rel_bc",  (double) vertex_property_map[Ve]*factor);
 			else
 				poFeature->SetField( "Rel_bc",  0);
 			
@@ -1985,7 +1987,6 @@ namespace FracG
 				printf( "Failed to create feature in shapefile.\n" );
 				exit( 1 );
 			}
-			Point.clear();
 			NO++;
 		}
 		OGRFeature::DestroyFeature( poFeature );
