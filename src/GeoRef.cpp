@@ -1273,6 +1273,22 @@ namespace FracG
 			return std::numeric_limits<T>::quiet_NaN();
 	}
 
+	//calculate the betweeness centrality values for the vertices and edges of a graph
+	template<class G, typename dtype=double>
+	betweenness_data<G, dtype> calculate_betweenness_centrality(G &graph)
+	{
+		betweenness_data<G, double> btd(graph);
+		brandes_betweenness_centrality(graph, 
+			btd.vertex_betweenness, //boost::make_iterator_property_map(.begin(), boost::get(boost::vertex_index, graph))
+			btd.edge_betweenness
+		);
+		btd.scale = (num_vertices(graph)*num_vertices(graph) - 3*num_vertices(graph) + 2);
+		if (btd.scale <= 0) btd.scale = 1; //if there is only one vertex, then this denumerator becomes zero, causing a divide by zero error
+		btd.factor = 2 / (double) btd.scale; //the 2 is because the graph is undirected. I should change this to consider which type of graph it is
+		btd.set = true; //the values have been set
+		return btd;
+	}
+
 	//this is a function to write a raster file from the datastructure RASTER
 	//mainly for debug purposes but might be useful
 	template<typename T>
@@ -1550,7 +1566,7 @@ namespace FracG
 	 }
 
 	//convert graph edges to shp-file---------------------------------------
-	void WriteSHP_g_lines(Graph G, std::string refWKT, std::string Name, bool raster)
+	void WriteSHP_g_lines(Graph &G, std::string refWKT, std::string Name, bool raster, const betweenness_data<Graph, double> &btd)
 	{
 		GDALAllRegister();
 		const char *pszDriverName = "ESRI Shapefile";
@@ -1625,54 +1641,74 @@ namespace FracG
 			printf( "Creating 'Angle' field failed.\n" );
 			exit( 1 );
 		}
+
+		if (btd.set)
+		{
+			OGRFieldDefn oFieldAC("Abs_bc", OFTReal );
+			oFieldAC.SetWidth(15);
+			oFieldAC.SetPrecision(5);
+			if (poLayer->CreateField( &oFieldAC ) != OGRERR_NONE)
+			{
+				printf( "Creating 'Absolute Centrality' field failed.\n" );
+				exit( 1 );
+			}
+			OGRFieldDefn oFieldRC("Rel_bc", OFTReal );
+			oFieldRC.SetWidth(10);
+			oFieldRC.SetPrecision(6);
+			if (poLayer->CreateField( &oFieldRC ) != OGRERR_NONE)
+			{
+				printf( "Creating 'Relativue Centrality' field failed.\n" );
+				exit( 1 );
+			}
+		}
 		
 		if (raster)
 		{
 // raster---------------------------------------------------------------
-				OGRFieldDefn oField4( "Centre", OFTReal );
-				oField4.SetWidth(25);
-				oField4.SetPrecision(5);
-				if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
-				{
-					printf( "Creating 'Centre' field failed.\n" );
-					exit( 1 );
-				}
-
-				OGRFieldDefn oField5( "MeanValue", OFTReal );
-				oField5.SetWidth(25);
-				oField5.SetPrecision(5);
-				if( poLayer->CreateField( &oField5 ) != OGRERR_NONE )
-				{
-					printf( "Creating 'MeanValue' field failed.\n" );
-					exit( 1 );
-				}
-
-				OGRFieldDefn oField6( "CentreGrad", OFTReal );
-				oField6.SetWidth(25);
-				oField6.SetPrecision(5);
-				if( poLayer->CreateField( &oField6 ) != OGRERR_NONE )
-				{
-					printf( "Creating 'CentreGrad' field failed.\n" );
-					exit( 1 );
-				}
-
-				OGRFieldDefn oField7( "CrossGrad", OFTReal );
-				oField7.SetWidth(25);
-				oField7.SetPrecision(5);
-				if( poLayer->CreateField( &oField7 ) != OGRERR_NONE )
-				{
-					printf( "Creating 'CrossGrad' field failed.\n" );
-					exit( 1 );
-				}
-
-				OGRFieldDefn oField8( "PGrad", OFTReal );
-				oField8.SetWidth(10);
-				if( poLayer->CreateField( &oField8 ) != OGRERR_NONE )
-				{
-					printf( "Creating 'PGrad' field failed.\n" );
-					exit( 1 );
-				}
+			OGRFieldDefn oField4( "Centre", OFTReal );
+			oField4.SetWidth(25);
+			oField4.SetPrecision(5);
+			if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+			{
+				printf( "Creating 'Centre' field failed.\n" );
+				exit( 1 );
 			}
+
+			OGRFieldDefn oField5( "MeanValue", OFTReal );
+			oField5.SetWidth(25);
+			oField5.SetPrecision(5);
+			if( poLayer->CreateField( &oField5 ) != OGRERR_NONE )
+			{
+				printf( "Creating 'MeanValue' field failed.\n" );
+				exit( 1 );
+			}
+
+			OGRFieldDefn oField6( "CentreGrad", OFTReal );
+			oField6.SetWidth(25);
+			oField6.SetPrecision(5);
+			if( poLayer->CreateField( &oField6 ) != OGRERR_NONE )
+			{
+				printf( "Creating 'CentreGrad' field failed.\n" );
+				exit( 1 );
+			}
+
+			OGRFieldDefn oField7( "CrossGrad", OFTReal );
+			oField7.SetWidth(25);
+			oField7.SetPrecision(5);
+			if( poLayer->CreateField( &oField7 ) != OGRERR_NONE )
+			{
+				printf( "Creating 'CrossGrad' field failed.\n" );
+				exit( 1 );
+			}
+
+			OGRFieldDefn oField8( "PGrad", OFTReal );
+			oField8.SetWidth(10);
+			if( poLayer->CreateField( &oField8 ) != OGRERR_NONE )
+			{
+				printf( "Creating 'PGrad' field failed.\n" );
+				exit( 1 );
+			}
+		}
 
 		int id = 0;
 		for (auto Eg : boost::make_iterator_range(edges(G))) 
@@ -1694,16 +1730,23 @@ namespace FracG
 			poFeature->SetField( "BranchType", G[Eg].BranchType.c_str());
 			poFeature->SetField( "Component", C);
 			poFeature->SetField( "Angle", strike);
+
+			//if betweeness centrality data is calculated, write it into the file
+			if (btd.set)
+			{
+				poFeature->SetField( "Abs_bc", btd.edge_betweenness[Eg]);
+				poFeature->SetField( "Rel_bc", btd.edge_betweenness[Eg] * btd.factor);
+			}
 		
-		if (raster)
-		{
-		//add raster data to graph shp file-------------------------------------
-			poFeature->SetField( "Centre", 		(float) G[Eg].Centre);
-			poFeature->SetField( "MeanValue", 	(float) G[Eg].MeanValue);
-			poFeature->SetField( "CentreGrad", 	(float) G[Eg].CentreGrad);
-			poFeature->SetField( "CrossGrad", 	(float) G[Eg].CrossGrad);
-			poFeature->SetField( "PGrad", 		(float) G[Eg].ParalGrad );
-		}
+			if (raster)
+			{
+			//add raster data to graph shp file-------------------------------------
+				poFeature->SetField( "Centre", 		(float) G[Eg].Centre);
+				poFeature->SetField( "MeanValue", 	(float) G[Eg].MeanValue);
+				poFeature->SetField( "CentreGrad", 	(float) G[Eg].CentreGrad);
+				poFeature->SetField( "CrossGrad", 	(float) G[Eg].CrossGrad);
+				poFeature->SetField( "PGrad", 		(float) G[Eg].ParalGrad );
+			}
 			
 			BOOST_FOREACH(point_type P, line) 
 				l.addPoint(P.x(), P.y());
@@ -1858,7 +1901,7 @@ namespace FracG
 	}
 
 	//convert graph edges to shp-file---------------------------------------
-	void WriteSHP_g_points(Graph G, const char* refWKT, const char* Name, bool raster, bool skip_betweenness_centrality)
+	void WriteSHP_g_points(Graph &G, const char* refWKT, const char* Name, bool raster, const betweenness_data<Graph, double> &btd)
 	{
 		GDALAllRegister();
 		point_type point;
@@ -1910,22 +1953,26 @@ namespace FracG
 			exit( 1 );
 		}
 		
-		OGRFieldDefn oField3( "Rel_bc", OFTReal );
-		oField3.SetWidth(10);
-		oField3.SetPrecision(6); //this might not be enough precision for non-centralised networks
-		if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
+		//conditionally create fields for the betweeness centrality
+		if (btd.set)
 		{
-			printf( "Creating relative betweeness centrality field failed.\n" );
-			exit( 1 );
-		}
-		
-		OGRFieldDefn oField4( "Abs_bc", OFTReal );
-		oField4.SetWidth(10);
-		oField3.SetPrecision(2);
-		if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
-		{
-			printf( "Creating absolute betweeness centrality field failed.\n" );
-			exit( 1 );
+			OGRFieldDefn oField3( "Abs_bc", OFTReal );
+			oField3.SetWidth(15);
+			oField3.SetPrecision(5);
+			if( poLayer->CreateField( &oField3 ) != OGRERR_NONE )
+			{
+				printf( "Creating absolute betweeness centrality field failed.\n" );
+				exit( 1 );
+			}
+			
+			OGRFieldDefn oField4( "Rel_bc", OFTReal );
+			oField4.SetWidth(10);
+			oField4.SetPrecision(6); //this might not be enough precision for non-centralised networks
+			if( poLayer->CreateField( &oField4 ) != OGRERR_NONE )
+			{
+				printf( "Creating relative betweeness centrality field failed.\n" );
+				exit( 1 );
+			}
 		}
 		
 		if (raster)
@@ -1942,17 +1989,8 @@ namespace FracG
 		std::cout << "centrality started" << std::endl;
 
 		//Betweeness centrality----------------------------------------
-		boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
-		std::vector< double > vertex_property_vec(boost::num_vertices(G), 0.0);
-		iterator_property_map< std::vector< double >::iterator, boost::property_map<Graph, boost::vertex_index_t>::type> vertex_property_map(vertex_property_vec.begin(), v_index);
-		double factor = 0;
-		if (!skip_betweenness_centrality)
-		{
-			brandes_betweenness_centrality(G, vertex_property_map);
-			long long int scale = (num_vertices(G)*num_vertices(G) - 3*num_vertices(G) +2);
-			if (scale <= 0) scale = 1; //if there is only one vertex, then this denumerator becomes zero, causing a divide by zero error
-			factor = 2 / (double) scale;
-		}
+		//boost::property_map<Graph, boost::vertex_index_t>::type  v_index = get(boost::vertex_index, G);
+		//std::vector< double > vertex_property_vec;
 		
 		std::cout << "centrality done" << std::endl;
 		
@@ -1969,11 +2007,14 @@ namespace FracG
 			poFeature->SetField( "Degree", (int) degree(Ve, G));
 			poFeature->SetField( "Component", (int) G[Ve].component);
 			
-			poFeature->SetField( "Abs_bc", (double) vertex_property_map[Ve]);
-			if (factor != 0)
-				poFeature->SetField( "Rel_bc",  (double) vertex_property_map[Ve]*factor);
-			else
-				poFeature->SetField( "Rel_bc",  0);
+			if (btd.set)
+			{
+				poFeature->SetField( "Abs_bc", (double) btd.vertex_betweenness[Ve]);
+				if (btd.factor != 0)
+					poFeature->SetField( "Rel_bc",  (double) btd.vertex_betweenness[Ve]*btd.factor);
+				else
+					poFeature->SetField( "Rel_bc",  0);
+			}
 			
 			if (raster)
 				poFeature->SetField( "data", (double) G[Ve].data);
@@ -2008,8 +2049,11 @@ namespace FracG
 		const char* Name_b = n_b.c_str();
 		const char* Name_v = n_v.c_str();
 
-		WriteSHP_g_lines(G, reference, Name_b, raster);//false
-		WriteSHP_g_points(G, reference, Name_v, raster, skip_betweenness_centrality);//false
+		betweenness_data<Graph, double> btd;
+		if (!skip_betweenness_centrality) btd = calculate_betweenness_centrality(G);
+
+		WriteSHP_g_lines(G, reference, Name_b, raster, btd);//false
+		WriteSHP_g_points(G, reference, Name_v, raster, btd);//false
 		std::cout << " done" << std::endl;
 	}
 
