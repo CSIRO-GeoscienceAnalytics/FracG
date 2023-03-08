@@ -97,12 +97,12 @@
 #include <boost/geometry/geometries/box.hpp>
 #include <boost/geometry/index/rtree.hpp>
 
-#include "/usr/include/gdal/ogr_geometry.h"
-#include "/usr/include/gdal/gdal_priv.h"
-#include "/usr/include/gdal/ogrsf_frmts.h"
-#include "/usr/include/gdal/cpl_conv.h"
-#include "/usr/include/gdal/cpl_port.h"
-#include "/usr/include/gdal/gdalwarper.h"
+#include "ogr_geometry.h"
+#include "gdal_priv.h"
+#include "ogrsf_frmts.h"
+#include "cpl_conv.h"
+#include "cpl_port.h"
+#include "gdalwarper.h"
 
 #include <boost/variant.hpp>
 #include <boost/variant/static_visitor.hpp>
