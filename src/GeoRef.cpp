@@ -1274,7 +1274,7 @@ namespace FracG
 	}
 
 	//calculate the betweeness centrality values for the vertices and edges of a graph
-	template<class G, typename dtype=double>
+	template<class G, typename dtype>
 	betweenness_data<G, dtype> calculate_betweenness_centrality(G &graph)
 	{
 		betweenness_data<G, double> btd(graph);
