@@ -69,7 +69,7 @@ jobs:
       run: |
         mkdir -p ${{github.workspace}}/arm-target/bin
         mkdir -p ${{github.workspace}}/arm-target/brew-cache
-        export PATH="$HOME/arm-target/bin:$PATH"
+        export PATH="${{github.workspace}}/arm-target/bin:$PATH"
 
         cd ${{github.workspace}}/arm-target
         mkdir arm-homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C arm-homebrew
