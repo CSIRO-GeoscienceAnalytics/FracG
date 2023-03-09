@@ -28,7 +28,8 @@ project(FracG VERSION 1.0.0 DESCRIPTION "FracG")
 find_package(GDAL REQUIRED)
 include_directories( include ${GDAL_INCLUDE_DIRS})
 
-find_package(Boost REQUIRED COMPONENTS random system filesystem program_options timer)
+SET(BOOST_MIN_VERSION "1.72.0")
+find_package(Boost ${BOOST_MIN_VERSION} REQUIRED COMPONENTS random system filesystem program_options timer)
 include_directories( include ${BOOST_INCLUDE_DIRS})
 
 find_package(Armadillo REQUIRED)
@@ -37,7 +38,24 @@ include_directories(${ARMADILLO_INCLUDE_DIRS})
 find_package(GSL REQUIRED)
 include_directories(${GSL_INCLUDE_DIRS})
 
-find_package(OpenMP REQUIRED)
+if(APPLE)
+  find_package(OpenMP)
+  if(NOT OpenMP_FOUND)
+    # libomp 15.0+ from brew is keg-only, so have to search in other locations.
+    # See https://github.com/Homebrew/homebrew-core/issues/112107#issuecomment-1278042927.
+    execute_process(COMMAND brew --prefix libomp
+                    OUTPUT_VARIABLE HOMEBREW_LIBOMP_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp -I${HOMEBREW_LIBOMP_PREFIX}/include")
+    set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I${HOMEBREW_LIBOMP_PREFIX}/include")
+    set(OpenMP_C_LIB_NAMES omp)
+    set(OpenMP_CXX_LIB_NAMES omp)
+    set(OpenMP_omp_LIBRARY ${HOMEBREW_LIBOMP_PREFIX}/lib/libomp.dylib)
+    find_package(OpenMP REQUIRED)
+  endif()
+else()
+  find_package(OpenMP REQUIRED)
+endif()
 include_directories(${OPENMP_INCLUDE_DIRS})
 
 #add gmsh API-----------------------------------------------------------
