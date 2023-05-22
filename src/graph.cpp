@@ -1338,13 +1338,13 @@ namespace FracG
 	{
 		return 1; //currently, the model is to set the edge capacities to a uniform value
 	}
-	double EdgeCapacity(DEdge &de)
-	{
-		return 1; //same thing as above, but with a directed edge
-	}
+// 	double EdgeCapacity(DEdge &de)
+// 	{
+// 		return 1; //same thing as above, but with a directed edge
+// 	}
 	
 	//Assign pressure values to the vertex's data value, with pressure flowing towards pressure_direction and from a high/start of p_high and a low/end value of p_low
-	void AssignPressureMatrix(Graph &g, float p_high, float p_low, Direction pressure_direction)
+	void AssignPressureMatrix(Graph &g, float p_high, float p_low, Direction pressure_direction, const std::function< double(FEdge&) >& capacity_function=&EdgeCapacity)
 	{
 		Direction source_direction = OppositeDirection(pressure_direction); //the pressure flow is from the source_direction, towards the pressure_direction
 // 		std::cout << "The pressure is from " << source_direction << " to " << pressure_direction << std::endl;
@@ -1411,7 +1411,7 @@ namespace FracG
 				assert(s_idx == v_idx);
 				assert(t_idx != v_idx);
 				FEdge &edge = g[*oeit];
-				const double edge_capacity = EdgeCapacity(edge);
+				const double edge_capacity = capacity_function(edge);
 				L(s_idx, t_idx) -= edge_capacity;//if (!is_boundary) 
 				vertex_flow_sum += edge_capacity;
 			}
@@ -1475,7 +1475,7 @@ namespace FracG
 			DVertex &t = dg[boost::target(*eit, dg)];
 			const double sp = s.data;
 			const double tp = t.data;
-			double this_capacity = (sp >= tp) ? EdgeCapacity(e) : 0;
+			double this_capacity = (sp >= tp) ? 1 : 0;//EdgeCapacity(e)
 			e.capacity = this_capacity;
 			e.residual_capacity = this_capacity;
 			if (this_capacity > max_capacity) max_capacity = this_capacity;

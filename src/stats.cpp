@@ -1783,7 +1783,7 @@ namespace FracG
 			return(0);
 	}
 
-	line_type RandomLine(std::vector<std::pair<int, line_type>> all_lines, box AOI, polygon_type t_AOI, double angle, double min_spaceing, int d, boost::mt19937 rng)
+	line_type RandomLine(std::vector<std::pair<int, line_type>> all_lines, box AOI, polygon_type t_AOI, double angle, double min_spaceing, int d, boost::mt19937 &rng)
 	{
 		line_type basis, r_line;
 
@@ -1846,8 +1846,8 @@ namespace FracG
 						iter_2++;
 				}
 				
-				if(geometry::disjoint(point_type(x2, y2), t_AOI));
-					iter++;
+				if(geometry::disjoint(point_type(x2, y2), t_AOI))
+					iter++; //this is probably a bug - hopefully fixed.
 
 				if (iter > 100)
 				{
