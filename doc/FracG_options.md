@@ -16,7 +16,7 @@ Filenames to save graph analysis.
 _default:_ graph<br>
 Folder to save graph analysis.
 
-## Correction parametres and distances
+## Correction parameters and distances
 
 **dist_thresh** | _\< double \>_ <br>
 _default:_ 1<br>
@@ -142,14 +142,14 @@ This will determine the usual characteristic length (cl) of the mesh in the samp
 _default:_ -1<br>
 If positive, this is the fixed size for all sampling windows.
 
-**gmsh_in_metres** | _\< bool \>_ <br>
+**gmsh_in_meters** | _\< bool \>_ <br>
 If true, convert map units into metres.
 
 **gmsh_sample_show_output** | _\< bool \>_ <br>
 _default:_ false<br>
 Show output of gmsh while meshing and the final mesh in the gmsh GUI for every sampling window.
 
-**gmsh_in_show_metres** | _\< bool \>_ <br>
+**gmsh_in_show_meters** | _\< bool \>_ <br>
 _default:_ false<br>
 Convert coordinates into metres. This may be necessary for small-scale models.
 
