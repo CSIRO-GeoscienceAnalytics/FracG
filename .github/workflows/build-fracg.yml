@@ -2,9 +2,9 @@ name: Build FracG
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -15,85 +15,87 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -yq build-essential libgdal-dev libboost-all-dev liblapack-dev libblas-dev libgsl-dev libgmsh-dev libarmadillo-dev
+      - uses: actions/checkout@v3
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -yq build-essential libgdal-dev libboost-all-dev liblapack-dev libblas-dev libgsl-dev libgmsh-dev libarmadillo-dev
 
-    - name: Build
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      - name: Configure CMake
+        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v3.1.2
-      with:
-        # Artifact name
-        name: fracg_linux_amd64
-        # A file, directory or wildcard pattern that describes what to upload
-        path: ${{github.workspace}}/build/FracG
+      - name: Build
+        # Build your program with the given configuration
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
-  macos-x86_64-build:
-    runs-on: macos-latest
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v3.1.2
+        with:
+          # Artifact name
+          name: fracg_linux_amd64
+          # A file, directory or wildcard pattern that describes what to upload
+          path: ${{github.workspace}}/build/FracG
 
-    steps:
-    - uses: actions/checkout@v3
+  # FIXME: Disable macos-x86_64 builds until we have hardware to test them on
+  # macos-x86_64-build:
+  #   runs-on: macos-latest
 
-    - name: Install dependencies (MacOS x86_64)
-      run: brew install gdal boost lapack gsl gmsh armadillo libomp
+  #   steps:
+  #   - uses: actions/checkout@v3
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_OSX_ARCHITECTURES="x86_64"
+  #   - name: Install dependencies (MacOS x86_64)
+  #     run: brew install gdal boost lapack gsl gmsh armadillo libomp
 
-    - name: Build
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+  #   - name: Configure CMake
+  #     run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_OSX_ARCHITECTURES="x86_64"
 
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v3.1.2
-      with:
-        # Artifact name
-        name: fracg_macos-x86_64
-        # A file, directory or wildcard pattern that describes what to upload
-        path: ${{github.workspace}}/build/FracG
+  #   - name: Build
+  #     # Build your program with the given configuration
+  #     run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
-  macos-arm64-build:
-    runs-on: macos-latest
+  #   - name: Upload a Build Artifact
+  #     uses: actions/upload-artifact@v3.1.2
+  #     with:
+  #       # Artifact name
+  #       name: fracg_macos-x86_64
+  #       # A file, directory or wildcard pattern that describes what to upload
+  #       path: ${{github.workspace}}/build/FracG
 
-    steps:
-    - uses: actions/checkout@v3
+  # FIXME: Disable macos-arm64 builds until we have hardware to test them on
+  # macos-arm64-build:
+  #   runs-on: macos-latest
 
-    - name: Install dependencies (MacOS arm64)
-      run: |
-        mkdir -p ${{github.workspace}}/arm-target/bin
-        mkdir -p ${{github.workspace}}/arm-target/brew-cache
-        export PATH="${{github.workspace}}/arm-target/bin:$PATH"
+  #   steps:
+  #   - uses: actions/checkout@v3
 
-        cd ${{github.workspace}}/arm-target
-        mkdir arm-homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C arm-homebrew
-        ln -s ${{github.workspace}}/arm-target/arm-homebrew/bin/brew ${{github.workspace}}/arm-target/bin/arm-brew
+  #   - name: Install dependencies (MacOS arm64)
+  #     run: |
+  #       mkdir -p ${{github.workspace}}/arm-target/bin
+  #       mkdir -p ${{github.workspace}}/arm-target/brew-cache
+  #       export PATH="${{github.workspace}}/arm-target/bin:$PATH"
 
-        export HOMEBREW_CACHE=${{github.workspace}}/arm-target/brew-cache
-        export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-        arm-brew fetch --deps --bottle-tag=arm64_big_sur gdal boost lapack gsl gmsh armadillo libomp |\
-          grep -E "(Downloaded to:|Already downloaded:)" |\
-          grep -v pkg-config |\
-          awk '{ print $3 }' |\
-          xargs -n 1 arm-brew install --ignore-dependencies --force-bottle
+  #       cd ${{github.workspace}}/arm-target
+  #       mkdir arm-homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C arm-homebrew
+  #       ln -s ${{github.workspace}}/arm-target/arm-homebrew/bin/brew ${{github.workspace}}/arm-target/bin/arm-brew
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_OSX_ARCHITECTURES="arm64" -DCMAKE_PREFIX_PATH="arm-brew --prefix"
+  #       export HOMEBREW_CACHE=${{github.workspace}}/arm-target/brew-cache
+  #       export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+  #       arm-brew fetch --deps --bottle-tag=arm64_big_sur gdal boost lapack gsl gmsh armadillo libomp |\
+  #         grep -E "(Downloaded to:|Already downloaded:)" |\
+  #         grep -v pkg-config |\
+  #         awk '{ print $3 }' |\
+  #         xargs -n 1 arm-brew install --ignore-dependencies --force-bottle
 
-    - name: Build
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+  #   - name: Configure CMake
+  #     run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_OSX_ARCHITECTURES="arm64" -DCMAKE_PREFIX_PATH="arm-brew --prefix"
 
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v3.1.2
-      with:
-        # Artifact name
-        name: fracg_macos-arm64
-        # A file, directory or wildcard pattern that describes what to upload
-        path: ${{github.workspace}}/build/FracG
+  #   - name: Build
+  #     # Build your program with the given configuration
+  #     run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+  #   - name: Upload a Build Artifact
+  #     uses: actions/upload-artifact@v3.1.2
+  #     with:
+  #       # Artifact name
+  #       name: fracg_macos-arm64
+  #       # A file, directory or wildcard pattern that describes what to upload
+  #       path: ${{github.workspace}}/build/FracG
