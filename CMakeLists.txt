@@ -1,14 +1,14 @@
 #****************************************************************/
-#*				DO NOT MODIFY THIS HEADER							*/
-#*					FRACG - FRACture Graph							*/
-#*				Network analysis and meshing software					*/
-#*																		*/
-#*						(c) 2021 CSIRO									*/
-#*			GNU General Public Licence version 3 (GPLv3)				*/
-#*																		*/
-#*						Prepared by CSIRO								*/
-#*																		*/
-#*					See license for full restrictions 						*/
+#*                  DO NOT MODIFY THIS HEADER                   */
+#*                    FRACG - FRACture Graph                    */
+#*            Network analysis and meshing software             */
+#*                                                              */
+#*                        (c) 2021 CSIRO                        */
+#*         GNU General Public Licence version 3 (GPLv3)         */
+#*                                                              */
+#*                      Prepared by CSIRO                       */
+#*                                                              */
+#*              See license for full restrictions               */
 #****************************************************************/
 cmake_minimum_required(VERSION 3.9)
 if (NOT CMAKE_BUILD_TYPE)
@@ -22,7 +22,7 @@ include(CMakePrintHelpers)
 cmake_print_variables(CMAKE_BUILD_TYPE)
 
 #Name of the Project and version
-project(FracG VERSION 1.0.0 DESCRIPTION "FracG")
+project(FracG VERSION 1.0.1 DESCRIPTION "FracG")
 
 #Check fro all required external libaries-------------------------------
 find_package(GDAL REQUIRED)
